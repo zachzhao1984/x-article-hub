@@ -85,7 +85,14 @@ export function parseMarkdownToDocument(markdown: string, opts: ParseOptions): P
 
   const header = readHeader(frontmatter, opts);
 
-  const { blocks, links, images, authorChip } = parseBlocks(body, header.title, warnings);
+  const { blocks, links, images, authorChip } = parseBlocks(
+    body,
+    header.title,
+    warnings,
+    // The canonical URL is the Article's identity here. SPEC §10 keys stored media
+    // by article, so an image id has to be unique per article rather than per URL.
+    opts.url,
+  );
 
   const document: ArticleDocument = {
     title: header.title,
@@ -152,7 +159,12 @@ interface ParsedBlocks {
   authorChip: { avatarUrl: string; name: string | null; dateHint: string | null } | null;
 }
 
-function parseBlocks(body: string, documentTitle: string, warnings: string[]): ParsedBlocks {
+function parseBlocks(
+  body: string,
+  documentTitle: string,
+  warnings: string[],
+  articleScope: string,
+): ParsedBlocks {
   const lines = body.split('\n');
   const blocks: ArticleBlock[] = [];
   const links: ArticleLink[] = [];
@@ -176,7 +188,14 @@ function parseBlocks(body: string, documentTitle: string, warnings: string[]): P
 
     // SPEC §36 — key media off the source URL so a re-parse or a re-crawl
     // reuses the same download instead of fetching the bytes twice.
-    const imageId = `img_${hash32(src)}`;
+    //
+    // Scoped to the article, because the same image legitimately appears in more
+    // than one Article. Keying on the URL alone made the id collide across
+    // articles — a shared avatar, or a syndicated screenshot — and `media_objects`
+    // has the image id as its PRIMARY KEY, so the second article's media run died
+    // on a UNIQUE violation. The article scope keeps the reuse-within-an-article
+    // property that was the point, without claiming global ownership of a URL.
+    const imageId = `img_${hash32(`${articleScope} ${src}`)}`;
     const image: ArticleImage = {
       imageId,
       r2Key: null,

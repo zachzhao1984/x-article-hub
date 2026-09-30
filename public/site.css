@@ -437,3 +437,39 @@ pre {
   color: var(--faint);
   text-align: center;
 }
+
+/* --- archived media (SPEC §10) --- */
+
+/* An image the media pipeline owns: sized from the stored dimensions so the
+   article does not reflow as figures arrive. */
+.article-body figure.fig img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* An image that is still on X's CDN. Deliberately not a hotlinked <img> — a
+   reader deserves to know the figure is not part of the archive before it
+   silently breaks, and before their browser phones x.com for it. */
+.article-body figure.fallback {
+  margin: 0 0 28px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.fig-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 22px 20px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.fig-missing:hover { color: var(--ink); }
+.fig-missing span {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.avatar.is-remote { opacity: 0.75; }

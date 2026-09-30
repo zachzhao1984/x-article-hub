@@ -91,17 +91,23 @@ const jsonLd = isTakedown
         <h1 class="article-title">{article.title}</h1>
         <div class="byline">
           {
-            article.author_avatar && (
-              <img
-                class="avatar"
-                src={article.author_avatar}
-                alt=""
-                width="40"
-                height="40"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-              />
-            )
+            /* SPEC §10 — the pipeline rewrites author_avatar to a local
+               /media path once the portrait is in R2. A bare x.com URL here
+               means it is not archived yet. */
+            article.author_avatar &&
+              (article.author_avatar.startsWith('http') ? (
+                <img
+                  class="avatar is-remote"
+                  src={article.author_avatar}
+                  alt=""
+                  width="40"
+                  height="40"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                />
+              ) : (
+                <img class="avatar" src={article.author_avatar} alt="" width="40" height="40" loading="lazy" />
+              ))
           }
           {article.author_username && (
             <a class="author-name" href={`/author/${article.author_username}`}>
@@ -184,16 +190,41 @@ const jsonLd = isTakedown
                         case 'image': {
                           const img = document.images.find((i) => i.imageId === block.imageId);
                           if (!img) return null;
-                          // SPEC §10 — `external_fallback` means the bytes are still
-                          // on X's CDN because media download has not run yet.
+                          // SPEC §10 — the page serves every image from /media, which
+                          // reads R2. Only an image the pipeline gave up on still
+                          // points at X, and that case says so out loud instead of
+                          // quietly hotlinking: a reader cannot tell a working image
+                          // from one that breaks the day X drops it.
+                          const archived = Boolean(img.r2Key);
                           return (
-                            <figure class:list={['fig', { cover: isCoverCaption(img.altText) }]}>
-                              <img
-                                src={img.r2Key ? `/media/${img.imageId}` : img.sourceUrl}
-                                alt={img.altText ?? ''}
-                                loading="lazy"
-                                referrerpolicy="no-referrer"
-                              />
+                            <figure
+                              class:list={[
+                                'fig',
+                                { cover: isCoverCaption(img.altText), fallback: !archived },
+                              ]}
+                            >
+                              {archived ? (
+                                <img
+                                  src={`/media/${img.imageId}`}
+                                  alt={img.altText ?? ''}
+                                  loading="lazy"
+                                  decoding="async"
+                                  // Reserves the box from the stored dimensions, so
+                                  // the article does not reflow as images arrive.
+                                  width={img.width ?? undefined}
+                                  height={img.height ?? undefined}
+                                />
+                              ) : (
+                                <a
+                                  class="fig-missing"
+                                  href={img.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                >
+                                  Image not archived
+                                  <span>this figure still loads from x.com and may stop working</span>
+                                </a>
+                              )}
                               {img.altText && !isCoverCaption(img.altText) && (
                                 <figcaption>{img.altText}</figcaption>
                               )}

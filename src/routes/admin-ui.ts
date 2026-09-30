@@ -16,6 +16,7 @@ import { listEvents } from '../db/events';
 import { importUrls, retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle } from '../services/parse';
+import { downloadArticleMedia, listArticleMedia } from '../services/media';
 import {
   archiveArticle,
   publishArticle,
@@ -140,16 +141,21 @@ adminUi.get('/articles/:id', async (c) => {
   const article = await getArticleById(c.env.DB, id);
   if (!article) throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
 
-  const [jobs, events, raw] = await Promise.all([
+  const [jobs, events, raw, media] = await Promise.all([
     listCrawlJobsForArticle(c.env.DB, id),
     listEvents(c.env.DB, id),
     summarizeRawArchive(c.env.ARCHIVE, article.raw_r2_key),
+    // SPEC §10 — per-image state, so it is visible which figures are archived
+    // and which are still hotlinking X.
+    listArticleMedia(c.env.DB, id),
   ]);
   const parsed = c.req.query('parsed');
   const blocks = Number(c.req.query('blocks') ?? '0') || 0;
   const notice = parsed
     ? `Parsed (${parsed}) — ${blocks} blocks. Refresh the article page to read it.`
-    : null;
+    : c.req.query('media')
+      ? `Media run ${c.req.query('media')} — ${c.req.query('ready') ?? 0} archived, ${c.req.query('failed') ?? 0} still on X's CDN.`
+      : null;
 
   const error = c.req.query('error');
   const errorMessage =
@@ -168,6 +174,7 @@ adminUi.get('/articles/:id', async (c) => {
           wordCount: article.word_count,
           parserVersion: article.parser_version,
         },
+        media,
         notice,
         error: errorMessage,
       },
@@ -234,6 +241,50 @@ adminUi.post('/articles/:id/parse', async (c) => {
       ? `/admin/articles/${id}?parsed=${outcome.result}&blocks=${outcome.blockCount ?? 0}`
       : `/admin/articles/${id}?error=${encodeURIComponent(outcome.errorMessage ?? 'parse failed')}`,
   });
+  return new Response(null, { status: 303, headers });
+});
+
+/**
+ * SPEC §10 — download every image into R2, synchronously.
+ *
+ * Unlike Parse, this does reach X's CDN — but only to take a copy. After it
+ * runs the reading page no longer depends on that CDN, and running it again is
+ * how a previously failed image gets retried.
+ */
+adminUi.post('/articles/:id/media', async (c) => {
+  const id = c.req.param('id');
+  const article = await getArticleById(c.env.DB, id);
+  if (!article) throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
+
+  if (!article.content_r2_key) {
+    const headers = new Headers({
+      Location: `/admin/articles/${id}?error=${encodeURIComponent(
+        'No parsed document yet — run Parse first, media is derived from the ArticleDocument.',
+      )}`,
+    });
+    return new Response(null, { status: 303, headers });
+  }
+
+  const outcome = await downloadArticleMedia(c.env, id);
+
+  const jobs = await listCrawlJobsForArticle(c.env.DB, id, 20);
+  const mediaJob = jobs.find((j) => j.job_type === 'media');
+  if (mediaJob) {
+    // A partial result is still a completed run: SPEC §10 says a failed image
+    // must not fail its Article, and the per-image state is on the detail page.
+    await updateJobStatus(c.env.DB, mediaJob.id, 'success', outcome.ok ? undefined : {
+      code: 'MEDIA_PARTIAL',
+      message: `${outcome.failures.length} image(s) fell back to X's CDN.`,
+    });
+  }
+
+  const query = new URLSearchParams({
+    media: outcome.ok ? 'complete' : 'partial',
+    ready: String(outcome.ready),
+    failed: String(outcome.failed),
+  });
+
+  const headers = new Headers({ Location: `/admin/articles/${id}?${query}` });
   return new Response(null, { status: 303, headers });
 });
 

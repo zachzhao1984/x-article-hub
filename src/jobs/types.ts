@@ -4,7 +4,7 @@
  * Consumers must be idempotent (SPEC §19): every field here is enough to look up
  * the row in `crawl_jobs` and decide whether the work still needs doing.
  */
-export type JobType = 'crawl' | 'parse' | 'ai' | 'metrics' | 'reindex';
+export type JobType = 'crawl' | 'parse' | 'media' | 'ai' | 'metrics' | 'reindex';
 
 export interface JobMessage {
   jobId: string;
@@ -48,7 +48,7 @@ export function isJobMessage(value: unknown): value is JobMessage {
     typeof v.jobId === 'string' &&
     typeof v.articleId === 'string' &&
     typeof v.type === 'string' &&
-    ['crawl', 'parse', 'ai', 'metrics', 'reindex'].includes(v.type) &&
+    ['crawl', 'parse', 'media', 'ai', 'metrics', 'reindex'].includes(v.type) &&
     typeof v.attempt === 'number' &&
     typeof v.createdAt === 'number'
   );

@@ -36,8 +36,13 @@ import { readRawArchive } from './crawl';
  * v4: the author name prefers fresh extraction over the stored column, and no
  *     longer falls back to X's <title>, which is "Headline | Author on X" and
  *     produced bylines like "Some Headline | Some Author".
+ * v5: image ids are scoped to the article. Keying them on the source URL alone
+ *     made the same image collide across two Articles — the same avatar, or a
+ *     syndicated screenshot — and SPEC §10's media_objects uses the id as its
+ *     PRIMARY KEY, so the second article's media run failed on a UNIQUE
+ *     violation.
  */
-export const PARSER_VERSION = 4;
+export const PARSER_VERSION = 5;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 

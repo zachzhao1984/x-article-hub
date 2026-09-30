@@ -67,7 +67,23 @@ export const R2_PATHS = {
   versionJson: (articleId: string, version: number) => `articles/${articleId}/versions/v${version}/article.json`,
   versionMarkdown: (articleId: string, version: number) => `articles/${articleId}/versions/v${version}/article.md`,
   versionHtml: (articleId: string, version: number) => `articles/${articleId}/versions/v${version}/article.html`,
-  media: (articleId: string, index: number) => `articles/${articleId}/media/${String(index).padStart(3, '0')}.webp`,
+  /**
+   * SPEC §8 / §10 — `articles/{id}/media/001.webp`.
+   *
+   * The extension is a parameter rather than a constant. SPEC §10 writes `.webp`
+   * because X serves WebP when asked, but a response that ignored the Accept
+   * header would land PNG or JPEG bytes under a `.webp` name, and the reading
+   * page would then serve the wrong content type. The extension follows the
+   * sniffed format instead, so a `.webp` key always holds WebP.
+   */
+  media: (articleId: string, index: number, extension: string) =>
+    `articles/${articleId}/media/${String(index).padStart(3, '0')}.${extension}`,
+  /**
+   * SPEC §8 lists `media/cover.webp`; the author portrait is the other X CDN
+   * hotlink on the reading page, so it is stored under its own fixed name rather
+   * than competing for a body ordinal.
+   */
+  avatar: (articleId: string) => `articles/${articleId}/media/avatar.webp`,
 } as const;
 
 /** SPEC §13.4 / §12 — derive indexable plain text. Never hand raw HTML to a model or FTS. */

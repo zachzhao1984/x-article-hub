@@ -230,6 +230,44 @@ is that, without the fragility.
 | Quotes | 1 |
 | Images | 9, in document order (the 10th capture image is the author chip, §7.2) |
 
+### Media: the archive owns the bytes (SPEC §10)
+
+Before this, every figure on the reading page was an `<img>` pointing at
+`pbs.twimg.com`. That is not an archive — X deletes posts, replaces images on
+reposts, and re-encodes media behind the same URL, so every hotlinked image was a
+promise that someone else's storage decision would hold forever.
+
+`POST /api/admin/articles/:id/media` (and the **Archive images** button) copies
+every image into R2 under `articles/{id}/media/NNN.<ext>`. The reading page then
+serves all of them from `/media/:imageId`, which reads the bytes from R2. The
+byline avatar goes through the same pipeline, since it was the other X CDN
+hotlink on the page.
+
+Four decisions worth knowing about:
+
+- **The extension follows the sniffed format, not SPEC §10's literal `.webp`.**
+  X serves WebP when asked, but a response that ignored the `Accept` header would
+  land PNG or JPEG bytes under a `.webp` name, and `/media` would then serve the
+  wrong content type. The key is named after magic bytes, so `.webp` always holds
+  WebP.
+- **The content-type header is not trusted.** SPEC §10 asks for a content-type
+  check, and the check is a magic-byte sniff instead: an HTML error page served as
+  `image/jpeg` would otherwise be archived as an image and fail in the reader's
+  browser instead of in the pipeline.
+- **An image the pipeline gave up on is not hotlinked.** It renders as a labelled
+  link to the original. A reader cannot tell a working image from one that breaks
+  the day X drops it, so the page says which is which.
+- **Image ids are scoped per article.** They hash the canonical URL *and* the
+  image URL, because `media_objects.id` is the PRIMARY KEY and an author posting
+  several articles has one avatar. Keying on the URL alone collided, and the
+  second article's media run died on a UNIQUE violation.
+
+The media job is enqueued by the parse job, not the crawl: media is derived from
+the ArticleDocument, so there is no path that produces a document without also
+scheduling its download. A failed image never fails its Article (SPEC §10) — it
+becomes `failed` or stays `external_fallback`, and the admin detail page lists
+every image with its status, dimensions and reason.
+
 ### Icons
 
 `public/favicon.svg` is the single source of truth; every raster size is
@@ -364,14 +402,27 @@ All deliberate; all additive or justified by the spec's own later sections.
    §35 requires, and to make the Phase 1 → Phase 2 boundary observable.
 5. **Partial unique index `idx_crawl_jobs_open_per_type`** — one open job per
    (article, job_type), which is what makes retry idempotent (§19).
-6. **`0004_parser_versions.sql`** changes `article_versions` from
+6. **`0005_media.sql`** adds `media_objects` (SPEC §10): one row per image with
+   `position`, `source_url`, `r2_key`, `width`, `height`, `alt_text` and the
+   `ready` / `failed` / `external_fallback` status. It also carries `kind`
+   (`body` / `avatar`) so the author portrait does not take a body ordinal, plus
+   `content_type`, `byte_size` and `error_code` — SPEC §25's
+   `IMAGE_FETCH_FAILED` / `INVALID_CONTENT_TYPE` / `IMAGE_TOO_LARGE` need
+   somewhere to land, and without them a permanently broken image is
+   indistinguishable from a retryable one.
+7. **`0006_media_job_type.sql`** adds `'media'` to `crawl_jobs.job_type`'s CHECK.
+   The table was written against the five job types SPEC §19 named, and routing
+   media through the existing `parse` type would make a redelivered parse message
+   indistinguishable from a media one. SQLite cannot ALTER a CHECK, so the table
+   is rebuilt with foreign keys deferred across the swap.
+8. **`0004_parser_versions.sql`** changes `article_versions` from
    `UNIQUE(article_id, version)` (SPEC §11.6) to
    `UNIQUE(article_id, version, parser_version)`. §11.6's key cannot coexist with
    its own `parser_version` column: §27 requires a re-parse to produce a new
    ArticleDocument, and with a per-(article, version) key re-parsing failed with a
    UNIQUE violation. The new key satisfies §28 (unchanged *source* → no new row)
    and §27 (unchanged source, new *parser* → new row) at once.
-7. **`0003_search.sql`** adds FTS5. §42 orders FTS5 at P4, but `/search` is part
+9. **`0003_search.sql`** adds FTS5. §42 orders FTS5 at P4, but `/search` is part
    of the reading experience and §12 says D1's FTS5 is sufficient — no
    Elasticsearch.
 
@@ -426,6 +477,8 @@ search, SPEC §37 governance and public-API shape.
 | `POST /api/admin/articles/:id/crawl` | Runs Browser Run immediately, reports the exact §25 code |
 | `GET /api/admin/articles/:id/raw?format=html\|markdown` | The archived capture, not a live fetch |
 | `POST /api/admin/articles/:id/parse` | Runs the Parser now. Reads only R2 — free, no X traffic |
+| `GET /api/admin/articles/:id/media` | Per-image status: archived, on x.com, or failed, with the reason |
+| `POST /api/admin/articles/:id/media` | Downloads every image into R2. Re-run to retry failures |
 | `GET /api/admin/articles/:id/errors` | Job errors straight from the job row |
 | `POST /api/admin/articles/:id/takedown` | §37 takedown (requires a reason) |
 

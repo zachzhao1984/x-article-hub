@@ -237,6 +237,21 @@ export interface ArticleDetailView {
   events: Array<{ id: string; action: string; actor: string; note: string | null; created_at: number }>;
   raw?: { archived: boolean; markdownBytes: number; htmlBytes: number; r2Key: string | null } | null;
   parsed?: { contentR2Key: string | null; blockCount: number; wordCount: number; parserVersion: number } | null;
+  /** SPEC §10 — per-image media state, so "archived" is a claim you can check. */
+  media?: {
+    imageId: string;
+    position: number;
+    kind: 'body' | 'avatar';
+    status: 'ready' | 'failed' | 'external_fallback';
+    contentType: string | null;
+    byteSize: number | null;
+    width: number | null;
+    height: number | null;
+    altText: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    attempts: number;
+  }[];
   notice?: string | null;
   error?: string | null;
 }
@@ -300,6 +315,12 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
       <button class="button button-secondary" type="submit">Parse</button>
       <span class="hint">
         Raw archive → ArticleDocument. Reads only R2, so it is free and never touches X.
+      </span>
+    </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/media">
+      <button class="button button-secondary" type="submit"${a.content_r2_key ? '' : ' disabled'}>Archive images</button>
+      <span class="hint">
+        Fetches every image from x.com into R2, so the article stops depending on their CDN. Re-run to retry failures.
       </span>
     </form>
     <form method="post" action="/admin/articles/${escapeHtml(a.id)}/featured">
@@ -366,6 +387,54 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
       : `<p class="hint">Not parsed yet. The reading page stays empty until the Parser runs.</p>`
   }
   ${view.notice ? `<div class="banner banner-ok">${escapeHtml(view.notice)}</div>` : ''}
+</section>
+
+<section class="card">
+  <h2>Media (SPEC §10)</h2>
+  ${
+    !view.media || view.media.length === 0
+      ? `<p class="hint">
+           No media run yet. The reading page still points every figure at x.com's CDN, so the archive is not
+           self-sufficient — X can delete a post or replace an image and this article loses it.
+         </p>`
+      : (() => {
+          const ready = view.media!.filter((m) => m.status === 'ready');
+          const failed = view.media!.filter((m) => m.status === 'failed');
+          const fallback = view.media!.filter((m) => m.status === 'external_fallback');
+          const bytes = ready.reduce((sum, m) => sum + (m.byteSize ?? 0), 0);
+          const kb = (bytes / 1024).toFixed(0);
+          return `<dl class="kv">
+    <dt>Archived</dt><dd>${ready.length} of ${view.media!.length} (${kb} KB in R2)</dd>
+    <dt>Still on X's CDN</dt><dd>${fallback.length}</dd>
+    <dt>Given up on</dt><dd>${failed.length}</dd>
+  </dl>
+  <table class="table">
+    <thead><tr><th>#</th><th>Status</th><th>Type</th><th>Size</th><th>Dimensions</th><th>Note</th></tr></thead>
+    <tbody>
+      ${view.media!
+        .map(
+          (m) => `<tr>
+        <td>${m.kind === 'avatar' ? 'avatar' : String(m.position).padStart(3, '0')}</td>
+        <td>${m.status === 'ready' ? 'archived' : m.status === 'failed' ? 'failed' : 'on x.com'}</td>
+        <td>${m.contentType ? escapeHtml(m.contentType) : '—'}</td>
+        <td>${m.byteSize ? `${(m.byteSize / 1024).toFixed(0)} KB` : '—'}</td>
+        <td>${m.width && m.height ? `${m.width}×${m.height}` : '—'}</td>
+        <td>${m.errorCode ? `<code>${escapeHtml(m.errorCode)}</code> ${escapeHtml(m.errorMessage ?? '')}` : ''}</td>
+      </tr>`,
+        )
+        .join('')}
+    </tbody>
+  </table>
+  ${
+    fallback.length > 0 || failed.length > 0
+      ? `<p class="hint">
+           Figures still on x.com are shown to readers as a labelled link rather than a hotlinked
+           <code>&lt;img&gt;</code>, so nobody mistakes a CDN image for an archived one.
+         </p>`
+      : ''
+  }`;
+        })()
+  }
 </section>
 
 <section class="card">

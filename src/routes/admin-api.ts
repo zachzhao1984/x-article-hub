@@ -18,6 +18,7 @@ import { listCategories } from '../db/categories';
 import { retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle, PARSER_VERSION } from '../services/parse';
+import { downloadArticleMedia, mediaSummary } from '../services/media';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -337,6 +338,81 @@ adminApi.post('/articles/:id/parse', async (c) => {
   log.info('publish', { article_id: id, actor, action: 'parsed', blocks: outcome.blockCount });
   const { ok, ...rest } = outcome;
   return c.json({ articleId: id, ok, ...rest, contentR2Key: article?.content_r2_key ?? null });
+});
+
+/**
+ * SPEC §10 — download every image into R2, now.
+ *
+ * Unlike the crawl and the parse, this does reach out to X's CDN — but only to
+ * take a copy. After it runs, the reading page no longer depends on that CDN at
+ * all, and re-running it is how a previously failed image is retried.
+ */
+adminApi.post('/articles/:id/media', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  const id = c.req.param('id');
+
+  const article = await getArticleById(c.env.DB, id);
+  if (!article) throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
+
+  if (!article.content_r2_key) {
+    throw new AppError(
+      'BAD_REQUEST',
+      'No parsed document yet. Run the Parser first — media is derived from the ArticleDocument.',
+      409,
+    );
+  }
+
+  const outcome = await downloadArticleMedia(c.env, id);
+  const summary = await mediaSummary(c.env, id);
+
+  log.info('publish', {
+    article_id: id,
+    actor,
+    action: 'media_downloaded',
+    ready: outcome.ready,
+    failed: outcome.failed,
+  });
+
+  // A partial result is still a completed request: the per-image state is in the
+  // response and in media_objects. Reporting 400 would make the admin UI treat a
+  // single deleted image as a broken endpoint.
+  return c.json({ articleId: id, ...outcome, summary });
+});
+
+/** SPEC §10 — per-image state, so the admin can see what is and is not archived. */
+adminApi.get('/articles/:id/media', async (c) => {
+  const id = c.req.param('id');
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, position, kind, source_url, r2_key, width, height, alt_text, status,
+            content_type, byte_size, error_code, error_message, attempt_count, fetched_at
+       FROM media_objects
+      WHERE article_id = ?
+      ORDER BY kind ASC, position ASC`,
+  )
+    .bind(id)
+    .all<Record<string, unknown>>();
+
+  return c.json({
+    articleId: id,
+    summary: await mediaSummary(c.env, id),
+    images: results.map((row) => ({
+      imageId: row.id,
+      position: row.position,
+      kind: row.kind,
+      status: row.status,
+      r2Key: row.r2_key,
+      servedFrom: row.r2_key ? `/media/${row.id}` : row.source_url,
+      width: row.width,
+      height: row.height,
+      contentType: row.content_type,
+      byteSize: row.byte_size,
+      altText: row.alt_text,
+      errorCode: row.error_code,
+      errorMessage: row.error_message,
+      attempts: row.attempt_count,
+      fetchedAt: row.fetched_at,
+    })),
+  });
 });
 
 /** SPEC §16.4 — crawl errors, straight from the job row. */

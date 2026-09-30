@@ -10,6 +10,7 @@ import { recordDelivery } from '../db/jobs';
 import { log } from '../lib/logger';
 import { handleCrawl } from './crawl';
 import { handleParse } from './parse';
+import { handleMedia } from './media';
 
 type Handler = (message: JobMessage, env: Env) => Promise<void>;
 
@@ -18,6 +19,8 @@ const handlers: Record<JobMessage['type'], Handler> = {
   crawl: handleCrawl,
   // SPEC §38 Phase 3 — raw → ArticleDocument → D1.
   parse: handleParse,
+  // SPEC §10 — source image URL → R2, so the archive stops depending on X's CDN.
+  media: handleMedia,
   // Phase 4 / 6 own these. Declared so an unroutable message is caught here
   // instead of being silently acked somewhere else.
   ai: notImplemented('ai'),
