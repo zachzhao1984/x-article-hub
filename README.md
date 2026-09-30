@@ -228,7 +228,7 @@ is that, without the fragility.
 | Headings | 32 (levels preserved, clamped to 1–3 per §9.2) |
 | List items | 18 across 3 lists |
 | Quotes | 1 |
-| Images | 10, in document order |
+| Images | 9, in document order (the 10th capture image is the author chip, §7.2) |
 | Links | 15 |
 | Warnings | 0 |
 
@@ -331,7 +331,14 @@ All deliberate; all additive or justified by the spec's own later sections.
    §35 requires, and to make the Phase 1 → Phase 2 boundary observable.
 5. **Partial unique index `idx_crawl_jobs_open_per_type`** — one open job per
    (article, job_type), which is what makes retry idempotent (§19).
-6. **`0003_search.sql`** adds FTS5. §42 orders FTS5 at P4, but `/search` is part
+6. **`0004_parser_versions.sql`** changes `article_versions` from
+   `UNIQUE(article_id, version)` (SPEC §11.6) to
+   `UNIQUE(article_id, version, parser_version)`. §11.6's key cannot coexist with
+   its own `parser_version` column: §27 requires a re-parse to produce a new
+   ArticleDocument, and with a per-(article, version) key re-parsing failed with a
+   UNIQUE violation. The new key satisfies §28 (unchanged *source* → no new row)
+   and §27 (unchanged source, new *parser* → new row) at once.
+7. **`0003_search.sql`** adds FTS5. §42 orders FTS5 at P4, but `/search` is part
    of the reading experience and §12 says D1's FTS5 is sufficient — no
    Elasticsearch.
 

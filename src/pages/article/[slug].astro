@@ -18,6 +18,11 @@ if (!article) {
   return Astro.rewrite('/404');
 }
 
+/** A cover's alt text is generated boilerplate, not a caption worth rendering. */
+function isCoverCaption(alt?: string): boolean {
+  return !alt || /^(article )?cover image$/i.test(alt.trim());
+}
+
 const isTakedown = article.status === 'takedown' || article.display_mode === 'takedown';
 // SPEC §37 — the body is only rendered for `full`. `excerpt` and `link_only`
 // deliberately do not fetch the R2 document at all.
@@ -85,9 +90,23 @@ const jsonLd = isTakedown
       <header class="article-head">
         <h1 class="article-title">{article.title}</h1>
         <div class="byline">
+          {
+            article.author_avatar && (
+              <img
+                class="avatar"
+                src={article.author_avatar}
+                alt=""
+                width="40"
+                height="40"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              />
+            )
+          }
           {article.author_username && (
-            <a href={`/author/${article.author_username}`}>
-              {article.author_name ? `${article.author_name} ` : ''}@{article.author_username}
+            <a class="author-name" href={`/author/${article.author_username}`}>
+              {article.author_name ?? ''}
+              <span class="handle">@{article.author_username}</span>
             </a>
           )}
           {article.published_at && (
@@ -168,14 +187,16 @@ const jsonLd = isTakedown
                           // SPEC §10 — `external_fallback` means the bytes are still
                           // on X's CDN because media download has not run yet.
                           return (
-                            <figure>
+                            <figure class:list={['fig', { cover: isCoverCaption(img.altText) }]}>
                               <img
                                 src={img.r2Key ? `/media/${img.imageId}` : img.sourceUrl}
                                 alt={img.altText ?? ''}
                                 loading="lazy"
                                 referrerpolicy="no-referrer"
                               />
-                              {img.altText && <figcaption>{img.altText}</figcaption>}
+                              {img.altText && !isCoverCaption(img.altText) && (
+                                <figcaption>{img.altText}</figcaption>
+                              )}
                             </figure>
                           );
                         }

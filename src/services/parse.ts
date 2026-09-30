@@ -28,8 +28,16 @@ import { readRawArchive } from './crawl';
 /**
  * SPEC §27 — the Parser version. Bump when the block extraction changes
  * materially; existing articles can then be re-parsed from their raw archive.
+ *
+ * v2: X's author chip (linked avatar + name + date) is recognised as metadata
+ *     instead of being published as a body figure, per SPEC §7.2.
+ * v3: the recovered avatar is written back to the article row. The crawl had put
+ *     the cover image there from og:image, so the byline showed a stock photo.
+ * v4: the author name prefers fresh extraction over the stored column, and no
+ *     longer falls back to X's <title>, which is "Headline | Author on X" and
+ *     produced bylines like "Some Headline | Some Author".
  */
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 4;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 
@@ -162,7 +170,8 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
             title = COALESCE(NULLIF(?8, ''), title),
             author_name = COALESCE(?9, author_name),
             author_username = COALESCE(?10, author_username),
-            updated_at = ?11
+            author_avatar = COALESCE(?11, author_avatar),
+            updated_at = ?12
       WHERE id = ?1`,
   )
     .bind(
@@ -176,6 +185,9 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
       document.title,
       document.author.name,
       document.author.username,
+      // SPEC §9 — the Parser is the metadata authority. The crawl's avatar came
+      // from og:image, which on an X Article is the cover image, not a face.
+      document.author.avatar ?? null,
       Date.now(),
     )
     .run();

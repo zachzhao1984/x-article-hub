@@ -171,11 +171,22 @@ export function extractPublishedAt(html: string, markdown: string): string | nul
   return null;
 }
 
-/** SPEC §10 — og:image / twitter:image is the best available avatar. */
+/**
+ * SPEC §7.2 — the author avatar, not the cover image.
+ *
+ * On an X Article, `og:image` is the article's cover image, not a face. Using it
+ * as the avatar put a stock photo where someone's portrait belongs. X serves
+ * avatars from a distinct CDN path, so that is what is matched first, and the
+ * Parser independently recovers the real avatar from X's author chip.
+ */
 export function extractAvatarUrl(html: string): string | null {
+  // X's avatar CDN path anywhere in the document.
+  const fromCdn = /(["'(])(https?:\/\/pbs\.twimg\.com\/profile_images\/[^"')\s]+)\1/i.exec(html);
+  if (fromCdn?.[2]) return fromCdn[2];
+
   const patterns = [
-    /<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i,
     /<meta[^>]+name="twitter:image"[^>]+content="([^"]+)"/i,
+    /<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i,
   ];
   for (const re of patterns) {
     const m = re.exec(html);
@@ -224,6 +235,11 @@ export function classifyContent(markdown: string, html?: string): ContentVerdict
   if (bodyChars < CONTENT_LIMITS.minBodyChars) return { kind: 'too_small', bodyChars };
 
   return { kind: 'ok', bodyChars };
+}
+
+/** A bare profile URL has no headline, so its <title> is trustworthy identity. */
+function isProfileUrl(url: string): boolean {
+  return /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/?$/i.test(url);
 }
 
 /** Builds the full metadata set from both captures plus the canonical URL. */

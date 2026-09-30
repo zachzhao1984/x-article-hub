@@ -41,6 +41,24 @@ const UNORDERED_ITEM_RE = /^[-*+]\s+(.*)$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const FENCE_RE = /^(?:```|~~~)\s*([A-Za-z0-9+#._-]*)\s*$/;
 
+/**
+ * SPEC §7.2 — "/markdown 的元数据和媒体映射需要额外处理".
+ *
+ * X renders the byline as a linked avatar whose alt text is
+ * `Display Name @handle · Mon D`, wrapped in a link to the bare profile URL:
+ *
+ *   [![灰原学姐](…/profile_images/….jpg)灰原学姐@ HaibaraCrypto·Sep 26](https://x.com/HaibaraCrypto)
+ *
+ * Parsed naively this becomes a body image of someone's face with a garbled
+ * caption, so it is recognised as metadata and lifted out of the content.
+ *
+ * Two independent signals, either of which is conclusive on its own:
+ *   1. the href is a bare profile URL — a body image links to `/media/<id>`
+ *   2. the src path is X's avatar CDN path
+ */
+const PROFILE_LINK_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/?$/i;
+const AVATAR_CDN_RE = /\/profile_images\//i;
+
 export interface ParseOptions {
   url: string;
   /** Author already known from the crawl; the Markdown author chip is a fallback. */
@@ -55,6 +73,8 @@ export interface ParseOptions {
 export interface ParseResult {
   document: ArticleDocument;
   warnings: string[];
+  /** Present when the capture carried X's author chip; useful for diagnostics. */
+  authorChip?: { avatarUrl: string; name: string | null; dateHint: string | null } | null;
 }
 
 export function parseMarkdownToDocument(markdown: string, opts: ParseOptions): ParseResult {
@@ -65,17 +85,19 @@ export function parseMarkdownToDocument(markdown: string, opts: ParseOptions): P
 
   const header = readHeader(frontmatter, opts);
 
-  const { blocks, links, images } = parseBlocks(body, header.title, warnings);
+  const { blocks, links, images, authorChip } = parseBlocks(body, header.title, warnings);
 
   const document: ArticleDocument = {
     title: header.title,
     author: {
       // SPEC §9.1 types these as required. The URL was normalized from
       // /<username>/article/<id>, so the handle is always available even when the
-      // capture carried no author name at all.
-      name: header.authorName ?? header.authorUsername ?? 'Unknown',
+      // capture carried no author name. The chip's alt text beats the fallback.
+      name: header.authorName ?? authorChip?.name ?? header.authorUsername ?? 'Unknown',
       username: header.authorUsername ?? 'unknown',
-      avatar: frontmatter['og:image'] ?? undefined,
+      // The chip is the only reliable avatar source. `og:image` on an X Article is
+      // the cover image, not a face — rendering it as an avatar is its own bug.
+      avatar: authorChip?.avatarUrl ?? undefined,
     },
     publishedAt: opts.publishedAt ?? header.publishedAt ?? undefined,
     blocks,
@@ -88,7 +110,7 @@ export function parseMarkdownToDocument(markdown: string, opts: ParseOptions): P
     },
   };
 
-  return { document, warnings };
+  return { document, warnings, authorChip };
 }
 
 export function stripFrontmatter(markdown: string): string {
@@ -115,7 +137,10 @@ function readHeader(
     title,
     // The URL is authoritative for the handle: it is the dedup key's own input.
     authorUsername: urlUsername ?? opts.authorUsername ?? fromTitle.username ?? null,
-    authorName: opts.authorName ?? fromAuthor.name ?? fromTitle.name ?? null,
+    // SPEC §27 — fresh extraction outranks the stored column. A column written by
+    // an older, buggier extractor must not outvote the current one, or a bad
+    // value is permanent.
+    authorName: fromAuthor.name ?? opts.authorName ?? null,
     publishedAt: null,
   };
 }
@@ -124,6 +149,7 @@ interface ParsedBlocks {
   blocks: ArticleBlock[];
   links: ArticleLink[];
   images: ArticleImage[];
+  authorChip: { avatarUrl: string; name: string | null; dateHint: string | null } | null;
 }
 
 function parseBlocks(body: string, documentTitle: string, warnings: string[]): ParsedBlocks {
@@ -134,6 +160,9 @@ function parseBlocks(body: string, documentTitle: string, warnings: string[]): P
 
   const seenLinks = new Set<string>();
   const seenImages = new Set<string>();
+
+  /** Lifted out of the content stream when the author chip is met. */
+  let authorChip: { avatarUrl: string; name: string | null; dateHint: string | null } | null = null;
 
   const addLink = (href: string, text: string) => {
     if (!href || seenLinks.has(href)) return;
@@ -221,8 +250,22 @@ function parseBlocks(body: string, documentTitle: string, warnings: string[]): P
     // --- images (SPEC §9.3 "保留图片顺序") -----------------------------------
     const linked = LINKED_IMAGE_RE.exec(line.trim());
     if (linked) {
-      flushList();
       const [, src = '', altText = '', href = ''] = linked;
+
+      if (PROFILE_LINK_RE.test(href) || AVATAR_CDN_RE.test(src)) {
+        // Metadata, not content. SPEC §9.3 says preserve the author's structure;
+        // it does not say to publish someone's face as a figure mid-article.
+        flushList();
+        authorChip = {
+          avatarUrl: src,
+          name: altText.split('@')[0]?.trim() || null,
+          dateHint: altText.split('·')[1]?.trim() || null,
+        };
+        index += 1;
+        continue;
+      }
+
+      flushList();
       const imageId = addImage(src, altText);
       if (imageId) blocks.push({ type: 'image', imageId });
       if (href) addLink(href, 'media');
@@ -341,7 +384,7 @@ function parseBlocks(body: string, documentTitle: string, warnings: string[]): P
     warnings.push('No blocks were extracted from the capture.');
   }
 
-  return { blocks, links, images };
+  return { blocks, links, images, authorChip };
 }
 
 /**

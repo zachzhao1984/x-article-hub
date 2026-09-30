@@ -57,7 +57,9 @@ describe('parseMarkdownToDocument — the real capture (SPEC §39)', () => {
 
   it('extracts images in document order (SPEC §9.3)', () => {
     const { document } = parse();
-    expect(document.images.length).toBeGreaterThanOrEqual(10);
+    // The capture has 10 images; one of them is X's author chip, which §7.2
+    // requires be lifted out as metadata rather than published as content.
+    expect(document.images.length).toBe(9);
 
     const imageBlocks = document.blocks.filter((b) => b.type === 'image');
     expect(imageBlocks.length).toBe(document.images.length);
@@ -65,7 +67,25 @@ describe('parseMarkdownToDocument — the real capture (SPEC §39)', () => {
     expect(imageBlocks.map((b) => (b.type === 'image' ? b.imageId : ''))).toEqual(
       document.images.map((i) => i.imageId),
     );
-    expect(document.images.every((i) => i.sourceUrl.startsWith('https://pbs.twimg.com/'))).toBe(true);
+    expect(document.images.every((i) => i.sourceUrl.startsWith('https://pbs.twimg.com/media/'))).toBe(true);
+  });
+
+  it("does not publish the author avatar as a body figure (SPEC §7.2)", () => {
+    const { document } = parse();
+    // The chip is the one capture line linking to a bare profile URL.
+    expect(document.images.some((i) => i.sourceUrl.includes('/profile_images/'))).toBe(false);
+    expect(document.links.some((l) => /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/$/.test(l.href))).toBe(false);
+    expect(document.blocks.some((b) => b.type === 'image' && b.imageId.includes('img_'))).toBe(true);
+  });
+
+  it('recovers the avatar from the author chip', () => {
+    const { document } = parse();
+    expect(document.author.avatar).toMatch(/pbs\.twimg\.com\/profile_images\//);
+  });
+
+  it('prefers the chip name over a handle-only fallback', () => {
+    const { document } = parse();
+    expect(document.author.name).toBe('灰原学姐');
   });
 
   it('marks images external_fallback until media download runs (SPEC §10)', () => {
