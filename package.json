@@ -18,7 +18,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply x-article-hub --remote",
     "db:query": "wrangler d1 execute x-article-hub --local",
     "smoke": "bash scripts/smoke.sh",
-    "smoke:site": "bash scripts/smoke-site.sh"
+    "smoke:site": "bash scripts/smoke-site.sh",
+    "cleanup": "bash scripts/cleanup-smoke.sh"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.3",

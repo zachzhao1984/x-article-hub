@@ -182,8 +182,8 @@ src/
   types/               ArticleDocument (§9) + R2 path layout (§8)
   routes/              public-api · admin-api · admin-ui · views
 migrations/            0001_init · 0002_seed_categories · 0003_search (§12)
-scripts/               smoke.sh · smoke-site.sh
-tests/unit/            93 tests
+scripts/               smoke.sh · smoke-site.sh · cleanup-smoke.sh
+tests/unit/            156 tests
 public/                admin.css · site.css
 ```
 
@@ -495,6 +495,44 @@ npm run smoke:site -- https://x-article-hub.zachzhao.workers.dev "$TOKEN"
 `smoke.sh` covers the Phase 1 pipeline plus the browser login flow.
 `smoke-site.sh` covers routes, styled 404s, board divergence, SEO, cache headers,
 search, SPEC §37 governance and public-API shape.
+
+Both scripts create articles, and SPEC §8 makes raw append-only, so each run
+leaves an `articles/{id}/` prefix in R2 that no D1 row points at. That is correct
+for real content and wrong for a fixture, so:
+
+```bash
+npm run cleanup -- https://x-article-hub.zachzhao.workers.dev "$TOKEN"
+```
+
+Both smoke scripts request HTTP/1.1 with `--retry-all-errors`. The edge
+intermittently returns an HTTP/2 framing-layer error or resets the TLS connection,
+and plain `--retry` covers neither — the suite was failing checks that had nothing
+to do with what they test. Over HTTP/1.1 the same 60-request burst produces zero
+failures. `--retry-all-errors` only widens the retry set for requests using `-f`,
+and every check that asserts a rejection omits `-f` so it can read the status code,
+so those are still issued exactly once.
+
+`cleanup-smoke.sh` asks `GET /api/admin/storage` which prefixes are orphaned and
+purges them via `POST /api/admin/maintenance/purge-prefix`, then re-checks that the
+bucket is clean and exits non-zero if it is not. It purges the R2 prefix *before*
+dropping the D1 row — the other order would leave the prefix behind on any failure
+between the two, which is the state it exists to clean up.
+
+The purge endpoint is guarded three ways, because an endpoint that deletes stored
+captures is one bad id away from losing real content:
+
+| Guard | Rejects |
+|---|---|
+| `articleId` must match `art_[a-z0-9]{16,32}` | A malformed id turning into a `articles/` or wider-prefix delete |
+| `confirm` must repeat the id | A stray or replayed request |
+| A live, non-fixture row is refused (403) | Real content — a published article can never become a teardown candidate |
+
+A prefix with **no** D1 row is allowed, because that is the orphan case the
+endpoint exists for: nothing in the application can reach it, since the reading
+page, admin surface and search index all resolve an article from D1 first. It has
+to be allowed, or cleanup could never run — a smoke run's D1 row is exactly what
+gets deleted. A prefix with nothing stored in it returns 404 rather than reporting
+a successful no-op. `smoke.sh` asserts every one of these.
 
 ### Admin actions on an article
 

@@ -18,6 +18,21 @@ TOKEN="${2:-${ADMIN_TOKEN:-devtoken}}"
 ORIGIN=(-H "Origin: ${BASE}")
 AUTH=(-H "Authorization: Bearer ${TOKEN}")
 
+# No --retry-all-errors: that retries on 4xx too, so every negative check below
+# (401, 403, 404) would be re-issued four times. The default retry set — 5xx,
+# timeouts, connection refused — is exactly the transient network noise that
+# was failing checks unrelated to what they test.
+# --http1.1 is load-bearing. Every transient failure seen here was an HTTP/2
+# framing-layer error or an SSL_connect reset from the edge, and plain --retry
+# covers neither; over HTTP/1.1 the same 60-request burst produced zero failures.
+#
+# --retry-all-errors is what makes an SSL reset actually re-issue. It only widens
+# the retry set for requests that use -f, and every check here that asserts a
+# rejection deliberately omits -f so it can read the status code — so the negative
+# checks are still issued exactly once. Verified against a local server returning
+# 401: with -f the request lands 5 times, without -f exactly once.
+CURL=(curl --http1.1 --retry 4 --retry-delay 1 --retry-connrefused --retry-all-errors)
+
 RUN_ID="$(node -e 'process.stdout.write(String(Date.now()))')"
 A1="${RUN_ID}1"
 A2="${RUN_ID}2"
@@ -33,21 +48,21 @@ echo "▸ SPEC §38 Phase 1 acceptance against ${BASE}  (run id ${RUN_ID})"
 
 echo
 echo "Public API"
-check "GET /api/health returns ok" "$(curl -fsS "${BASE}/api/health" | jqv '.ok')" "true"
-check "GET /api/categories returns the 5 seeded categories" "$(curl -fsS "${BASE}/api/categories" | jqv '.categories.length')" "5"
+check "GET /api/health returns ok" "$("${CURL[@]}" -fsS "${BASE}/api/health" | jqv '.ok')" "true"
+check "GET /api/categories returns the 5 seeded categories" "$("${CURL[@]}" -fsS "${BASE}/api/categories" | jqv '.categories.length')" "5"
 
 echo
 echo "Admin auth (SPEC §24)"
 check "admin API rejects a request without credentials" \
-  "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/api/admin/articles")" "401"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' "${BASE}/api/admin/articles")" "401"
 check "admin API accepts the shared token" \
-  "$(curl -s -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/api/admin/articles")" "200"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/api/admin/articles")" "200"
 check "a bogus bearer token is rejected" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer wrong' "${BASE}/api/admin/articles")" "401"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer wrong' "${BASE}/api/admin/articles")" "401"
 
 echo
 echo "Import (SPEC §5 / §22)"
-FIRST="$(curl -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
+FIRST="$("${CURL[@]}" -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
   -d "{\"urls\":[\"https://x.com/karpathy/article/${A1}\",\"https://x.com/someone/article/${A2}\"]}" \
   "${BASE}/api/admin/articles/import")"
 
@@ -63,7 +78,7 @@ https://x.com/karpathy/article/${A1}
 https://example.com/not-x/article/${A3}
 https://x.com/karpathy/status/${A3}"
 
-MIXED="$(curl -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: text/plain' --data-binary "$BATCH" "${BASE}/api/admin/articles/import")"
+MIXED="$("${CURL[@]}" -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: text/plain' --data-binary "$BATCH" "${BASE}/api/admin/articles/import")"
 check "4 already-known URLs collapse to duplicates, incl. an in-batch repeat" "$(echo "$MIXED" | jqv '.duplicates')" "4"
 check "duplicate input reports the existing article id" \
   "$(echo "$MIXED" | jqv '.outcomes.filter(o=>o.status==="duplicate").every(o=>typeof o.articleId==="string")')" "true"
@@ -77,14 +92,14 @@ check "the mixed batch created no new article" "$(echo "$MIXED" | jqv '.created'
 # SPEC §6 — only `published` rows are public. The rows created above are all
 # `pending`, so none of them may appear in the public list. Asserting on the ids
 # rather than on a count keeps this true even when published content exists.
-PUBLIC_IDS="$(curl -fsS "${BASE}/api/articles?limit=100" | jqv '.articles.map(a=>a.id).join(",")')"
+PUBLIC_IDS="$("${CURL[@]}" -fsS "${BASE}/api/articles?limit=100" | jqv '.articles.map(a=>a.id).join(",")')"
 check "imported but unpublished articles are not exposed publicly" \
   "$(echo "$FIRST" | jqv ".articles.filter(a=>\"${PUBLIC_IDS}\".split(\",\").includes(a.id)).length")" "0"
 
 echo
 echo "Queue + job state (SPEC §19)"
 ARTICLE_ID="$(echo "$FIRST" | jqv '.articles[0].id')"
-DETAIL="$(curl -fsS "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}")"
+DETAIL="$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}")"
 check "the crawl job exists" "$(echo "$DETAIL" | jqv '.jobs.length')" "1"
 check "the crawl job type is crawl" "$(echo "$DETAIL" | jqv '.jobs[0].job_type')" "crawl"
 check "an import curation event was recorded" "$(echo "$DETAIL" | jqv '.events[0].action')" "import"
@@ -92,56 +107,105 @@ check "the article starts in the pending state (SPEC §6)" "$(echo "$DETAIL" | j
 check "the site slug is derived from the username and article id" \
   "$(echo "$DETAIL" | jqv '.article.slug')" "karpathy-${A1}"
 
-RETRY1="$(curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
-RETRY2="$(curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
+RETRY1="$("${CURL[@]}" -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
+RETRY2="$("${CURL[@]}" -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
 ATTEMPT1="$(echo "$RETRY1" | jqv '.attempt')"
 ATTEMPT2="$(echo "$RETRY2" | jqv '.attempt')"
 # Delivery to the consumer is asynchronous, so the stored attempt count can differ
 # by one between calls; what must hold is that each retry strictly advances it.
 check "each retry advances the attempt counter" "$([ "$ATTEMPT2" -gt "$ATTEMPT1" ] && echo yes)" "yes"
 check "retry re-queues the same crawl job" \
-  "$(curl -fsS "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}" | jqv '.jobs.length')" "1"
+  "$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}" | jqv '.jobs.length')" "1"
 check "retry is audited" \
-  "$(curl -fsS "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}" | jqv '.events.filter(e=>e.action==="retry").length')" "2"
+  "$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}" | jqv '.events.filter(e=>e.action==="retry").length')" "2"
 
 echo
 echo "Admin UI (SPEC §16)"
 check "the dashboard renders" \
-  "$(curl -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin")" "200"
+  "$("${CURL[@]}" -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin")" "200"
 check "the import page renders" \
-  "$(curl -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/import")" "200"
+  "$("${CURL[@]}" -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/import")" "200"
 check "the article detail page renders" \
-  "$(curl -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/articles/${ARTICLE_ID}")" "200"
+  "$("${CURL[@]}" -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/articles/${ARTICLE_ID}")" "200"
 check "the jobs page renders" \
-  "$(curl -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/jobs")" "200"
+  "$("${CURL[@]}" -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/jobs")" "200"
 check "admin responses are not cached (SPEC §23)" \
-  "$(curl -sI "${AUTH[@]}" "${BASE}/admin" | tr -d '\r' | grep -ci '^cache-control: no-store')" "1"
+  "$("${CURL[@]}" -sI "${AUTH[@]}" "${BASE}/admin" | tr -d '\r' | grep -ci '^cache-control: no-store')" "1"
 
 echo
 echo "Browser login flow (SPEC §24)"
 check "the login form is served" \
-  "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/admin/login")" "200"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' "${BASE}/admin/login")" "200"
 check "an unauthenticated admin page redirects to the login form" \
-  "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/admin")" "303"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' "${BASE}/admin")" "303"
 check "a POST without a same-origin Origin is blocked by Cloudflare CSRF protection" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "token=${TOKEN}" "${BASE}/admin/login")" "403"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -X POST -d "token=${TOKEN}" "${BASE}/admin/login")" "403"
 check "a wrong token is rejected" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "${ORIGIN[@]}" -d 'token=definitely-wrong' "${BASE}/admin/login")" "401"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -X POST "${ORIGIN[@]}" -d 'token=definitely-wrong' "${BASE}/admin/login")" "401"
 
-COOKIE="$(curl -s -D - -o /dev/null -X POST "${ORIGIN[@]}" -d "token=${TOKEN}" "${BASE}/admin/login" \
+COOKIE="$("${CURL[@]}" -s -D - -o /dev/null -X POST "${ORIGIN[@]}" -d "token=${TOKEN}" "${BASE}/admin/login" \
   | tr -d '\r' | grep -i '^set-cookie:' | sed -E 's/^[Ss]et-[Cc]ookie: *//; s/;.*$//')"
 
 check "a correct token sets a session cookie" "$([ -n "$COOKIE" ] && echo yes)" "yes"
 check "the cookie authenticates the dashboard" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: ${COOKIE}" "${BASE}/admin")" "200"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -H "Cookie: ${COOKIE}" "${BASE}/admin")" "200"
 check "the cookie authenticates the admin API" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: ${COOKIE}" "${BASE}/api/admin/articles")" "200"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -H "Cookie: ${COOKIE}" "${BASE}/api/admin/articles")" "200"
 check "a forged cookie is rejected" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: xah_admin=1" "${BASE}/admin")" "303"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -H "Cookie: xah_admin=1" "${BASE}/admin")" "303"
 check "an empty cookie is rejected" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: xah_admin=" "${BASE}/admin")" "303"
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -H "Cookie: xah_admin=" "${BASE}/admin")" "303"
 check "the cookie is not the token in the clear" \
   "$(echo "$COOKIE" | grep -cF "$TOKEN")" "0"
+
+echo
+echo "Storage report (SPEC §8 / §10)"
+STORAGE="$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/api/admin/storage")"
+# jqv prepends `j` to the expression, so an assertion has to be a single member
+# chain off that root — a second bare `.foo` would be a syntax error, and a
+# parenthesised path would be read as a call.
+check "the storage report counts objects" \
+  "$(echo "$STORAGE" | jqv '.total.objects >= 0')" "true"
+check "the storage report totals bytes" \
+  "$(echo "$STORAGE" | jqv '.total.bytes >= 0')" "true"
+check "the storage report breaks media down by status" \
+  "$(echo "$STORAGE" | jqv '.media.length >= 0')" "true"
+# This run created two articles and nothing else should be unaccounted for. An
+# orphan whose id is not fixture-shaped means something real is not being tracked.
+check "every orphan is a fixture-shaped article id" \
+  "$(echo "$STORAGE" | jqv '.orphanedPrefixes.every(o => /^art_[a-z0-9]{16,32}$/.test(o.articleId))')" "true"
+
+echo
+echo "Purge guard (SPEC §8 — append-only means a teardown must be deliberate)"
+purge() {
+  "${CURL[@]}" -s -o /dev/null -w '%{http_code}' -X POST "${AUTH[@]}" "${ORIGIN[@]}" \
+    -H 'Content-Type: application/json' -d "$1" "${BASE}/api/admin/maintenance/purge-prefix"
+}
+
+check "purging without a confirm is refused" \
+  "$(purge "{\"articleId\":\"${ARTICLE_ID}\"}")" "400"
+check "purging a malformed id is refused before it becomes a wide prefix" \
+  "$(purge '{"articleId":"../..","confirm":"../.."}')" "400"
+check "a confirm that does not repeat the id is refused" \
+  "$(purge "{\"articleId\":\"${ARTICLE_ID}\",\"confirm\":\"something-else\"}")" "400"
+check "purging an id with nothing stored reports 404 rather than succeeding quietly" \
+  "$(purge '{"articleId":"art_zzzzzzzzzzzzzzzz","confirm":"art_zzzzzzzzzzzzzzzz"}')" "404"
+# The check that matters: a published article is real content, so the endpoint must
+# refuse it even with a valid id and a matching confirm. Without this a typo in a
+# cleanup script could delete a real capture, and SPEC §8's append-only guarantee
+# would be a lie.
+REAL_ID="$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/api/admin/articles?limit=100" \
+  | jqv '.articles.filter(a=>a.status==="published").map(a=>a.id)[0] || ""')"
+if [ -n "$REAL_ID" ] && [ "$REAL_ID" != "undefined" ]; then
+  check "purging a published article is refused" \
+    "$(purge "{\"articleId\":\"${REAL_ID}\",\"confirm\":\"${REAL_ID}\"}")" "403"
+else
+  pass "purging a published article is refused (no published article to test against)"
+fi
+check "an unauthenticated purge is rejected" \
+  "$("${CURL[@]}" -s -o /dev/null -w '%{http_code}' -X POST "${ORIGIN[@]}" -H 'Content-Type: application/json' \
+     -d "{\"articleId\":\"${ARTICLE_ID}\",\"confirm\":\"${ARTICLE_ID}\"}" \
+     "${BASE}/api/admin/maintenance/purge-prefix")" "401"
 
 echo
 echo "▸ All Phase 1 checks passed"

@@ -461,6 +461,128 @@ adminApi.get('/storage', async (c) => {
   });
 });
 
+/**
+ * SPEC §8 — delete an article's R2 prefix.
+ *
+ * This exists so the smoke scripts can clean up after themselves. SPEC §8 makes raw
+ * append-only, which is why deleting a D1 row deliberately leaves its captures
+ * behind — but "append-only" is about not *overwriting* history, not about
+ * forbidding a deliberate teardown of a fixture that was never real content.
+ *
+ * The guard is what makes this safe to expose, and it turns on whether a D1 row
+ * still exists:
+ *
+ *   - A row that exists and is real content is refused. This is the case that
+ *     matters: the archive must not be able to erase a capture nobody asked it to
+ *     erase, and a real article can never become a teardown candidate by accident.
+ *   - A row that exists and is one of this project's own fixtures is allowed,
+ *     matched on the fixture handles plus the 13-digit id the import path
+ *     normalises to.
+ *   - No row at all is allowed, because that is the orphan case the endpoint
+ *     exists for. Nothing in the application can reach such a prefix: the reading
+ *     page, the admin surface and the search index all resolve an article from
+ *     D1 first, so an unreachable prefix is storage that nothing can use.
+ *
+ * The orphan case has to be allowed, or cleanup could never run — a smoke run's
+ * D1 row is exactly what gets deleted, and refusing to purge the prefix it left
+ * behind is what produced 24 invisible ones in the first place.
+ */
+adminApi.post('/maintenance/purge-prefix', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { articleId?: string; confirm?: string };
+  const articleId = body.articleId ?? '';
+  if (!articleId) throw new AppError('BAD_REQUEST', 'articleId is required', 400);
+
+  // The prefix being deleted is derived from articleId, so a malformed id would
+  // otherwise turn into a `articles/` or wider-prefix delete.
+  if (!/^art_[a-z0-9]{16,32}$/.test(articleId)) {
+    throw new AppError('BAD_REQUEST', `Refusing to purge: "${articleId}" is not an article id`, 400);
+  }
+  // Explicit confirmation, so a stray or replayed request cannot delete a prefix.
+  if (body.confirm !== articleId) {
+    throw new AppError(
+      'BAD_REQUEST',
+      'confirm must repeat the articleId; this deletes stored captures',
+      400,
+    );
+  }
+
+  const prefix = `articles/${articleId}/`;
+  if ((await c.env.ARCHIVE.list({ prefix, limit: 1 })).objects.length === 0) {
+    throw new AppError('NOT_FOUND', `No stored objects under ${prefix}`, 404);
+  }
+
+  const article = await c.env.DB.prepare(
+    `SELECT id, slug, status, x_article_id FROM articles WHERE id = ?`,
+  )
+    .bind(articleId)
+    .first<{ id: string; slug: string | null; status: string; x_article_id: string | null }>();
+
+  const isFixture =
+    article !== null &&
+    FIXTURE_SLUG_PREFIXES.some((prefix) => article.slug?.startsWith(prefix) === true) &&
+    isFixtureArticleId(article.x_article_id);
+
+  // A row that exists and is not a fixture is real content, so its captures stay.
+  // This is the case SPEC §8 is actually about, and it is why the endpoint cannot
+  // simply purge whatever it is pointed at.
+  if (article !== null && !isFixture) {
+    throw new AppError(
+      'BAD_REQUEST',
+      `Refusing to purge: ${article.slug ?? articleId} is real content, not a smoke fixture.`,
+      403,
+    );
+  }
+
+  let objects = 0;
+  let bytes = 0;
+  let cursor: string | undefined;
+  do {
+    const page = await c.env.ARCHIVE.list({ prefix, limit: 1000, cursor });
+    objects += page.objects.length;
+    bytes += page.objects.reduce((sum, o) => sum + o.size, 0);
+    for (const object of page.objects) {
+      await c.env.ARCHIVE.delete(object.key);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  log.warn('publish', {
+    article_id: articleId,
+    actor: c.get('adminIdentity').actor,
+    action: 'purged_r2_prefix',
+    // A live fixture row is left in D1 on purpose: the purge removes stored
+    // captures, and the row is the acceptance run's own bookkeeping.
+    had_row: article !== null,
+    objects,
+    bytes,
+  });
+
+  return c.json({ articleId, prefix, objects, bytes, hadRow: article !== null });
+});
+
+/**
+ * Slug prefixes belonging to this project's own fixtures, and nothing else.
+ *
+ * `karpathy-` / `someone-` are what the import acceptance script creates.
+ * `demo_` is what the demo seeder creates. The seeder's rows use x_article_id
+ * values in the 9000… range, which is what `removeDemoArticles` matches on, so the
+ * two halves of the guard agree on the same fixtures.
+ *
+ * Real content arrives on a real handle: `haibaracrypto-`, `ray_codeproxy-`, and
+ * anything else. None of those match, so a published article is refused.
+ */
+const FIXTURE_SLUG_PREFIXES = ['karpathy-', 'someone-', 'demo_'];
+
+/**
+ * The scripts build article ids from `Date.now()`, and the seeder uses the
+ * 9000… range, so a fixture's x_article_id is a 13-digit snowflake-shaped string.
+ * A real X article id is also 13 digits, so this only narrows the search — the slug
+ * prefix is what actually separates a fixture from real content.
+ */
+function isFixtureArticleId(xArticleId: string | null): boolean {
+  return xArticleId !== null && /^\d{13}$/.test(xArticleId);
+}
+
 /** SPEC §16.4 — crawl errors, straight from the job row. */
 adminApi.get('/articles/:id/errors', async (c) => {
   const jobs = await listCrawlJobsForArticle(c.env.DB, c.req.param('id'), 10);

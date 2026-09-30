@@ -11,6 +11,21 @@ TOKEN="${2:-${ADMIN_TOKEN:-devtoken}}"
 AUTH=(-H "Authorization: Bearer ${TOKEN}")
 ORIGIN=(-H "Origin: ${BASE}")
 
+# No --retry-all-errors: that retries on 4xx too, so every negative check below
+# (401, 403, 404) would be re-issued four times. The default retry set — 5xx,
+# timeouts, connection refused — is exactly the transient network noise that
+# was failing checks unrelated to what they test.
+# --http1.1 is load-bearing. Every transient failure seen here was an HTTP/2
+# framing-layer error or an SSL_connect reset from the edge, and plain --retry
+# covers neither; over HTTP/1.1 the same 60-request burst produced zero failures.
+#
+# --retry-all-errors is what makes an SSL reset actually re-issue. It only widens
+# the retry set for requests that use -f, and every check here that asserts a
+# rejection deliberately omits -f so it can read the status code — so the negative
+# checks are still issued exactly once. Verified against a local server returning
+# 401: with -f the request lands 5 times, without -f exactly once.
+CURL=(curl --http1.1 --retry 4 --retry-delay 1 --retry-connrefused --retry-all-errors)
+
 pass() { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 fail() { printf '  \033[31m✗\033[0m %s\n' "$1"; exit 1; }
 check() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1 (expected '$3', got '$2')"; fi; }
@@ -19,15 +34,15 @@ absent() { if echo "$2" | grep -qF "$3"; then fail "$1 (unexpectedly found '$3')
 
 jqv() { node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(eval('j'+process.argv[1]))})" "$1"; }
 
-status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+status() { "${CURL[@]}" -s -o /dev/null -w '%{http_code}' "$@"; }
 
 echo "▸ Public site acceptance against ${BASE}"
 
 # --- seed so there is something to verify ----------------------------------
-curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/demo/seed" > /dev/null
+"${CURL[@]}" -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/demo/seed" > /dev/null
 
-SLUG="$(curl -fsS "${BASE}/api/articles?limit=1" | jqv '.articles[0].slug')"
-ID="$(curl -fsS "${BASE}/api/articles?limit=1" | jqv '.articles[0].id')"
+SLUG="$("${CURL[@]}" -fsS "${BASE}/api/articles?limit=1" | jqv '.articles[0].slug')"
+ID="$("${CURL[@]}" -fsS "${BASE}/api/articles?limit=1" | jqv '.articles[0].id')"
 if [ -z "$SLUG" ] || [ "$SLUG" = "undefined" ]; then
   fail "no published articles found — seed failed"
 fi
@@ -48,14 +63,14 @@ echo "Unknown slugs return a styled 404, not a blank body"
 for p in /article/nope /category/nope /tag/nope /author/nope; do
   check "GET ${p} is 404" "$(status "${BASE}${p}")" "404"
   # no -f: curl must be willing to return a 404 body here.
-  contains "GET ${p} renders the 404 page" "$(curl -sS "${BASE}${p}")" "404 — not found"
+  contains "GET ${p} renders the 404 page" "$("${CURL[@]}" -sS "${BASE}${p}")" "404 — not found"
 done
 
 echo
 echo "Boards order differently (SPEC §15)"
-LATEST="$(curl -fsS "${BASE}/latest")"
-TRENDING="$(curl -fsS "${BASE}/trending")"
-RISING="$(curl -fsS "${BASE}/rising")"
+LATEST="$("${CURL[@]}" -fsS "${BASE}/latest")"
+TRENDING="$("${CURL[@]}" -fsS "${BASE}/trending")"
+RISING="$("${CURL[@]}" -fsS "${BASE}/rising")"
 check "trending order differs from latest" \
   "$(if [ "$LATEST" != "$TRENDING" ]; then echo yes; else echo no; fi)" "yes"
 check "rising order differs from trending" \
@@ -63,20 +78,20 @@ check "rising order differs from trending" \
 
 echo
 echo "SEO (SPEC §33)"
-ARTICLE="$(curl -fsS "${BASE}/article/${SLUG}")"
+ARTICLE="$("${CURL[@]}" -fsS "${BASE}/article/${SLUG}")"
 contains "article has a canonical" "$ARTICLE" "<link rel=\"canonical\""
 contains "article has og:title" "$ARTICLE" "property=\"og:title\""
 contains "article has twitter:card" "$ARTICLE" "name=\"twitter:card\""
 contains "article has JSON-LD" "$ARTICLE" "application/ld+json"
 contains "article description is non-empty" "$ARTICLE" 'name="description"'
-contains "admin pages are noindex" "$(curl -fsS "${AUTH[@]}" "${BASE}/admin")" 'name="robots" content="noindex'
-ROBOTS="$(curl -fsS "${BASE}/robots.txt")"
+contains "admin pages are noindex" "$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/admin")" 'name="robots" content="noindex'
+ROBOTS="$("${CURL[@]}" -fsS "${BASE}/robots.txt")"
 contains "robots disallows /admin" "$ROBOTS" "Disallow: /admin"
 contains "robots disallows /api" "$ROBOTS" "Disallow: /api/"
 contains "robots points at the sitemap" "$ROBOTS" "Sitemap:"
-SITEMAP="$(curl -fsS "${BASE}/sitemap.xml")"
+SITEMAP="$("${CURL[@]}" -fsS "${BASE}/sitemap.xml")"
 contains "sitemap lists the article" "$SITEMAP" "/article/${SLUG}"
-FEED="$(curl -fsS "${BASE}/feed.xml")"
+FEED="$("${CURL[@]}" -fsS "${BASE}/feed.xml")"
 contains "feed lists the article" "$FEED" "/article/${SLUG}"
 
 echo
@@ -85,13 +100,13 @@ contains "article links to the original on X" "$ARTICLE" "View original on X"
 
 echo
 echo "Search (SPEC §12)"
-SEARCH="$(curl -fsS "${BASE}/search?q=cache")"
+SEARCH="$("${CURL[@]}" -fsS "${BASE}/search?q=cache")"
 contains "search returns results with snippets" "$SEARCH" "result-snippet"
 check "search with no query renders the prompt" "$(status "${BASE}/search")" "200"
 
 echo
 echo "Cache policy (SPEC §23)"
-cache_of() { curl -sI "$@" | tr -d '\r' | grep -i '^cache-control:' | head -1; }
+cache_of() { "${CURL[@]}" -sI "$@" | tr -d '\r' | grep -i '^cache-control:' | head -1; }
 contains "homepage sets s-maxage=60" "$(cache_of "${BASE}/")" "s-maxage=60"
 contains "article sets s-maxage=3600" "$(cache_of "${BASE}/article/${SLUG}")" "s-maxage=3600"
 contains "admin is no-store" "$(cache_of "${AUTH[@]}" "${BASE}/admin")" "no-store"
@@ -100,23 +115,23 @@ contains "the public API is cacheable" "$(cache_of "${BASE}/api/articles?limit=1
 
 echo
 echo "Governance (SPEC §37)"
-curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
+"${CURL[@]}" -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
   -d '{"reason":"smoke test takedown"}' "${BASE}/api/admin/articles/${ID}/takedown" > /dev/null
 
-DOWN="$(curl -fsS "${BASE}/article/${SLUG}")"
+DOWN="$("${CURL[@]}" -fsS "${BASE}/article/${SLUG}")"
 contains "a takedown page explains itself" "$DOWN" "has been taken down"
 contains "a takedown page shows the reason" "$DOWN" "smoke test takedown"
 absent "a takedown page does not leak the body" "$DOWN" "article-body"
 absent "a takedown page emits no JSON-LD" "$DOWN" "application/ld+json"
 absent "a takedown page drops the X link" "$DOWN" "View original on X"
 check "a takedown article leaves the public list" \
-  "$(curl -fsS "${BASE}/api/articles?limit=100" | jqv ".articles.filter(a=>a.id==='${ID}').length")" "0"
-absent "a takedown article leaves the sitemap" "$(curl -fsS "${BASE}/sitemap.xml")" "/article/${SLUG}"
-absent "a takedown article leaves the feed" "$(curl -fsS "${BASE}/feed.xml")" "/article/${SLUG}"
+  "$("${CURL[@]}" -fsS "${BASE}/api/articles?limit=100" | jqv ".articles.filter(a=>a.id==='${ID}').length")" "0"
+absent "a takedown article leaves the sitemap" "$("${CURL[@]}" -fsS "${BASE}/sitemap.xml")" "/article/${SLUG}"
+absent "a takedown article leaves the feed" "$("${CURL[@]}" -fsS "${BASE}/feed.xml")" "/article/${SLUG}"
 
-curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
+"${CURL[@]}" -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
   -d '{"displayMode":"full"}' "${BASE}/api/admin/articles/${ID}/display-mode" > /dev/null
-contains "restore brings the body back" "$(curl -fsS "${BASE}/article/${SLUG}")" "article-body"
+contains "restore brings the body back" "$("${CURL[@]}" -fsS "${BASE}/article/${SLUG}")" "article-body"
 
 check "takedown without a reason is rejected" \
   "$(status -X POST "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' -d '{}' "${BASE}/api/admin/articles/${ID}/takedown")" "400"
@@ -125,13 +140,13 @@ check "an invalid displayMode is rejected" \
 
 echo
 echo "Public API shape"
-API="$(curl -fsS "${BASE}/api/articles?limit=1")"
+API="$("${CURL[@]}" -fsS "${BASE}/api/articles?limit=1")"
 absent "the list API does not leak indexed body text" "$API" "content_text"
 absent "the list API does not expose internal workflow status" "$API" '"status":"pending"'
 check "an unknown API route returns JSON, not HTML" \
-  "$(curl -s "${BASE}/api/nope" | jqv '.error.code')" "NOT_FOUND"
+  "$("${CURL[@]}" -s "${BASE}/api/nope" | jqv '.error.code')" "NOT_FOUND"
 check "an unknown API route has a JSON content type" \
-  "$(curl -sI "${BASE}/api/nope" | tr -d '\r' | grep -ci '^content-type: application/json')" "1"
+  "$("${CURL[@]}" -sI "${BASE}/api/nope" | tr -d '\r' | grep -ci '^content-type: application/json')" "1"
 
 echo
 echo "▸ All public-site checks passed"
