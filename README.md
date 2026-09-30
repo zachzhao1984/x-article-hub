@@ -9,9 +9,9 @@ search (§12), SEO (§33) and content governance (§37).
 - **Live:** https://x-article-hub.zachzhao.workers.dev
 - **Admin:** https://x-article-hub.zachzhao.workers.dev/admin
 
-> ⚠️ **Reading a real X Article body needs a signed-in X session.** X serves a
-> login wall to logged-out visitors, including Browser Run. Everything around that
-> is implemented and verified; see [X requires a session](#x-requires-a-session).
+"> ✅ **Real X Article bodies are readable logged-out.** Verified against a live
+> article (10 602 chars captured, no cookies configured). See
+> [X access](#x-access) — including the cases that *do* look like walls.
 
 ---
 
@@ -62,7 +62,8 @@ The crawl was exercised against real Browser Run responses, not mocks.
 | Real content page (Cloudflare docs) | `archived`, 14 820 chars, HTML 152 KB + Markdown 15 KB in R2, title + avatar extracted |
 | Same page re-crawled (§28) | `unchanged` — no second version created |
 | Nonexistent X article | `ARTICLE_NOT_FOUND`, nothing archived |
-| Logged-out X page | `LOGIN_REQUIRED`, nothing archived, operator told what to do |
+| **Real X Article (logged out, no cookies)** | `archived`, 10 602 chars, HTML 133 KB + Markdown 26 KB, title/author extracted |
+| Profile page / walled capture | `LOGIN_REQUIRED`, nothing archived, operator told what to do |
 | Browser Run 429 | `PAGE_BLOCKED` + `rateLimited` flag → 1 h backoff instead of the §25 ladder |
 | Queue consumer path (real import) | `pending → fetching → failed`, delivered once, correct non-retryable code |
 
@@ -76,10 +77,13 @@ not an optimisation — the second call was being rate-limited, and the missing 
 failed *silently*, producing an archive the Phase 3 Parser could not use. HTML
 capture failure is now reported on the crawl outcome (`htmlError`).
 
-**2. X's logged-out pages are a login wall.** `<title>`, `og:title` and
-`og:description` render server-side, so metadata is recoverable, but the body is
-"Log in / Sign up". Recognised as `LOGIN_REQUIRED` rather than `EMPTY_CONTENT`, so
-an operator is pointed at cookies instead of at a retry that can never succeed.
+**2. Only *some* X pages are walls — do not generalise from one.** A real Article
+page served its full body logged-out with no cookies configured. But a *profile*
+page and a *nonexistent* Article URL both come back as login walls. Recognising
+that difference matters, so the classifier checks for X's own "this page doesn't
+exist" marker *before* the login-wall heuristic — otherwise a deleted article
+would be misreported as `LOGIN_REQUIRED` and sent to an operator to fix cookies
+for an article that simply does not exist.
 
 **3. Browser Run rate limits are tight on this account.** Repeated 429s during
 development. A rate-limited crawl now backs off **1 hour** rather than following
@@ -87,11 +91,28 @@ the §25 ladder's 1-minute first step, which would just burn quota faster.
 
 ---
 
-## X requires a session
+## X access
 
-X uses cookie sessions, not HTTP Basic auth, so the documented `authenticate`
-quick-action option **cannot** log in to X. The only mechanism Browser Run offers
-is `cookies` (Puppeteer `setCookie` objects).
+**Real X Articles are readable logged-out.** A live article
+(`x.com/HaibaraCrypto/article/2103788150405705870`) was captured in full — 10 602
+characters of body, 133 KB of rendered HTML, 26 KB of Markdown, with title, author
+and publish date extracted — with **no cookies configured at all**.
+
+What *is* walled, logged-out:
+
+| Page | What X returns |
+|---|---|
+| A profile (`x.com/<user>`) | login wall |
+| A **nonexistent** article | login wall **and** X's own "this page doesn't exist" |
+
+The distinction is what the classifier keys on. It checks for X's explicit
+404 marker first, then the login wall, so a deleted article reports
+`ARTICLE_NOT_FOUND` and a genuinely walled capture reports `LOGIN_REQUIRED`.
+
+If a private or subscriber-only article ever does need a session: X uses cookie
+sessions, not HTTP Basic auth, so the documented `authenticate` quick-action
+option **cannot** log in. The only mechanism Browser Run offers is `cookies`
+(Puppeteer `setCookie` objects).
 
 ```bash
 # 1. Sign in to x.com in a real browser.
@@ -108,12 +129,9 @@ npx wrangler secret put X_COOKIES_JSON -c dist/server/wrangler.json
 ```
 
 The cookie is never logged and never returned by an endpoint. Treat it as a
-password: it grants access to a real X account.
-
-**Unverified:** whether a *valid* X Article URL returns its body with these cookies,
-or whether X requires a full browser-session login (SPEC §7.4 Level 3). That needs
-one real Article URL from you, which is why the crawler was built to report
-`LOGIN_REQUIRED` explicitly rather than guessing.
+password: it grants access to a real X account. **Leave it unset unless a
+specific article turns out to be private** — it is not needed for ordinary
+articles, and not having it keeps the crawl inside the least-privilege path.
 
 ---
 
@@ -329,7 +347,7 @@ search, SPEC §37 governance and public-API shape.
 | Secret | Purpose |
 |---|---|
 | `ADMIN_TOKEN` | §24 dev shim. Replace with Cloudflare Access. |
-| `X_COOKIES_JSON` | X session cookies (Puppeteer `setCookie` objects). See above. |
+| `X_COOKIES_JSON` | Optional. Only for private/subscriber articles. See [X access](#x-access). |
 
 | Var | Purpose |
 |---|---|
@@ -374,14 +392,11 @@ form POST, so the admin UI is unaffected — scripted clients must send it.
 
 ## Phase 3 next steps
 
-1. **Get one real X Article URL and a session cookie**, then confirm
-   `POST /api/admin/articles/:id/crawl` returns `ok: true`. That is the last
-   unverified link in the chain and the last assumption SPEC §42 flags as risky.
-2. Parser: `raw/page.html` → `ArticleDocument` (§9). The contract is already
+1. **Parser** (the crawl is verified working end to end against a live article): `raw/page.html` → `ArticleDocument` (§9). The contract is already
    defined in `src/types/article-document.ts` and the reading page already renders
    it; the seeder writes documents in that shape. All X selectors stay in
    `src/jobs/x-selectors.ts` (§7.4).
-3. Media: download images to `articles/{id}/media/NNN.webp` (§10). A failed image
+2. Media: download images to `articles/{id}/media/NNN.webp` (§10). A failed image
    must not fail the article.
-4. Then Workers AI (§4) — summary, category suggestion, tags, quality — with
+3. Then Workers AI (§4) — summary, category suggestion, tags, quality — with
    schema validation and the editor override already in place (§4.7).

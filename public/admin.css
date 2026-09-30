@@ -183,3 +183,37 @@ a .pill { color: var(--muted); }
 }
 .button-secondary:hover { border-color: var(--accent-dim); background: var(--panel-2); color: var(--text); }
 form + form { margin-top: 10px; }
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.action-grid form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+.action-inline {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+.action-inline input[type="text"], .action-inline select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 11px;
+  font-size: 13px;
+  width: 100%;
+}
+.button-danger { background: transparent; color: #f26a5a; border: 1px solid #f26a5a; }
+.button-danger:hover { background: rgba(242, 106, 90, 0.12); }
+.button[disabled] { opacity: 0.45; cursor: not-allowed; }

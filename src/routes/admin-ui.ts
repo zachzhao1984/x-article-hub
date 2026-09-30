@@ -5,7 +5,7 @@
  * with JavaScript disabled, which is also the easiest thing to smoke-test.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { AdminIdentity } from '../middleware/admin-auth';
 import { requireAdmin, setAdminCookie, clearAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { siteConfig } from '../config/site';
@@ -15,9 +15,17 @@ import { listCrawlJobsForArticle, listFailedJobs, updateJobStatus } from '../db/
 import { listEvents } from '../db/events';
 import { importUrls, retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
+import {
+  archiveArticle,
+  publishArticle,
+  rejectArticle,
+  restoreDisplay,
+  setFeatured,
+  takedownArticle,
+} from '../services/publish';
 import { AppError } from '../lib/errors';
 import { clampInt } from '../lib/http';
-import type { ArticleStatus } from '../jobs/types';
+import type { ArticleStatus, DisplayMode } from '../jobs/types';
 import {
   articleDetailView,
   articleListView,
@@ -136,7 +144,11 @@ adminUi.get('/articles/:id', async (c) => {
     listEvents(c.env.DB, id),
     summarizeRawArchive(c.env.ARCHIVE, article.raw_r2_key),
   ]);
-  return c.html(articleDetailView({ article, jobs, events, raw }, siteConfig(c.env).name));
+  const error = c.req.query('error');
+  const errorMessage =
+    error === 'takedown-reason-missing' ? 'A takedown needs a reason — that is what the reader sees.' : error ?? null;
+
+  return c.html(articleDetailView({ article, jobs, events, raw, error: errorMessage }, siteConfig(c.env).name));
 });
 
 /** SPEC §16.4 — Retry. Re-publishes the queue message. */
@@ -175,6 +187,60 @@ adminUi.post('/articles/:id/crawl', async (c) => {
   const headers = new Headers({ Location: `/admin/articles/${id}` });
   return new Response(null, { status: 303, headers });
 });
+
+/**
+ * SPEC §16.3 — the curation actions.
+ *
+ * The API endpoints existed but had no UI, which meant the review workflow in
+ * §16.3 could not actually be performed from the admin. Each handler maps to one
+ * validated transition in src/services/publish.ts.
+ */
+adminUi.post('/articles/:id/publish', async (c) => {
+  await publishArticle(c.env, c.req.param('id'), c.get('adminIdentity').actor);
+  return redirectToArticle(c, c.req.param('id'));
+});
+
+adminUi.post('/articles/:id/reject', async (c) => {
+  await rejectArticle(c.env, c.req.param('id'), c.get('adminIdentity').actor);
+  return redirectToArticle(c, c.req.param('id'));
+});
+
+adminUi.post('/articles/:id/archive', async (c) => {
+  await archiveArticle(c.env, c.req.param('id'), c.get('adminIdentity').actor);
+  return redirectToArticle(c, c.req.param('id'));
+});
+
+adminUi.post('/articles/:id/featured', async (c) => {
+  const article = await getArticleById(c.env.DB, c.req.param('id'));
+  await setFeatured(c.env, c.req.param('id'), c.get('adminIdentity').actor, article?.featured !== 1);
+  return redirectToArticle(c, c.req.param('id'));
+});
+
+/** SPEC §37 — takedown requires a reason, enforced in the service too. */
+adminUi.post('/articles/:id/takedown', async (c) => {
+  const form = await c.req.parseBody();
+  const reason = typeof form.reason === 'string' ? form.reason.trim() : '';
+  const id = c.req.param('id');
+  if (!reason) return redirectToArticle(c, id, 'takedown-reason-missing');
+
+  await takedownArticle(c.env, id, c.get('adminIdentity').actor, reason);
+  return redirectToArticle(c, id);
+});
+
+/** SPEC §37 — restore visibility. */
+adminUi.post('/articles/:id/restore', async (c) => {
+  const form = await c.req.parseBody();
+  const mode = (typeof form.displayMode === 'string' ? form.displayMode : 'full') as DisplayMode;
+  await restoreDisplay(c.env, c.req.param('id'), c.get('adminIdentity').actor, mode);
+  return redirectToArticle(c, c.req.param('id'));
+});
+
+function redirectToArticle(c: Context, id: string, error?: string): Response {
+  const headers = new Headers({
+    Location: error ? `/admin/articles/${id}?error=${encodeURIComponent(error)}` : `/admin/articles/${id}`,
+  });
+  return new Response(null, { status: 303, headers });
+}
 
 adminUi.get('/jobs', async (c) => {
   const jobs = await listFailedJobs(c.env.DB, 100);

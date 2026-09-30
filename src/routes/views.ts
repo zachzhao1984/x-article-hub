@@ -232,6 +232,7 @@ export interface ArticleDetailView {
   }>;
   events: Array<{ id: string; action: string; actor: string; note: string | null; created_at: number }>;
   raw?: { archived: boolean; markdownBytes: number; htmlBytes: number; r2Key: string | null } | null;
+  error?: string | null;
 }
 
 export function articleDetailView(view: ArticleDetailView, siteName: string = FALLBACK_SITE_NAME): string {
@@ -280,14 +281,63 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
     <dt>Imported</dt><dd>${escapeHtml(ts(a.imported_at))}</dd>
     <dt>Updated</dt><dd>${escapeHtml(ts(a.updated_at))}</dd>
   </dl>
-  <form method="post" action="/admin/articles/${escapeHtml(a.id)}/retry">
-    <button class="button" type="submit">Retry crawl job</button>
-    <span class="hint">Re-publishes the queue message for the queue consumer.</span>
-  </form>
-  <form method="post" action="/admin/articles/${escapeHtml(a.id)}/crawl">
-    <button class="button button-secondary" type="submit">Crawl now</button>
-    <span class="hint">Runs Browser Run immediately and reports the exact error code. Costs browser time.</span>
-  </form>
+  <div class="action-grid">
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/retry">
+      <button class="button button-secondary" type="submit">Retry crawl job</button>
+      <span class="hint">Re-queues the message for the consumer.</span>
+    </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/crawl">
+      <button class="button button-secondary" type="submit">Crawl now</button>
+      <span class="hint">Runs Browser Run immediately. Costs browser time.</span>
+    </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/featured">
+      <button class="button button-secondary" type="submit">${a.featured ? 'Unfeature' : "Feature"}</button>
+      <span class="hint">Editor's Pick — a human decision, not a score.</span>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Curation (SPEC §16.3)</h2>
+  ${
+    view.error
+      ? `<div class="banner banner-error">${escapeHtml(view.error)}</div>`
+      : `<div class="banner">Archived copy only. Publishing is the editor's call — the AI never publishes (§4.7).</div>`
+  }
+  <div class="action-grid">
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/publish">
+      <button class="button" type="submit"${a.status === 'published' ? ' disabled' : ''}>Publish</button>
+      <span class="hint">Makes it public at /article/${escapeHtml(a.slug ?? '')}</span>
+    </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/reject">
+      <button class="button button-secondary" type="submit">Reject</button>
+      <span class="hint">Not worth archiving.</span>
+    </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/archive">
+      <button class="button button-secondary" type="submit">Archive</button>
+      <span class="hint">Keep the capture, hide it.</span>
+    </form>
+  </div>
+
+  ${
+    a.display_mode === 'takedown' || a.status === 'takedown'
+      ? `<form method="post" action="/admin/articles/${escapeHtml(a.id)}/restore" class="action-inline">
+    <label class="label" for="dm">Restore as</label>
+    <select id="dm" name="displayMode">
+      <option value="full">full — body + original link</option>
+      <option value="excerpt">excerpt — notice only</option>
+      <option value="link_only">link_only — title + original link, no body</option>
+    </select>
+    <button class="button" type="submit">Restore</button>
+    <span class="hint">Returns it to published, since a takedown only ever applied to something already public.</span>
+  </form>`
+      : `<form method="post" action="/admin/articles/${escapeHtml(a.id)}/takedown" class="action-inline">
+    <label class="label" for="reason">Takedown reason (required)</label>
+    <input id="reason" name="reason" type="text" placeholder="e.g. author requested removal" required>
+    <button class="button button-danger" type="submit">Takedown</button>
+    <span class="hint">Removes it from lists, sitemap, feed and search immediately. The page then explains itself rather than 404ing.</span>
+  </form>`
+  }
 </section>
 
 <section class="card">
