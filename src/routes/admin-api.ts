@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../env';
 import type { AdminIdentity } from '../middleware/admin-auth';
-import { clearAdminCookie, requireAdmin, setAdminCookie } from '../middleware/admin-auth';
+import { clearAdminCookie, requireAdmin, setAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { importUrls } from '../services/import';
 import { getArticleById, listArticles } from '../db/articles';
 import { listCrawlJobsForArticle, getCrawlJob, listFailedJobs, updateJobStatus } from '../db/jobs';
@@ -143,19 +143,19 @@ adminApi.get('/jobs/:id', async (c) => {
 
 adminApi.post('/login', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { token?: string };
-  const expected = c.env.ADMIN_TOKEN;
+  const secret = c.env.ADMIN_TOKEN;
 
-  if (!expected) {
+  if (!secret) {
     throw new AppError('UNAUTHORIZED', 'ADMIN_TOKEN is not configured; put admin behind Cloudflare Access', 401);
   }
-  if (!body.token || body.token !== expected) {
+  if (!body.token || !timingSafeEqual(body.token, secret)) {
     log.warn('admin_login', { result: 'denied' });
     throw new AppError('UNAUTHORIZED', 'Invalid admin token', 401);
   }
 
   log.info('admin_login', { result: 'ok', via: 'admin-token' });
-  const headers = new Headers();
-  setAdminCookie(headers, new URL(c.req.url).protocol === 'https:');
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  await setAdminCookie(headers, secret, new URL(c.req.url).protocol === 'https:');
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
 });
 

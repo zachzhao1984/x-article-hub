@@ -7,10 +7,12 @@
  *
  *   1. trust the identity header Cloudflare Access injects
  *      (`Cf-Access-Authenticated-User-Email`), and
- *   2. allow a shared `ADMIN_TOKEN` for local development and `curl` workflows.
+ *   2. accept a shared `ADMIN_TOKEN` for local development and `curl`.
  *
- * If neither is present the request is rejected. There is no password store, no
- * user table and no session issuing beyond the dev shim below.
+ * The browser path is a thin session shim over that same shared secret: a
+ * successful token login sets a cookie holding an HMAC of `ADMIN_TOKEN`, so the
+ * cookie can be verified but cannot be forged without knowing the secret.
+ * There is no user table, no password store and no long-lived session state.
  */
 
 import type { Context } from 'hono';
@@ -20,9 +22,12 @@ const ACCESS_EMAIL_HEADER = 'cf-access-authenticated-user-email';
 const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion';
 const COOKIE_NAME = 'xah_admin';
 
+/** Fixed label so the signature can never collide with a hash of something else. */
+const SESSION_LABEL = 'xah-admin-session-v1';
+
 export interface AdminIdentity {
   actor: string;
-  via: 'cloudflare-access' | 'admin-token';
+  via: 'cloudflare-access' | 'admin-token' | 'session-cookie';
 }
 
 export function resolveIdentity(c: Context): AdminIdentity | null {
@@ -36,20 +41,45 @@ export function resolveIdentity(c: Context): AdminIdentity | null {
     return { actor: 'access-user', via: 'cloudflare-access' };
   }
 
-  const token = readAdminToken(c);
   const expected = c.env.ADMIN_TOKEN;
-  if (expected && token && timingSafeEqual(token, expected)) {
+  if (!expected) return null;
+
+  // SPEC §24 dev shim. Header first (curl, scripts), then the browser cookie.
+  const headerToken = c.req.header('authorization')?.replace(/^Bearer /i, '').trim() ?? c.req.header('x-admin-token')?.trim();
+  if (headerToken && timingSafeEqual(headerToken, expected)) {
     return { actor: 'admin-token', via: 'admin-token' };
   }
 
   return null;
 }
 
+/**
+ * Async because the cookie check is an HMAC, not a string compare. Split out so
+ * the login route can mint the same value.
+ */
+export async function verifySessionCookie(c: Context, secret: string): Promise<boolean> {
+  const cookie = readCookie(c, COOKIE_NAME);
+  if (!cookie) return false;
+  return timingSafeEqual(cookie, await signSession(secret));
+}
+
 export function requireAdmin() {
   return async (c: Context, next: () => Promise<void>) => {
-    const identity = resolveIdentity(c);
+    let identity = resolveIdentity(c);
+
+    if (!identity && c.env.ADMIN_TOKEN && (await verifySessionCookie(c, c.env.ADMIN_TOKEN))) {
+      identity = { actor: 'admin-token', via: 'session-cookie' };
+    }
+
     if (!identity) {
-      log.warn('admin_unauthorized', { path: new URL(c.req.url).pathname });
+      const path = new URL(c.req.url).pathname;
+      log.warn('admin_unauthorized', { path, method: c.req.method });
+
+      // A browser hitting an admin *page* should land on the login form, not on raw JSON.
+      // API and non-GET callers still get JSON.
+      if (!path.startsWith('/api/') && c.req.method === 'GET') {
+        return c.redirect('/admin/login', 303);
+      }
       return c.json({ error: { code: 'UNAUTHORIZED', message: 'Admin access requires Cloudflare Access or an ADMIN_TOKEN' } }, 401);
     }
 
@@ -61,35 +91,56 @@ export function requireAdmin() {
   };
 }
 
-function readAdminToken(c: Context): string | null {
-  const header = c.req.header('authorization');
-  if (header?.toLowerCase().startsWith('bearer ')) return header.slice(7).trim();
-
-  const custom = c.req.header('x-admin-token');
-  if (custom) return custom.trim();
-
-  const cookie = c.req.header('cookie');
-  if (!cookie) return null;
-  for (const part of cookie.split(';')) {
-    const [name, ...rest] = part.trim().split('=');
-    if (name === COOKIE_NAME) return decodeURIComponent(rest.join('='));
-  }
-  return null;
+/** HMAC-SHA256(secret, label) — a browser can hold this but cannot produce it. */
+export async function signSession(secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(SESSION_LABEL));
+  return base64Url(new Uint8Array(mac));
 }
 
-export function setAdminCookie(headers: Headers, secure: boolean): void {
+export async function setAdminCookie(headers: Headers, secret: string, secure: boolean): Promise<void> {
+  const value = await signSession(secret);
+  // Path=/ so browser sessions also authenticate /api/admin/* calls.
   headers.append(
     'Set-Cookie',
-    `${COOKIE_NAME}=1; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=43200${secure ? '; Secure' : ''}`,
+    `${COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${secure ? '; Secure' : ''}`,
   );
 }
 
 export function clearAdminCookie(headers: Headers): void {
-  headers.append('Set-Cookie', `${COOKIE_NAME}=; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=0`);
+  headers.append('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
 }
 
-/** Constant-time comparison; lengths are compared first because this is not a secret-length leak. */
-function timingSafeEqual(a: string, b: string): boolean {
+function readCookie(c: Context, name: string): string | null {
+  const header = c.req.header('cookie');
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) {
+      try {
+        return decodeURIComponent(rest.join('='));
+      } catch {
+        return rest.join('=');
+      }
+    }
+  }
+  return null;
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** Constant-time compare; length is compared first, which is not a secret here. */
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

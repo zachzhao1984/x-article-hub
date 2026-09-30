@@ -35,6 +35,8 @@ check "admin API rejects a request without credentials" \
   "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/api/admin/articles")" "401"
 check "admin API accepts the shared token" \
   "$(curl -s -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/api/admin/articles")" "200"
+check "a bogus bearer token is rejected" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer wrong' "${BASE}/api/admin/articles")" "401"
 
 echo
 echo "Import (SPEC §5 / §22)"
@@ -100,6 +102,30 @@ check "the jobs page renders" \
   "$(curl -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/jobs")" "200"
 check "admin responses are not cached (SPEC §23)" \
   "$(curl -sI "${AUTH[@]}" "${BASE}/admin" | tr -d '\r' | grep -ci '^cache-control: no-store')" "1"
+
+echo
+echo "Browser login flow (SPEC §24)"
+check "the login form is served" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/admin/login")" "200"
+check "an unauthenticated admin page redirects to the login form" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/admin")" "303"
+check "a wrong token is rejected" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d 'token=definitely-wrong' "${BASE}/admin/login")" "401"
+
+COOKIE="$(curl -s -D - -o /dev/null -X POST -d "token=${TOKEN}" "${BASE}/admin/login" \
+  | tr -d '\r' | grep -i '^set-cookie:' | sed -E 's/^[Ss]et-[Cc]ookie: *//; s/;.*$//')"
+
+check "a correct token sets a session cookie" "$([ -n "$COOKIE" ] && echo yes)" "yes"
+check "the cookie authenticates the dashboard" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: ${COOKIE}" "${BASE}/admin")" "200"
+check "the cookie authenticates the admin API" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: ${COOKIE}" "${BASE}/api/admin/articles")" "200"
+check "a forged cookie is rejected" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: xah_admin=1" "${BASE}/admin")" "303"
+check "an empty cookie is rejected" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: xah_admin=" "${BASE}/admin")" "303"
+check "the cookie is not the token in the clear" \
+  "$(echo "$COOKIE" | grep -cF "$TOKEN")" "0"
 
 echo
 echo "▸ All Phase 1 checks passed"

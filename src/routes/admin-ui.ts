@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../env';
 import type { AdminIdentity } from '../middleware/admin-auth';
-import { requireAdmin, setAdminCookie, clearAdminCookie } from '../middleware/admin-auth';
+import { requireAdmin, setAdminCookie, clearAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { siteConfig } from '../config/site';
 import { dashboardStats } from '../db/stats';
 import { getArticleById, listArticles } from '../db/articles';
@@ -53,14 +53,14 @@ adminUi.get('/login', (c) => c.html(loginView(undefined, siteConfig(c.env).name)
 adminUi.post('/login', async (c) => {
   const form = await c.req.parseBody();
   const token = typeof form.token === 'string' ? form.token : '';
-  const expected = c.env.ADMIN_TOKEN;
+  const secret = c.env.ADMIN_TOKEN;
 
-  if (!expected || token !== expected) {
+  if (!secret || !token || !timingSafeEqual(token, secret)) {
     return c.html(loginView('Invalid admin token', siteConfig(c.env).name), 401);
   }
 
   const headers = new Headers({ Location: '/admin' });
-  setAdminCookie(headers, new URL(c.req.url).protocol === 'https:');
+  await setAdminCookie(headers, secret, new URL(c.req.url).protocol === 'https:');
   return new Response(null, { status: 303, headers });
 });
 
