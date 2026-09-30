@@ -2,15 +2,16 @@
 
 A human-curated, machine-archived library of X Articles — built entirely on Cloudflare.
 
-Implements **SPEC §38 Phase 0 (基础设施) + Phase 1 (人工导入)**, plus the **public
-reading site (SPEC §17)**, **ranking (SPEC §14)**, **full-text search (SPEC §12)**,
-**SEO (SPEC §33)** and **content governance (SPEC §37)**.
+Implements **SPEC §38 Phase 0–2**: infrastructure, human import, and the real
+Browser Run crawl — plus the public reading site (§17), ranking (§14), full-text
+search (§12), SEO (§33) and content governance (§37).
 
 - **Live:** https://x-article-hub.zachzhao.workers.dev
 - **Admin:** https://x-article-hub.zachzhao.workers.dev/admin
 
-> The crawl itself is **Phase 2 and not implemented**. Published content is
-> clearly-labelled demo data — see [Demo content](#demo-content) below.
+> ⚠️ **Reading a real X Article body needs a signed-in X session.** X serves a
+> login wall to logged-out visitors, including Browser Run. Everything around that
+> is implemented and verified; see [X requires a session](#x-requires-a-session).
 
 ---
 
@@ -23,7 +24,15 @@ Hono  ── normalize (§5.2) ── dedup (§5.3)
       ↓
 D1     ── article + crawl_job + curation_event
       ↓
-Queues ── article-ingest ──▶ consumer  (records delivery; crawl is Phase 2)
+Queues ── article-ingest ──▶ crawl consumer
+                              ↓
+                        Browser Run /snapshot      (§7)
+                        one session → HTML + Markdown
+                              ↓
+                        R2 raw archive             (§8)
+                        + source/content hash       (§27, §28)
+                              ↓
+                        metadata → D1, status=fetched
 
 Astro  ── /  /latest  /trending  /rising  /category/:slug  /tag/:slug
           /author/:username  /article/:slug  /search  /about
@@ -34,12 +43,77 @@ Astro  ── /  /latest  /trending  /rising  /category/:slug  /tag/:slug
 
 | Check | Count | Command |
 |---|---:|---|
-| Unit tests (url, ranking, config, document) | 70 | `npm test` |
+| Unit tests (url, ranking, config, document, crawl recognition) | 93 | `npm test` |
 | Phase 1 acceptance | 44 | `npm run smoke -- <url> <token>` |
 | Public-site acceptance | 63 | `npm run smoke:site -- <url> <token>` |
 | TypeScript strict | clean | `npm run typecheck` |
 
-All three suites pass against the live deployment.
+All suites pass against the live deployment. The crawl was verified end to end
+against **live X** and a live content page — see [Crawl verification](#crawl-verification).
+
+---
+
+## Crawl verification
+
+The crawl was exercised against real Browser Run responses, not mocks.
+
+| Scenario | Result |
+|---|---|
+| Real content page (Cloudflare docs) | `archived`, 14 820 chars, HTML 152 KB + Markdown 15 KB in R2, title + avatar extracted |
+| Same page re-crawled (§28) | `unchanged` — no second version created |
+| Nonexistent X article | `ARTICLE_NOT_FOUND`, nothing archived |
+| Logged-out X page | `LOGIN_REQUIRED`, nothing archived, operator told what to do |
+| Browser Run 429 | `PAGE_BLOCKED` + `rateLimited` flag → 1 h backoff instead of the §25 ladder |
+| Queue consumer path (real import) | `pending → fetching → failed`, delivered once, correct non-retryable code |
+
+### Three findings that shaped the implementation
+
+**1. `/snapshot` instead of `/markdown` + `/content`.** Two separate quick
+actions cost two browser sessions. `/snapshot` with
+`formats: ["content", "markdown"]` returns both in **one**: measured 1 794 ms and
+one `X-Browser-Ms-Used` for a full capture versus 2 596 ms and two calls. This is
+not an optimisation — the second call was being rate-limited, and the missing HTML
+failed *silently*, producing an archive the Phase 3 Parser could not use. HTML
+capture failure is now reported on the crawl outcome (`htmlError`).
+
+**2. X's logged-out pages are a login wall.** `<title>`, `og:title` and
+`og:description` render server-side, so metadata is recoverable, but the body is
+"Log in / Sign up". Recognised as `LOGIN_REQUIRED` rather than `EMPTY_CONTENT`, so
+an operator is pointed at cookies instead of at a retry that can never succeed.
+
+**3. Browser Run rate limits are tight on this account.** Repeated 429s during
+development. A rate-limited crawl now backs off **1 hour** rather than following
+the §25 ladder's 1-minute first step, which would just burn quota faster.
+
+---
+
+## X requires a session
+
+X uses cookie sessions, not HTTP Basic auth, so the documented `authenticate`
+quick-action option **cannot** log in to X. The only mechanism Browser Run offers
+is `cookies` (Puppeteer `setCookie` objects).
+
+```bash
+# 1. Sign in to x.com in a real browser.
+# 2. Copy the document.cookie values for auth_token and ct0 from x.com.
+# 3. Store them as Puppeteer cookie objects:
+npx wrangler secret put X_COOKIES_JSON -c dist/server/wrangler.json
+```
+
+```json
+[
+  { "name": "auth_token", "value": "…", "domain": ".x.com", "path": "/", "secure": true, "httpOnly": true },
+  { "name": "ct0", "value": "…", "domain": ".x.com", "path": "/", "secure": true }
+]
+```
+
+The cookie is never logged and never returned by an endpoint. Treat it as a
+password: it grants access to a real X account.
+
+**Unverified:** whether a *valid* X Article URL returns its body with these cookies,
+or whether X requires a full browser-session login (SPEC §7.4 Level 3). That needs
+one real Article URL from you, which is why the crawler was built to report
+`LOGIN_REQUIRED` explicitly rather than guessing.
 
 ---
 
@@ -54,14 +128,14 @@ adapter's first-class Hono pipeline — the existing API routes slot in between
 worker.use(cf());        // env + executionCtx, serves static assets
 worker.use(actions());
 worker.use(middleware()); // Astro middleware (src/middleware.ts → cache policy)
-worker.route('/', apiApp); // /api/*, /admin/*, /healthz  (Hono, Phase 1)
+worker.route('/', apiApp); // /api/*, /admin/*, /healthz  (Hono)
 worker.all('/api/*', apiNotFound); // JSON 404 before Astro can answer with HTML
 worker.use(pages());     // public reading site (Astro, SSR)
 worker.use(i18n());
 ```
 
 A custom entrypoint (`main: ./src/worker.ts`) is required because the adapter's
-default entrypoint cannot export the `queue` / `scheduled` handlers (SPEC §19 / §21).
+default entrypoint cannot export the `queue` / `scheduled` handlers (§19 / §21).
 
 ### Layout
 
@@ -70,29 +144,48 @@ src/
   worker.ts            Worker entry: fetch / queue / scheduled      (§31)
   app.ts               Hono sub-app: /api/*, /admin/*, /healthz
   middleware.ts        Astro cache policy                          (§23)
-  env.ts               Ambient binding augmentation
   pages/               Astro public site                           (§17)
   layouts/ components/ Base.astro, SiteHeader, ArticleCard, BoardPage
   config/              site · ranking weights (§14) · AI (§32)
   db/                  rows · articles · jobs · events · public · stats · categories
+  jobs/                types (§19) · dispatch · crawl (§2) · x-selectors (§7.4)
   lib/                 url (§5) · ids · hash · logger (§35) · errors (§25) · http
   ranking/score.ts     popularity · velocity · normalize · combine  (§14)
-  services/            import (§5) · publish (§6/§16.3/§37) · archive (§8) · seed-demo
+  services/            import (§5) · crawl (§7) · browser (§7) · publish (§6/§37) · archive · seed-demo
   types/               ArticleDocument (§9) + R2 path layout (§8)
   routes/              public-api · admin-api · admin-ui · views
 migrations/            0001_init · 0002_seed_categories · 0003_search (§12)
 scripts/               smoke.sh · smoke-site.sh
+tests/unit/            93 tests
 public/                admin.css · site.css
 ```
 
 ---
 
+## Error handling (SPEC §25)
+
+Every crawl ends in exactly one typed code, and the codes stay distinguishable —
+SPEC §25 explicitly requires that timeout types are not collapsed into "fetch
+failed".
+
+| Code | Meaning | Retryable |
+|---|---|---|
+| `FETCH_TIMEOUT` | Browser Run could not load the page in time | yes (§25 ladder) |
+| `PAGE_BLOCKED` | 429 / 403 / other block — includes our own quota | yes (**1 h** if rate-limited) |
+| `PARSER_FAILED` | Captured, but HTML→Markdown conversion failed (Browser Run code 2012) | yes |
+| `ARTICLE_NOT_FOUND` | X served its own 404, or 404/410 from Browser Run | **no** |
+| `EMPTY_CONTENT` | Deleted, private, or empty | **no** |
+| `LOGIN_REQUIRED` | X served its logged-out shell | **no** — set cookies first |
+
+Retry ladder is §25's: 1 min → 5 min → 30 min → 2 h → 24 h, then `failed`.
+
+---
+
 ## The three boards are genuinely different
 
-SPEC §15 requires four boards that do not collapse into one ordering. With the
-demo set:
+SPEC §15 requires four boards that do not collapse into one ordering:
 
-| Board | Ordering | Top 3 |
+| Board | Ordering | Top 3 (demo set) |
 |---|---|---|
 | `/latest` | `published_at DESC` | Database → Inference → Market |
 | `/trending` | `final_score DESC` (weighted blend) | Agents → Inference → Market |
@@ -100,9 +193,9 @@ demo set:
 | Editor's Pick | `featured = true` (human) | Agents, Market |
 
 `/rising` ranks "Reading Slowly" above "Measurement Noise" while `/trending`
-reverses them — that divergence is the point of keeping velocity separate from
-the blend (SPEC §14.2). Weights come from `RANKING_WEIGHTS_JSON`, never from a
-literal in code (SPEC §14.4).
+reverses them — that divergence is the point of keeping velocity separate from the
+blend (§14.2). Weights come from `RANKING_WEIGHTS_JSON`, never from a literal in
+code (§14.4).
 
 ---
 
@@ -120,30 +213,26 @@ literal in code (SPEC §14.4).
 
 A takedown returns **200 with an explanation**, not a 404 — a shared link should
 not silently look broken. Reaching "we crawled it" is never treated as "we may
-republish the full text" (SPEC §37).
+republish the full text".
 
 ---
 
 ## Demo content
 
-The crawl pipeline is Phase 2, so there is nothing real to publish. To make the
-product verifiable, `src/services/seed-demo.ts` writes 6 clearly-fictional
-articles that exercise every code path: blocks, headings, quotes, tags, topics,
-two metric samples (so velocity is computable), all five categories, and real
-SPEC §14 scores.
+There is no real published content yet, because reading a real X Article needs a
+session (see above). To make the product verifiable,
+`src/services/seed-demo.ts` writes 6 clearly-fictional articles that exercise
+every code path: blocks, headings, quotes, tags, topics, two metric samples (so
+velocity is computable), all five categories, and real §14 scores.
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Origin: https://<host>" \
   https://x-article-hub.zachzhao.workers.dev/api/admin/demo/seed
-
-curl -X POST -H "Authorization: Bearer $TOKEN" -H "Origin: https://<host>" \
-  https://x-article-hub.zachzhao.workers.dev/api/admin/demo/clear
 ```
 
-It is identifiable and removable: authors are `demo_*`, `x_article_id`s start
-with `9000`, every curation event is noted `DEMO CONTENT`, and `demo/clear`
-deletes exactly that set. **None of it is crawled content, and none of it proves
-the crawl works.**
+Identifiable and removable: authors are `demo_*`, `x_article_id`s start with `9000`,
+every curation event is noted `DEMO CONTENT`, and `demo/clear` deletes exactly that
+set.
 
 ---
 
@@ -153,18 +242,21 @@ All deliberate; all additive or justified by the spec's own later sections.
 
 1. **`articles.title` has `DEFAULT ''`.** §11.4 says `NOT NULL`, but a row is
    created at import time, before any crawl produces a title (§6: `imported`
-   precedes `fetching`). A provisional `@username on X` is written and the Parser
-   replaces it in Phase 3.
-2. **`slug`, `featured`, `display_mode`, `takedown_*`, `word_count`, `block_count`,
-   `content_text`, `tags_text`** added up front. Required by §15, §17.1, §37, §12.
-3. **`crawl_jobs.deliveries` / `last_delivered_at`** added for the queue
-   observability §35 requires, and to make the Phase 1 → Phase 2 boundary
-   observable (produced vs. delivered vs. executed).
-4. **Partial unique index `idx_crawl_jobs_open_per_type`** — one open job per
+   precedes `fetching`). The provisional title is replaced by the crawl.
+2. **Raw captures are timestamped directories.** §8's directory listing is
+   "recommended", but its rule is explicit: "Raw 永远只追加，不覆盖". A fixed
+   `raw/page.html` cannot satisfy both, so each capture gets
+   `articles/{id}/raw/{timestamp}/` and `metadata.json` names its own siblings.
+   `articles.raw_r2_key` stays one stable pointer per article.
+3. **`slug`, `featured`, `display_mode`, `takedown_*`, `word_count`, `block_count`,
+   `content_text`, `tags_text`** added up front — required by §15, §17.1, §37, §12.
+4. **`crawl_jobs.deliveries` / `last_delivered_at`** for the queue observability
+   §35 requires, and to make the Phase 1 → Phase 2 boundary observable.
+5. **Partial unique index `idx_crawl_jobs_open_per_type`** — one open job per
    (article, job_type), which is what makes retry idempotent (§19).
-5. **`0003_search.sql`** adds FTS5. §42 orders FTS5 at P4, but `/search` is part
-   of the reading experience being delivered now, and §12 says D1's FTS5 is
-   sufficient — no Elasticsearch.
+6. **`0003_search.sql`** adds FTS5. §42 orders FTS5 at P4, but `/search` is part
+   of the reading experience and §12 says D1's FTS5 is sufficient — no
+   Elasticsearch.
 
 ### One spec conflict, resolved
 
@@ -172,7 +264,7 @@ All deliberate; all additive or justified by the spec's own later sections.
 omits it, while §22's import example returns `"status": "queued"`. Resolution:
 `articles.status` uses the §6 enum (`pending` is the import state),
 `crawl_jobs.status` owns `queued`, and the import response's `status` field
-reports the **job** status — so both sections are satisfied.
+reports the **job** status — both sections satisfied.
 
 ---
 
@@ -200,17 +292,24 @@ That generated file is what gets deployed — do not point `wrangler deploy` at
 
 ### Acceptance checks
 
-Both scripts take a base URL and token, and can be re-run against the same
-database.
-
 ```bash
 npm run smoke      -- http://127.0.0.1:8787 devtoken
 npm run smoke:site -- https://x-article-hub.zachzhao.workers.dev "$TOKEN"
 ```
 
 `smoke.sh` covers the Phase 1 pipeline plus the browser login flow.
-`smoke-site.sh` covers routes, styled 404s, board divergence, SEO, cache
-headers, search, SPEC §37 governance, and public-API shape.
+`smoke-site.sh` covers routes, styled 404s, board divergence, SEO, cache headers,
+search, SPEC §37 governance and public-API shape.
+
+### Admin actions on an article
+
+| Action | Effect |
+|---|---|
+| `POST /api/admin/articles/:id/retry` | Re-publishes the queue message |
+| `POST /api/admin/articles/:id/crawl` | Runs Browser Run immediately, reports the exact §25 code |
+| `GET /api/admin/articles/:id/raw?format=html\|markdown` | The archived capture, not a live fetch |
+| `GET /api/admin/articles/:id/errors` | Job errors straight from the job row |
+| `POST /api/admin/articles/:id/takedown` | §37 takedown (requires a reason) |
 
 ---
 
@@ -219,13 +318,24 @@ headers, search, SPEC §37 governance, and public-API shape.
 | Binding | Resource | Notes |
 |---|---|---|
 | `DB` | D1 `x-article-hub` | `61f1e63b-4097-49fb-a99d-1f05dcb69ad9` |
-| `ARCHIVE` | R2 `x-article-archive` | holds `ArticleDocument` JSON + Markdown per §8 |
+| `ARCHIVE` | R2 `x-article-archive` | raw captures + versioned documents (§8) |
 | `BROWSER` | Browser Run | `remote: true` — Quick Actions need it |
-| `AI` | Workers AI | bound now, used from Phase 4 |
-| `ARTICLE_INGEST_QUEUE` | Queue `article-ingest` | consumer + `article-ingest-dlq` |
+| `AI` | Workers AI | bound, used from Phase 4 |
+| `ARTICLE_INGEST_QUEUE` | Queue `article-ingest` | crawl consumer + `article-ingest-dlq` |
 | `ARTICLE_PROCESS_QUEUE` | Queue `article-process` | consumer |
 | `ARTICLE_METRICS_QUEUE` | Queue `article-metrics` | producer only until Phase 6 |
 | `ASSETS` | Workers static assets | `site.css`, `admin.css`, `/_astro/*` |
+
+| Secret | Purpose |
+|---|---|
+| `ADMIN_TOKEN` | §24 dev shim. Replace with Cloudflare Access. |
+| `X_COOKIES_JSON` | X session cookies (Puppeteer `setCookie` objects). See above. |
+
+| Var | Purpose |
+|---|---|
+| `RANKING_WEIGHTS_JSON` | §14.4 — weights are configurable, never hard-coded |
+| `MAX_IMPORT_URLS` | §16.2 guard against pasting a whole file |
+| `CRAWL_SCREENSHOT` | §39 optional screenshot capture, default `false` |
 
 ---
 
@@ -247,12 +357,8 @@ application, then delete the shim:
 wrangler secret delete ADMIN_TOKEN
 ```
 
-⚠️ The currently-set `ADMIN_TOKEN` is 8 characters and trivially guessable. It
-exists so the deployed admin is reachable during this build-out. Rotate it:
-
-```bash
-npx wrangler secret put ADMIN_TOKEN -c dist/server/wrangler.json
-```
+⚠️ The currently-set `ADMIN_TOKEN` is 8 characters and trivially guessable. Rotate
+it: `npx wrangler secret put ADMIN_TOKEN -c dist/server/wrangler.json`.
 
 ---
 
@@ -261,26 +367,21 @@ npx wrangler secret put ADMIN_TOKEN -c dist/server/wrangler.json
 **Cloudflare applies CSRF protection to Workers.** A POST without a same-origin
 `Origin` header is rejected with `403 Cross-site POST form submissions are
 forbidden` before the Worker runs. Browsers always send `Origin` on a same-origin
-form POST, so the admin UI is unaffected — but scripted clients must send it.
+form POST, so the admin UI is unaffected — scripted clients must send it.
 `scripts/smoke.sh` does, and asserts the 403 as a security property.
 
 ---
 
-## Phase 2 next steps
+## Phase 3 next steps
 
-1. **De-risk the crawl first.** §42 calls this the biggest risk. Browser Run works
-   (verified against a non-X page), but **X's logged-out pages are a login wall**
-   — so this almost certainly needs `BROWSER.quickAction` with
-   `authenticate-username` / `authenticate-password`, i.e. §7.4 Level 3, plus real
-   Article URLs to build fixtures from. Get a handful of real URLs and X
-   credentials before writing parser code.
-2. Implement `jobs/crawl.ts` with §7's two-level fallback
-   (`/markdown` → `/content` → Parser → Browser Session), all X selectors in one
-   file (`src/jobs/x-selectors.ts`) per §7.4.
-3. Archive raw output to `articles/{id}/raw/page.{html,md}` per §8, and record
-   `browser_ms_used` from `X-Browser-Ms-Used` (§35).
-4. Map failures to §25's codes (`FETCH_TIMEOUT`, `PAGE_BLOCKED`, `EMPTY_CONTENT`,
-   `LOGIN_REQUIRED`, …). Browser Run reports page-load, selector and action
-   timeouts separately — they must not collapse into one generic failure.
-5. Then Parser (§3) and Workers AI (§4). The `ArticleDocument` contract they must
-   produce is already defined and the reading page already renders it.
+1. **Get one real X Article URL and a session cookie**, then confirm
+   `POST /api/admin/articles/:id/crawl` returns `ok: true`. That is the last
+   unverified link in the chain and the last assumption SPEC §42 flags as risky.
+2. Parser: `raw/page.html` → `ArticleDocument` (§9). The contract is already
+   defined in `src/types/article-document.ts` and the reading page already renders
+   it; the seeder writes documents in that shape. All X selectors stay in
+   `src/jobs/x-selectors.ts` (§7.4).
+3. Media: download images to `articles/{id}/media/NNN.webp` (§10). A failed image
+   must not fail the article.
+4. Then Workers AI (§4) — summary, category suggestion, tags, quality — with
+   schema validation and the editor override already in place (§4.7).

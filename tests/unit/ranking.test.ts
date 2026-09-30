@@ -7,8 +7,8 @@ import {
   rawPopularity,
   rawVelocity,
   ZERO_METRICS,
-} from '../src/ranking/score';
-import { DEFAULT_RANKING_WEIGHTS } from '../src/config/ranking';
+} from '../../src/ranking/score';
+import { DEFAULT_RANKING_WEIGHTS } from '../../src/config/ranking';
 
 const HOUR = 3_600_000;
 

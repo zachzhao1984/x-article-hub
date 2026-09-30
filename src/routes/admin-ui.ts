@@ -11,9 +11,10 @@ import { requireAdmin, setAdminCookie, clearAdminCookie, timingSafeEqual } from 
 import { siteConfig } from '../config/site';
 import { dashboardStats } from '../db/stats';
 import { getArticleById, listArticles } from '../db/articles';
-import { listCrawlJobsForArticle, listFailedJobs } from '../db/jobs';
+import { listCrawlJobsForArticle, listFailedJobs, updateJobStatus } from '../db/jobs';
 import { listEvents } from '../db/events';
 import { importUrls, retryCrawl } from '../services/import';
+import { crawlArticle, readRawArchive } from '../services/crawl';
 import { AppError } from '../lib/errors';
 import { clampInt } from '../lib/http';
 import type { ArticleStatus } from '../jobs/types';
@@ -45,6 +46,22 @@ const STATUSES: ArticleStatus[] = [
 ];
 
 export const adminUi = new Hono<AdminUiEnv>();
+
+/** SPEC §16.4 — the raw archive summary, without pulling megabytes into the page. */
+async function summarizeRawArchive(
+  bucket: R2Bucket,
+  rawR2Key: string | null,
+): Promise<{ archived: boolean; markdownBytes: number; htmlBytes: number; r2Key: string | null }> {
+  if (!rawR2Key) return { archived: false, markdownBytes: 0, htmlBytes: 0, r2Key: null };
+
+  const archive = await readRawArchive(bucket, rawR2Key);
+  return {
+    archived: archive.metadata !== null,
+    markdownBytes: archive.markdown?.length ?? 0,
+    htmlBytes: archive.html?.length ?? 0,
+    r2Key: rawR2Key,
+  };
+}
 
 // The login page is the only route that is not behind requireAdmin().
 adminUi.get('/login', (c) => c.html(loginView(undefined, siteConfig(c.env).name)));
@@ -114,15 +131,46 @@ adminUi.get('/articles/:id', async (c) => {
   const article = await getArticleById(c.env.DB, id);
   if (!article) throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
 
-  const [jobs, events] = await Promise.all([listCrawlJobsForArticle(c.env.DB, id), listEvents(c.env.DB, id)]);
-  return c.html(articleDetailView({ article, jobs, events }, siteConfig(c.env).name));
+  const [jobs, events, raw] = await Promise.all([
+    listCrawlJobsForArticle(c.env.DB, id),
+    listEvents(c.env.DB, id),
+    summarizeRawArchive(c.env.ARCHIVE, article.raw_r2_key),
+  ]);
+  return c.html(articleDetailView({ article, jobs, events, raw }, siteConfig(c.env).name));
 });
 
-/** SPEC §16.4 — Retry. Re-publishes the queue message; crawling itself is Phase 2. */
+/** SPEC §16.4 — Retry. Re-publishes the queue message. */
 adminUi.post('/articles/:id/retry', async (c) => {
   const identity = c.get('adminIdentity');
   const id = c.req.param('id');
   await retryCrawl(c.env, id, identity.actor);
+
+  const headers = new Headers({ Location: `/admin/articles/${id}` });
+  return new Response(null, { status: 303, headers });
+});
+
+/** SPEC §16.4 — "Retry with Browser Session": crawl synchronously, report inline. */
+adminUi.post('/articles/:id/crawl', async (c) => {
+  const identity = c.get('adminIdentity');
+  const id = c.req.param('id');
+  const article = await getArticleById(c.env.DB, id);
+
+  if (article) {
+    const outcome = await crawlArticle(c.env, {
+      articleId: id,
+      url: article.canonical_url,
+      fallbackUsername: article.author_username,
+      actor: identity.actor,
+    });
+    const jobs = await listCrawlJobsForArticle(c.env.DB, id, 1);
+    const job = jobs[0];
+    if (job) {
+      await updateJobStatus(c.env.DB, job.id, outcome.ok ? 'success' : 'failed', {
+        code: outcome.errorCode ?? 'UNEXPECTED',
+        message: outcome.errorMessage ?? '',
+      });
+    }
+  }
 
   const headers = new Headers({ Location: `/admin/articles/${id}` });
   return new Response(null, { status: 303, headers });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildFtsQuery } from '../src/db/public';
-import { countWords, documentToPlainText, type ArticleDocument } from '../src/types/article-document';
+import { buildFtsQuery } from '../../src/db/public';
+import { countWords, documentToPlainText, type ArticleDocument } from '../../src/types/article-document';
 
 describe('buildFtsQuery (SPEC §12)', () => {
   it('quotes each token so FTS syntax characters cannot be injected', () => {

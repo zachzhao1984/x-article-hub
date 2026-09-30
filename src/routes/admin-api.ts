@@ -16,6 +16,7 @@ import { listCrawlJobsForArticle, getCrawlJob, listFailedJobs, updateJobStatus }
 import { listEvents } from '../db/events';
 import { listCategories } from '../db/categories';
 import { retryCrawl } from '../services/import';
+import { crawlArticle, readRawArchive } from '../services/crawl';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -128,6 +129,48 @@ adminApi.post('/articles/:id/retry', async (c) => {
   return c.json({ articleId: id, jobId, attempt, status: 'queued' });
 });
 
+/**
+ * SPEC §16.4 — "Retry with Browser Session".
+ *
+ * Runs the crawl synchronously instead of publishing a queue message, so an
+ * operator waiting in front of the admin UI sees the real outcome (including the
+ * specific §25 error code) instead of polling a job that may retry for a day.
+ */
+adminApi.post('/articles/:id/crawl', async (c) => {
+  const identity = c.get('adminIdentity');
+  const id = c.req.param('id');
+  const article = await getArticleById(c.env.DB, id);
+  if (!article) throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
+
+  const outcome = await crawlArticle(c.env, {
+    articleId: id,
+    url: article.canonical_url,
+    fallbackUsername: article.author_username,
+    actor: identity.actor,
+  });
+
+  const jobs = await listCrawlJobsForArticle(c.env.DB, id, 1);
+  const job = jobs[0];
+  if (job) {
+    await updateJobStatus(c.env.DB, job.id, outcome.ok ? 'success' : 'failed', {
+      code: outcome.errorCode ?? 'UNEXPECTED',
+      message: outcome.errorMessage ?? '',
+    });
+  }
+
+  return c.json({
+    articleId: id,
+    ok: outcome.ok,
+    result: outcome.result,
+    title: outcome.title,
+    bodyChars: outcome.bodyChars,
+    browserMsUsed: outcome.browserMsUsed,
+    htmlError: outcome.htmlError ?? null,
+    errorCode: outcome.errorCode,
+    errorMessage: outcome.errorMessage,
+  });
+});
+
 /** SPEC §16.4 — failed jobs list. */
 adminApi.get('/jobs', async (c) => {
   const status = c.req.query('status');
@@ -222,6 +265,56 @@ adminApi.patch('/articles/:id', async (c) => {
 
   const article = await getArticleById(c.env.DB, id);
   return c.json({ article });
+});
+
+/**
+ * SPEC §16.4 — "View Raw HTML" and "View Error".
+ *
+ * Returns the archived capture, not a live fetch: SPEC §27 requires the raw
+ * archive to be enough to re-run the Parser without touching X again.
+ */
+adminApi.get('/articles/:id/raw', async (c) => {
+  const article = await getArticleById(c.env.DB, c.req.param('id'));
+  if (!article) throw new AppError('NOT_FOUND', `Article not found: ${c.req.param('id')}`, 404);
+
+  if (!article.raw_r2_key) {
+    return c.json({
+      articleId: article.id,
+      archived: false,
+      message: 'No raw archive yet. The crawl has not completed for this article.',
+    });
+  }
+
+  const archive = await readRawArchive(c.env.ARCHIVE, article.raw_r2_key);
+  return c.json({
+    articleId: article.id,
+    archived: true,
+    rawR2Key: article.raw_r2_key,
+    metadata: archive.metadata,
+    markdown: c.req.query('format') === 'markdown' ? archive.markdown : undefined,
+    html: c.req.query('format') === 'html' ? archive.html : undefined,
+    // Byte counts only, so listing a capture stays cheap.
+    markdownBytes: archive.markdown?.length ?? 0,
+    htmlBytes: archive.html?.length ?? 0,
+  });
+});
+
+/** SPEC §16.4 — crawl errors, straight from the job row. */
+adminApi.get('/articles/:id/errors', async (c) => {
+  const jobs = await listCrawlJobsForArticle(c.env.DB, c.req.param('id'), 10);
+  return c.json({
+    errors: jobs
+      .filter((j) => j.error_code || j.status === 'failed' || j.status === 'retrying')
+      .map((j) => ({
+        jobId: j.id,
+        jobType: j.job_type,
+        status: j.status,
+        attempts: j.attempt_count,
+        code: j.error_code,
+        message: j.error_message,
+        updatedAt: new Date(j.updated_at).toISOString(),
+      })),
+  });
 });
 
 /**

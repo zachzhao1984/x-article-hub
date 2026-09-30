@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildArticleSlug, normalizeArticleUrl, slugify, splitUrlInput } from '../src/lib/url';
+import { buildArticleSlug, normalizeArticleUrl, slugify, splitUrlInput } from '../../src/lib/url';
 
 /**
  * SPEC §5.2 — URL normalization is the dedup key for the whole system

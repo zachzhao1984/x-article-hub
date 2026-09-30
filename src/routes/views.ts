@@ -231,6 +231,7 @@ export interface ArticleDetailView {
     updated_at: number;
   }>;
   events: Array<{ id: string; action: string; actor: string; note: string | null; created_at: number }>;
+  raw?: { archived: boolean; markdownBytes: number; htmlBytes: number; r2Key: string | null } | null;
 }
 
 export function articleDetailView(view: ArticleDetailView, siteName: string = FALLBACK_SITE_NAME): string {
@@ -281,8 +282,30 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
   </dl>
   <form method="post" action="/admin/articles/${escapeHtml(a.id)}/retry">
     <button class="button" type="submit">Retry crawl job</button>
-    <span class="hint">Re-publishes the queue message. The actual crawl lands in Phase 2.</span>
+    <span class="hint">Re-publishes the queue message for the queue consumer.</span>
   </form>
+  <form method="post" action="/admin/articles/${escapeHtml(a.id)}/crawl">
+    <button class="button button-secondary" type="submit">Crawl now</button>
+    <span class="hint">Runs Browser Run immediately and reports the exact error code. Costs browser time.</span>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Raw archive (SPEC §8)</h2>
+  ${
+    view.raw?.archived
+      ? `<dl class="kv">
+    <dt>R2 key</dt><dd><code>${escapeHtml(view.raw.r2Key ?? '')}</code></dd>
+    <dt>Markdown</dt><dd>${view.raw.markdownBytes.toLocaleString()} bytes</dd>
+    <dt>HTML</dt><dd>${view.raw.htmlBytes.toLocaleString()} bytes</dd>
+  </dl>
+  <p class="hint">
+    <a href="/api/admin/articles/${escapeHtml(a.id)}/raw?format=markdown" target="_blank" rel="noreferrer">View raw Markdown</a>
+    &nbsp;·&nbsp;
+    <a href="/api/admin/articles/${escapeHtml(a.id)}/raw?format=html" target="_blank" rel="noreferrer">View raw HTML</a>
+  </p>`
+      : '<p class="hint">No raw archive yet. The crawl has not completed for this article.</p>'
+  }
 </section>
 
 <section class="card">

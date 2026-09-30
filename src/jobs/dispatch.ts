@@ -8,15 +8,15 @@
 import { isJobMessage, type JobMessage } from './types';
 import { recordDelivery } from '../db/jobs';
 import { log } from '../lib/logger';
-import { handleIngest } from './ingest';
+import { handleCrawl } from './crawl';
 
 type Handler = (message: JobMessage, env: Env) => Promise<void>;
 
 const handlers: Record<JobMessage['type'], Handler> = {
-  // Phase 1 accepts the message and proves the queue path end to end.
-  crawl: handleIngest,
-  // Phase 3 / 4 / 6 own these; they are declared so a bad message is caught here
-  // rather than being silently acked somewhere else.
+  // SPEC §38 Phase 2 — the real Browser Run crawl.
+  crawl: handleCrawl,
+  // Phase 3 / 4 / 6 own these. Declared so an unroutable message is caught here
+  // instead of being silently acked somewhere else.
   parse: notImplemented('parse'),
   ai: notImplemented('ai'),
   metrics: notImplemented('metrics'),
@@ -40,7 +40,8 @@ export async function handleBatch(batch: MessageBatch<JobMessage>, env: Env): Pr
       await handleMessage(message.body, env);
       message.ack();
     } catch (err) {
-      // Re-throwing lets the queue apply its retry policy (SPEC §25).
+      // Re-throwing lets the queue apply its own retry policy on top of the
+      // SPEC §25 ladder the crawl job manages itself (SPEC §25).
       log.error('ingest_invalid', {
         job_id: message.body && typeof message.body === 'object' ? (message.body as JobMessage).jobId : undefined,
         error_code: 'CONSUMER_THREW',
@@ -66,8 +67,8 @@ export async function handleMessage(body: unknown, env: Env): Promise<void> {
   const startedAt = Date.now();
   const job = await recordDelivery(env.DB, body.jobId, body.attempt);
   if (!job) {
-    // The article or job row was deleted between produce and consume (SPEC §19
-    // requires idempotency, so this is expected, not an error).
+    // The article or job row was deleted between produce and consume. SPEC §19
+    // requires idempotency, so this is expected, not an error.
     log.warn('ingest_invalid', {
       job_id: body.jobId,
       article_id: body.articleId,

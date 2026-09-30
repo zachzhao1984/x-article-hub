@@ -89,6 +89,7 @@
     "SITE_NAME": "X Article Hub",
     "SITE_ORIGIN": "https://x-article-hub.workers.dev",
     "RANKING_WEIGHTS_JSON": "{\"popularity\":0.4,\"velocity\":0.3,\"quality\":0.2,\"editor\":0.1}",
-    "MAX_IMPORT_URLS": "200"
+    "MAX_IMPORT_URLS": "200",
+    "CRAWL_SCREENSHOT": "false"
   }
 }

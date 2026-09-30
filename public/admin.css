@@ -170,3 +170,16 @@ a .pill { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-word; }
 
 .meta-row { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+
+.button-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.button-secondary:hover { border-color: var(--accent-dim); background: var(--panel-2); color: var(--text); }
+form + form { margin-top: 10px; }

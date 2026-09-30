@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RANKING_WEIGHTS, rankingWeights } from '../src/config/ranking';
-import { isJobMessage } from '../src/jobs/types';
+import { DEFAULT_RANKING_WEIGHTS, rankingWeights } from '../../src/config/ranking';
+import { isJobMessage } from '../../src/jobs/types';
 
 describe('rankingWeights', () => {
   it('falls back to the SPEC §14.4 defaults when unset', () => {
