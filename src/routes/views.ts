@@ -2,6 +2,7 @@
 
 import { escapeHtml } from '../lib/http';
 import { FALLBACK_SITE_NAME } from '../config/site';
+import { MANIFEST_HREF, SITE_ICONS, THEME_COLOR, iconLinkHtml } from '../config/icons';
 import type { ArticleRow } from '../db/rows';
 import type { ArticleStatus } from '../jobs/types';
 
@@ -32,6 +33,9 @@ export function layout(options: LayoutOptions, body: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>${escapeHtml(options.title)} · ${escapeHtml(options.siteName)} Admin</title>
+${SITE_ICONS.map(iconLinkHtml).join('\n')}
+<link rel="manifest" href="${MANIFEST_HREF}">
+<meta name="theme-color" content="${THEME_COLOR}">
 <link rel="stylesheet" href="/admin.css">
 </head>
 <body>

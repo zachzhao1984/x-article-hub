@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="X Article Hub">
+  <!--
+    Maskable variant, source for public/icon-512-maskable.png.
+
+    An installed icon may be cropped to any shape within the middle 80% of the
+    canvas, so the tile is full-bleed (a shape mask would otherwise expose
+    transparency) while the glyph is pulled inward to stay inside that safe zone.
+    Regenerate with: rsvg-convert -w 512 -h 512 favicon-maskable.svg -o icon-512-maskable.png
+  -->
+  <!--
+    Identity: the X brand blue tile carries the association; the glyph is the X
+    mark sitting over a single text rule, which reads as "an article" rather than
+    "a logo". The tile has its own background so it stays legible against both
+    light and dark browser chrome, where favicons actually live.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b9cf5"/>
+      <stop offset="1" stop-color="#0d7ac2"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="0" fill="url(#tile)"/>
+
+  <!-- X mark -->
+  <g transform="translate(20 15) scale(1.0)" fill="#ffffff">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </g>
+
+  <!-- the article's text rule -->
+  <rect x="21" y="43" width="22" height="4.5" rx="2.25" fill="#ffffff" opacity="0.92"/>
+</svg>

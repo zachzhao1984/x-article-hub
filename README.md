@@ -229,6 +229,39 @@ is that, without the fragility.
 | List items | 18 across 3 lists |
 | Quotes | 1 |
 | Images | 9, in document order (the 10th capture image is the author chip, §7.2) |
+
+### Icons
+
+`public/favicon.svg` is the single source of truth; every raster size is
+generated from it, so the vector can be edited and re-derived rather than
+hand-tweaked per size:
+
+```bash
+rsvg-convert -w 180   -h 180   public/favicon.svg -o public/apple-touch-icon.png
+rsvg-convert -w 192   -h 192   public/favicon.svg -o public/icon-192.png
+rsvg-convert -w 512   -h 512   public/favicon.svg -o public/icon-512.png
+rsvg-convert -w 512   -h 512   public/favicon-maskable.svg -o public/icon-512-maskable.png
+magick public/favicon.svg -define icon:auto-resize=16,32,48,64 -background none public/favicon.ico
+```
+
+The link tags live in `src/config/icons.ts` rather than in either head template.
+There are two independent heads — `src/layouts/Base.astro` for public pages and
+the string template in `src/routes/views.ts` for `/admin` — and an admin page
+showing a different favicon than an article page is exactly the drift nobody
+notices until it appears in a screenshot.
+
+Three variants exist because each platform crops differently, and a
+favicon that renders as a black square or a haloed blob is a real bug:
+
+| File | Why it differs |
+|---|---|
+| `favicon.svg` / `.ico` | Rounded tile, inset artwork |
+| `apple-touch-icon.png` | Full-bleed square — iOS applies its own mask and renders transparency as black |
+| `icon-512-maskable.png` | Full-bleed square, artwork pulled into the middle 80% so a circular Android mask cannot clip the X |
+| `safari-pinned-tab.svg` | A pure alpha stencil, no colour of its own; Safari paints it with the user's toolbar colour |
+
+`/site.webmanifest` is server-rendered rather than a static file, so `name` and
+`theme_color` track `SITE_NAME` the way `/robots.txt` tracks `SITE_ORIGIN`.
 | Links | 15 |
 | Warnings | 0 |
 
