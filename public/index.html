@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X Article Hub</title>
+<meta name="description" content="A curated, archived and searchable library of X Articles.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="/admin.css">
+<style>
+  .hero { max-width: 62ch; padding: 96px 24px; }
+  .hero h1 { font-size: 40px; line-height: 1.1; margin-bottom: 16px; }
+  .hero p { color: var(--muted); font-size: 16px; line-height: 1.6; }
+  .phase-list { color: var(--muted); }
+  .phase-list code { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>X Article Hub</h1>
+  <p>
+    A human-curated, machine-archived library of X Articles — built entirely on Cloudflare
+    (Workers, D1, R2, Queues, Browser Run, Workers AI).
+  </p>
+  <p class="phase-list">
+    This deployment is at <strong>Phase 1</strong>: URL import, canonicalisation, dedup and
+    queueing. Crawling, parsing, AI enrichment and the public reading site land in
+    <code>Phase 2</code> and later.
+  </p>
+  <p><a href="/admin">→ Admin</a></p>
+</div>
+</body>
+</html>

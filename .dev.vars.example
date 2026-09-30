@@ -1,0 +1,7 @@
+# SPEC §24 — local-development secret for the admin shim.
+# Copy to `.dev.vars` (git-ignored) and fill in.
+#
+# In production admin is protected by Cloudflare Access, which authenticates the
+# request before it reaches the Worker. ADMIN_TOKEN exists only so `wrangler dev`
+# and `curl` have a way in. It is deliberately NOT set in wrangler.jsonc.
+ADMIN_TOKEN="replace-me-with-a-long-random-string"

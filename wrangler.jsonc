@@ -1,0 +1,89 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "x-article-hub",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "workers_dev": true,
+  "preview_urls": false,
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  // Cloudflare Browser Run binding.
+  // Required by SPEC §7 / §30. Wired now (Phase 0) so the crawl job in Phase 2
+  // has a browser available without another config change.
+  // `remote: true` because Quick Actions only run in remote mode.
+  "browser": {
+    "binding": "BROWSER",
+    "remote": true
+  },
+
+  "ai": {
+    "binding": "AI"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "x-article-hub",
+      "database_id": "61f1e63b-4097-49fb-a99d-1f05dcb69ad9",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "ARCHIVE",
+      "bucket_name": "x-article-archive"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "ARTICLE_INGEST_QUEUE",
+        "queue": "article-ingest"
+      },
+      {
+        "binding": "ARTICLE_PROCESS_QUEUE",
+        "queue": "article-process"
+      },
+      {
+        "binding": "ARTICLE_METRICS_QUEUE",
+        "queue": "article-metrics"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "article-ingest",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 5,
+        "dead_letter_queue": "article-ingest-dlq"
+      },
+      {
+        "queue": "article-process",
+        "max_batch_size": 5,
+        "max_batch_timeout": 30,
+        "max_retries": 5
+      }
+    ]
+  },
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/admin", "/admin/*"]
+  },
+
+  "vars": {
+    "SITE_NAME": "X Article Hub",
+    "SITE_ORIGIN": "https://x-article-hub.workers.dev",
+    "RANKING_WEIGHTS_JSON": "{\"popularity\":0.4,\"velocity\":0.3,\"quality\":0.2,\"editor\":0.1}",
+    "MAX_IMPORT_URLS": "200"
+  }
+}
