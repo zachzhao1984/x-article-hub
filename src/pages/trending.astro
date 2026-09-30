@@ -1,0 +1,13 @@
+---
+// SPEC §15 — Trending: `final_score DESC`, the weighted blend of popularity,
+// velocity, quality and editor score.
+import BoardPage from '../components/BoardPage.astro';
+---
+
+<BoardPage
+  sort="trending"
+  heading="Trending"
+  lede="What the archive is reading right now."
+  path="/trending"
+  description="Trending X Articles, ranked by a blend of engagement, velocity, quality and editor score."
+/>

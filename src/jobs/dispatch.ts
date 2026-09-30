@@ -5,7 +5,6 @@
  * safe to receive twice: state lives in D1, keyed by `jobId`.
  */
 
-import type { Env } from '../env';
 import { isJobMessage, type JobMessage } from './types';
 import { recordDelivery } from '../db/jobs';
 import { log } from '../lib/logger';

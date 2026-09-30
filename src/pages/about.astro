@@ -1,0 +1,69 @@
+---
+// SPEC §17.1 — /about
+import { env } from 'cloudflare:workers';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import { homepageCounts } from '../db/public';
+
+const db = env.DB as unknown as D1Database;
+const counts = await homepageCounts(db);
+---
+
+<Base
+  title="About"
+  description="How X Article Hub works: human curation, machine archiving, transparent ranking."
+  path="/about"
+>
+  <SiteHeader>
+    <article class="prose">
+      <h1>About</h1>
+
+      <p>
+        X Article Hub is an archive of long-form posts from X, chosen by a human and organized by
+        machines. It is currently holding <strong>{counts.total}</strong> published article{counts.total === 1 ? '' : 's'}.
+      </p>
+
+      <h2>How an article gets here</h2>
+      <ol>
+        <li>An editor pastes an X Article URL into the <a href="/admin/import">importer</a>.</li>
+        <li>The URL is normalized and de-duplicated by its canonical form.</li>
+        <li>A crawl job fetches the rendered page and archives the raw HTML and Markdown.</li>
+        <li>A parser converts that into a structured document, preserving the author's structure.</li>
+        <li>AI produces a summary, a suggested category and tags — all treated as suggestions.</li>
+        <li>An editor reviews, overrides what it disagrees with, and publishes.</li>
+      </ol>
+
+      <h2>How articles are ranked</h2>
+      <p>
+        Four signals are kept separate and blended with configurable weights, so no single number
+        decides what you see:
+      </p>
+      <ul>
+        <li><strong>Popularity</strong> — log-compressed likes, reposts, replies, quotes, bookmarks and views.</li>
+        <li><strong>Velocity</strong> — how fast engagement is arriving, averaged over 1h, 6h and 24h windows.</li>
+        <li><strong>Quality</strong> — an AI assessment that can inform ranking but never publishes anything.</li>
+        <li><strong>Editor score</strong> — a human override.</li>
+      </ul>
+      <p>
+        <a href="/trending">Trending</a> uses the blend. <a href="/rising">Rising</a> uses velocity alone, which is how
+        something surfaces before it is already popular. <a href="/latest">Latest</a> is strictly chronological.
+        Editor's Picks are a human decision and are not a ranking.
+      </p>
+
+      <h2>Content and rights</h2>
+      <p>
+        Articles here are archived copies of work written by other people. Each reading page links
+        back to the original. Some articles are shown as an excerpt or as a link only, depending on
+        the editorial and rights decision recorded for that article — archived does not automatically
+        mean republished. Articles can be taken down at any time, and a taken-down page says so
+        rather than pretending the link never existed.
+      </p>
+
+      <h2>Built on Cloudflare</h2>
+      <p>
+        Workers, D1, R2, Queues, Browser Run and Workers AI. No external search cluster, no
+        self-hosted browser fleet, no separate VPS.
+      </p>
+    </article>
+  </SiteHeader>
+</Base>

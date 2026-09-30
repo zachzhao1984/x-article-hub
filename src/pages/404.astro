@@ -1,0 +1,16 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+---
+
+<Base title="Not found" description="This page does not exist." path={Astro.url.pathname} noindex>
+  <SiteHeader>
+    <div class="empty-state">
+      <h2>404 — not found</h2>
+      <p>
+        That page does not exist, or the article was never published. Try <a href="/">the homepage</a>,
+        <a href="/latest">Latest</a>, or <a href="/search">search</a>.
+      </p>
+    </div>
+  </SiteHeader>
+</Base>

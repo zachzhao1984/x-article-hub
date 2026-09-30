@@ -1,0 +1,222 @@
+---
+// SPEC §17.2 — the reading page.
+import { env } from 'cloudflare:workers';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from '../../db/public';
+import { readArticleDocument } from '../../services/archive';
+import type { ArticleBlock } from '../../types/article-document';
+
+const db = env.DB as unknown as D1Database;
+const bucket = env.ARCHIVE as unknown as R2Bucket;
+const { slug = '' } = Astro.params;
+
+const article = await getPublishedArticleBySlug(db, slug);
+
+if (!article) {
+  return Astro.rewrite('/404');
+}
+
+const isTakedown = article.status === 'takedown' || article.display_mode === 'takedown';
+// SPEC §37 — the body is only rendered for `full`. `excerpt` and `link_only`
+// deliberately do not fetch the R2 document at all.
+const showBody = !isTakedown && article.display_mode === 'full';
+
+const [tags, document, related] = await Promise.all([
+  getArticleTags(db, article.id),
+  showBody && article.content_r2_key ? readArticleDocument(bucket, article.content_r2_key) : Promise.resolve(null),
+  listPublishedArticles(db, {
+    categorySlug: article.category_slug ?? undefined,
+    limit: 4,
+  }),
+]);
+
+const related_ = related.filter((r) => r.id !== article.id).slice(0, 3);
+
+const description =
+  article.excerpt ||
+  (document ? document.blocks.find((b) => b.type === 'paragraph')?.text.slice(0, 200) : null) ||
+  article.title;
+
+const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
+
+// SPEC §33 — canonical points at our archive; the X link is separate and explicit.
+const jsonLd = isTakedown
+  ? null
+  : {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: article.title,
+      description,
+      datePublished: article.published_at ? new Date(article.published_at).toISOString() : undefined,
+      author: article.author_username
+        ? { '@type': 'Person', name: article.author_name ?? article.author_username, url: `/author/${article.author_username}` }
+        : undefined,
+      mainEntityOfPage: { '@type': 'WebPage', '@id': new URL(Astro.url.pathname, env.SITE_ORIGIN).href },
+      isBasedOn: article.canonical_url,
+      wordCount: article.word_count,
+      keywords: tags.map((t) => t.name).join(', ') || undefined,
+    };
+---
+
+<Base
+  title={article.title}
+  description={description}
+  path={`/article/${article.slug ?? slug}`}
+  type="article"
+  publishedAt={article.published_at}
+  authorName={article.author_name ?? article.author_username}
+>
+  {jsonLd && <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />}
+
+  <SiteHeader>
+    <div class="article-shell">
+      <nav class="article-crumbs">
+        {article.category_name && article.category_slug && (
+          <>
+            <a class="tag-cat" href={`/category/${article.category_slug}`}>{article.category_name}</a>
+            <span class="muted">/</span>
+          </>
+        )}
+        <a href="/latest">Latest</a>
+      </nav>
+
+      <header class="article-head">
+        <h1 class="article-title">{article.title}</h1>
+        <div class="byline">
+          {article.author_username && (
+            <a href={`/author/${article.author_username}`}>
+              {article.author_name ? `${article.author_name} ` : ''}@{article.author_username}
+            </a>
+          )}
+          {article.published_at && (
+            <time datetime={new Date(article.published_at).toISOString()}>
+              {new Date(article.published_at).toISOString().slice(0, 10)}
+            </time>
+          )}
+          <span class="muted">{readingMinutes} min read</span>
+        </div>
+      </header>
+
+      {
+        isTakedown ? (
+          // SPEC §37 — a takedown is explained, not hidden. A shared link should
+          // not silently look like a broken page.
+          <div class="notice">
+            <h2>This article has been taken down</h2>
+            <p>
+              The archived copy is no longer displayed. This usually means the author requested removal, or
+              the content raised a rights concern.
+            </p>
+            {article.takedown_reason && <p><strong>Reason:</strong> {article.takedown_reason}</p>}
+          </div>
+        ) : (
+          <>
+            {
+              (article.final_score !== null || article.quality_score !== null) && (
+                <div class="stat-row">
+                  {article.final_score !== null && <span>Final <b>{article.final_score.toFixed(0)}</b></span>}
+                  {article.popularity_score !== null && <span>Popularity <b>{article.popularity_score.toFixed(0)}</b></span>}
+                  {article.velocity_score !== null && <span>Velocity <b>{article.velocity_score.toFixed(0)}</b></span>}
+                  {article.quality_score !== null && <span>Quality <b>{article.quality_score.toFixed(0)}</b></span>}
+                </div>
+              )
+            }
+
+            {article.display_mode === 'link_only' ? (
+              <div class="notice">
+                <h2>Full text not displayed</h2>
+                <p>
+                  This archive does not republish the full text of this article. Read it at the original
+                  source instead.
+                </p>
+              </div>
+            ) : (
+              article.editor_summary && <div class="notice"><p>{article.editor_summary}</p></div>
+            )}
+
+            {
+              article.display_mode === 'excerpt' && (
+                <div class="notice">
+                  <p><strong>Excerpt only.</strong> The full text is archived but not published.</p>
+                </div>
+              )
+            }
+
+            <div class="article-body">
+              {
+                showBody && document
+                  ? document.blocks.map((block: ArticleBlock) => {
+                      switch (block.type) {
+                        case 'heading':
+                          const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3';
+                          return <Tag>{block.text}</Tag>;
+                        case 'quote':
+                          return <blockquote>{block.text}</blockquote>;
+                        case 'list':
+                          return block.ordered ? (
+                            <ol>{block.items.map((i) => <li>{i}</li>)}</ol>
+                          ) : (
+                            <ul>{block.items.map((i) => <li>{i}</li>)}</ul>
+                          );
+                        case 'code':
+                          return <pre><code>{block.code}</code></pre>;
+                        case 'paragraph':
+                          return <p>{block.text}</p>;
+                        case 'embed':
+                          return (
+                            <p class="muted">
+                              [Embedded X post <code>{block.postId}</code>]
+                            </p>
+                          );
+                        default:
+                          return null;
+                      }
+                    })
+                  : null
+              }
+              {
+                showBody && !document && (
+                  <div class="notice">
+                    <p>The archived document for this article is not available yet.</p>
+                  </div>
+                )
+              }
+            </div>
+
+            <footer class="article-footer">
+              {
+                tags.length > 0 && (
+                  <div class="tag-row">
+                    {tags.map((t) => (
+                      <a class="tag" href={`/tag/${t.slug}`}>{t.name}</a>
+                    ))}
+                  </div>
+                )
+              }
+
+              <!-- SPEC §33 — the X link is explicit and separate from our canonical. -->
+              <a class="original-link" href={article.canonical_url} target="_blank" rel="noopener noreferrer nofollow">
+                ↗ View original on X
+              </a>
+            </footer>
+          </>
+        )
+      }
+
+      {
+        related_.length > 0 && !isTakedown && (
+          <section class="board" style="margin-top:56px">
+            <h2 class="board-title">More in {article.category_name ?? 'this topic'}</h2>
+            <div class="grid-cards">
+              {related_.map((r) => (
+                <ArticleCard article={r} />
+              ))}
+            </div>
+          </section>
+        )
+      }
+    </div>
+  </SiteHeader>
+</Base>

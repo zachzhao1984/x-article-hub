@@ -1,7 +1,6 @@
 /** SPEC §31 — Hono app assembly. */
 
 import { Hono } from 'hono';
-import type { Env } from './env';
 import type { AdminIdentity } from './middleware/admin-auth';
 import { adminApi } from './routes/admin-api';
 import { adminUi } from './routes/admin-ui';
@@ -35,14 +34,15 @@ app.onError((err, c) => {
   return c.json({ error: { code: appErr.code, message: appErr.message, details: appErr.details } }, appErr.status as 500);
 });
 
-app.notFound((c) => {
-  if (c.req.path.startsWith('/api/')) {
-    return c.json({ error: { code: 'NOT_FOUND', message: `No route for ${c.req.method} ${c.req.path}` } }, 404);
-  }
-  // SPEC §33 — the public site is Phase 5; until then the asset worker owns `/`.
-  if (c.req.method === 'GET') return c.env.ASSETS.fetch(c.req.raw);
-  return c.json({ error: { code: 'NOT_FOUND', message: 'Not found' } }, 404);
-});
+/**
+ * This sub-app owns `/api/*`, `/admin/*` and `/healthz`. Anything unmatched
+ * simply registers no route, so the request continues down the parent's
+ * middleware chain and reaches Astro's `pages()` (SPEC §17).
+ *
+ * There is deliberately no `notFound` handler here: Hono's NotFoundHandler
+ * receives no `next`, and the `/api/*` JSON 404 has to be registered on the
+ * parent (src/worker.ts) so it runs *before* Astro can answer with an HTML page.
+ */
 
 app.route('/api', publicApi);
 app.route('/api/admin', adminApi);

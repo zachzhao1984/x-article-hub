@@ -1,0 +1,64 @@
+---
+// One article card. Shared by the homepage sections, the boards and the category pages.
+export interface Props {
+  article: {
+    slug: string | null;
+    title: string;
+    excerpt: string | null;
+    author_username: string | null;
+    author_name: string | null;
+    published_at: number | null;
+    category_slug: string | null;
+    category_name: string | null;
+    word_count: number;
+    featured?: 0 | 1;
+    final_score?: number | null;
+    velocity_score?: number | null;
+  };
+  rank?: number;
+}
+
+const { article, rank } = Astro.props;
+const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
+const dateLabel = article.published_at
+  ? new Date(article.published_at).toISOString().slice(0, 10)
+  : null;
+const href = article.slug ? `/article/${article.slug}` : '#';
+---
+
+<article class="card-article">
+  {rank && <span class="rank">{rank}</span>}
+
+  <div class="card-body">
+    <div class="card-meta">
+      {article.category_name && article.category_slug && (
+        <a class="tag-cat" href={`/category/${article.category_slug}`}>
+          {article.category_name}
+        </a>
+      )}
+      {article.featured === 1 && <span class="badge badge-pick">★ Editor's Pick</span>}
+      <span class="muted">{readingMinutes} min read</span>
+      {dateLabel && <time class="muted" datetime={new Date(article.published_at!).toISOString()}>{dateLabel}</time>}
+    </div>
+
+    <h3 class="card-title"><a href={href}>{article.title}</a></h3>
+    {article.excerpt && <p class="card-excerpt">{article.excerpt}</p>}
+
+    <div class="card-foot">
+      {
+        article.author_username && (
+          <a class="author" href={`/author/${article.author_username}`}>
+            {article.author_name ? `@${article.author_username}` : `@${article.author_username}`}
+          </a>
+        )
+      }
+      {
+        typeof article.velocity_score === 'number' && article.velocity_score > 0 && (
+          <span class="score" title="Velocity score (SPEC §14.2)">
+            ↑ {article.velocity_score.toFixed(0)}
+          </span>
+        )
+      }
+    </div>
+  </div>
+</article>

@@ -1,42 +1,32 @@
 /**
- * Runtime bindings.
+ * Ambient type augmentation for the Worker.
  *
- * The runtime types (`D1Database`, `R2Bucket`, `BrowserRun`, `Ai`, `Fetcher`,
- * `Queue`) are ambient globals emitted by `npm run cf-typegen`
- * (`worker-configuration.d.ts`). This interface re-declares them so the app has
- * a single named `Env` to import, and so secret bindings that intentionally do
- * not appear in `wrangler.jsonc` still get type-checked.
+ * `Env` itself is declared by `worker-configuration.d.ts` (`npm run cf-typegen`),
+ * which also gives the `vars` literal types that the Cloudflare adapter's `cf()`
+ * middleware expects — so it must not be shadowed by a hand-written interface.
+ *
+ * Secret bindings never appear in the generated file because they only exist at
+ * runtime, so they are merged into the same global interface here.
+ *
+ * These live in a `.ts` file rather than a `.d.ts` because tsc's `include` was
+ * silently not picking the declaration file up.
  */
 
-import type { JobMessage } from './jobs/types';
+declare global {
+  interface Env {
+    /** SPEC §24 — local-dev shim only. Production gates admin with Cloudflare Access. */
+    ADMIN_TOKEN?: string;
+    ENVIRONMENT?: string;
+  }
 
-export interface Env {
-  /** SPEC §11 — relational metadata, state, indexes. */
-  DB: D1Database;
-  /** SPEC §8 — raw archive, normalized versions, media. */
-  ARCHIVE: R2Bucket;
-  /** SPEC §3 — static assets (admin css, placeholder public landing). */
-  ASSETS: Fetcher;
-  /** SPEC §7 — Browser Run Quick Actions. Wired in Phase 0, consumed in Phase 2. */
-  BROWSER: BrowserRun;
-  /** SPEC §13 — Workers AI. Wired in Phase 0, consumed in Phase 4. */
-  AI: Ai;
-
-  /** SPEC §19 — crawl jobs. */
-  ARTICLE_INGEST_QUEUE: Queue<JobMessage>;
-  /** SPEC §19 — parse / AI jobs. */
-  ARTICLE_PROCESS_QUEUE: Queue<JobMessage>;
-  /** SPEC §19 — metrics jobs. */
-  ARTICLE_METRICS_QUEUE: Queue<JobMessage>;
-
-  SITE_NAME: string;
-  SITE_ORIGIN: string;
-  /** SPEC §14.4 — ranking weights must be configurable, never hard-coded. */
-  RANKING_WEIGHTS_JSON: string;
-  /** SPEC §16.2 — guard against pasting a whole file by accident. */
-  MAX_IMPORT_URLS: string;
-
-  /** SPEC §24 — local-dev shim only. Production gates admin with Cloudflare Access. */
-  ADMIN_TOKEN?: string;
-  ENVIRONMENT?: string;
+  // Astro 6 removed `Astro.locals.runtime`; bindings come from `cloudflare:workers`.
+  // The adapter still exposes the ExecutionContext here, which is what `waitUntil`
+  // is read from.
+  namespace App {
+    interface Locals {
+      cfContext: ExecutionContext;
+    }
+  }
 }
+
+export {};

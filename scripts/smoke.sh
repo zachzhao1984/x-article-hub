@@ -2,12 +2,20 @@
 # SPEC §38 Phase 1 acceptance check against a running Worker (local dev or deployed).
 #   ./scripts/smoke.sh [base-url] [admin-token]
 #
+# The token can also come from the ADMIN_TOKEN environment variable.
+#
 # Uses fresh article ids per run so it can be executed repeatedly against the same
 # database without the dedup assertions passing vacuously.
 set -euo pipefail
 
 BASE="${1:-http://127.0.0.1:8787}"
-TOKEN="${2:-devtoken}"
+TOKEN="${2:-${ADMIN_TOKEN:-devtoken}}"
+
+# Cloudflare applies CSRF protection to Workers: a POST without a same-origin
+# `Origin` header is rejected with 403 "Cross-site POST form submissions are
+# forbidden" before the Worker ever runs. Browsers always send Origin on a
+# same-origin form POST, so this only affects scripted clients like this one.
+ORIGIN=(-H "Origin: ${BASE}")
 AUTH=(-H "Authorization: Bearer ${TOKEN}")
 
 RUN_ID="$(node -e 'process.stdout.write(String(Date.now()))')"
@@ -27,7 +35,6 @@ echo
 echo "Public API"
 check "GET /api/health returns ok" "$(curl -fsS "${BASE}/api/health" | jqv '.ok')" "true"
 check "GET /api/categories returns the 5 seeded categories" "$(curl -fsS "${BASE}/api/categories" | jqv '.categories.length')" "5"
-check "unpublished articles are not exposed publicly" "$(curl -fsS "${BASE}/api/articles" | jqv '.articles.length')" "0"
 
 echo
 echo "Admin auth (SPEC §24)"
@@ -40,7 +47,7 @@ check "a bogus bearer token is rejected" \
 
 echo
 echo "Import (SPEC §5 / §22)"
-FIRST="$(curl -fsS "${AUTH[@]}" -H 'Content-Type: application/json' \
+FIRST="$(curl -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: application/json' \
   -d "{\"urls\":[\"https://x.com/karpathy/article/${A1}\",\"https://x.com/someone/article/${A2}\"]}" \
   "${BASE}/api/admin/articles/import")"
 
@@ -56,7 +63,7 @@ https://x.com/karpathy/article/${A1}
 https://example.com/not-x/article/${A3}
 https://x.com/karpathy/status/${A3}"
 
-MIXED="$(curl -fsS "${AUTH[@]}" -H 'Content-Type: text/plain' --data-binary "$BATCH" "${BASE}/api/admin/articles/import")"
+MIXED="$(curl -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: text/plain' --data-binary "$BATCH" "${BASE}/api/admin/articles/import")"
 check "4 already-known URLs collapse to duplicates, incl. an in-batch repeat" "$(echo "$MIXED" | jqv '.duplicates')" "4"
 check "duplicate input reports the existing article id" \
   "$(echo "$MIXED" | jqv '.outcomes.filter(o=>o.status==="duplicate").every(o=>typeof o.articleId==="string")')" "true"
@@ -66,6 +73,13 @@ check "the status permalink reports NOT_AN_ARTICLE" \
   "$(echo "$MIXED" | jqv '.outcomes.filter(o=>o.code==="NOT_AN_ARTICLE").length')" "1"
 check "2 invalid URLs are rejected" "$(echo "$MIXED" | jqv '.failed')" "2"
 check "the mixed batch created no new article" "$(echo "$MIXED" | jqv '.created')" "0"
+
+# SPEC §6 — only `published` rows are public. The rows created above are all
+# `pending`, so none of them may appear in the public list. Asserting on the ids
+# rather than on a count keeps this true even when published content exists.
+PUBLIC_IDS="$(curl -fsS "${BASE}/api/articles?limit=100" | jqv '.articles.map(a=>a.id).join(",")')"
+check "imported but unpublished articles are not exposed publicly" \
+  "$(echo "$FIRST" | jqv ".articles.filter(a=>\"${PUBLIC_IDS}\".split(\",\").includes(a.id)).length")" "0"
 
 echo
 echo "Queue + job state (SPEC §19)"
@@ -78,8 +92,8 @@ check "the article starts in the pending state (SPEC §6)" "$(echo "$DETAIL" | j
 check "the site slug is derived from the username and article id" \
   "$(echo "$DETAIL" | jqv '.article.slug')" "karpathy-${A1}"
 
-RETRY1="$(curl -fsS -X POST "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
-RETRY2="$(curl -fsS -X POST "${AUTH[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
+RETRY1="$(curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
+RETRY2="$(curl -fsS -X POST "${AUTH[@]}" "${ORIGIN[@]}" "${BASE}/api/admin/articles/${ARTICLE_ID}/retry")"
 ATTEMPT1="$(echo "$RETRY1" | jqv '.attempt')"
 ATTEMPT2="$(echo "$RETRY2" | jqv '.attempt')"
 # Delivery to the consumer is asynchronous, so the stored attempt count can differ
@@ -109,10 +123,12 @@ check "the login form is served" \
   "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/admin/login")" "200"
 check "an unauthenticated admin page redirects to the login form" \
   "$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/admin")" "303"
+check "a POST without a same-origin Origin is blocked by Cloudflare CSRF protection" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "token=${TOKEN}" "${BASE}/admin/login")" "403"
 check "a wrong token is rejected" \
-  "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d 'token=definitely-wrong' "${BASE}/admin/login")" "401"
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "${ORIGIN[@]}" -d 'token=definitely-wrong' "${BASE}/admin/login")" "401"
 
-COOKIE="$(curl -s -D - -o /dev/null -X POST -d "token=${TOKEN}" "${BASE}/admin/login" \
+COOKIE="$(curl -s -D - -o /dev/null -X POST "${ORIGIN[@]}" -d "token=${TOKEN}" "${BASE}/admin/login" \
   | tr -d '\r' | grep -i '^set-cookie:' | sed -E 's/^[Ss]et-[Cc]ookie: *//; s/;.*$//')"
 
 check "a correct token sets a session cookie" "$([ -n "$COOKIE" ] && echo yes)" "yes"

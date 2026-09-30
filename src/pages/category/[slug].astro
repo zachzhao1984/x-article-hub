@@ -1,0 +1,87 @@
+---
+// SPEC §17.1 — /category/:slug
+import { env } from 'cloudflare:workers';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { listPublishedArticles } from '../../db/public';
+
+const db = env.DB as unknown as D1Database;
+const { slug = '' } = Astro.params;
+
+const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
+const PER_PAGE = 20;
+const sort = (Astro.url.searchParams.get('sort') as 'latest' | 'trending' | 'rising') ?? 'latest';
+
+const articles = await listPublishedArticles(db, {
+  categorySlug: slug,
+  sort,
+  limit: PER_PAGE,
+  offset: (page - 1) * PER_PAGE,
+});
+
+// An empty category is indistinguishable from a typo'd slug, so resolve the name.
+const { results: categoryRows } = await db
+  .prepare(`SELECT slug, name, description FROM categories WHERE slug = ?`)
+  .bind(slug)
+  .all<{ slug: string; name: string; description: string | null }>();
+const category = categoryRows[0] ?? null;
+
+if (!category) {
+  // SPEC §17.1 — an unknown slug should render the styled 404, not a blank body.
+  return Astro.rewrite('/404');
+}
+
+const title = category.name;
+const description = category.description ?? `X Articles about ${category.name}.`;
+const sorts: Array<{ key: typeof sort; label: string; href: string }> = [
+  { key: 'latest', label: 'Latest', href: `/category/${slug}` },
+  { key: 'trending', label: 'Trending', href: `/category/${slug}?sort=trending` },
+  { key: 'rising', label: 'Rising', href: `/category/${slug}?sort=rising` },
+];
+---
+
+<Base title={title} description={description} path={`/category/${slug}`}>
+  <SiteHeader>
+    <header class="hero">
+      <h1>Category</h1>
+      <p class="hero-sub">{title}</p>
+      {description && <p class="hero-meta">{description}</p>}
+    </header>
+
+    <div class="chips" style="display:flex;gap:6px;margin-bottom:24px">
+      {
+        sorts.map((s) => (
+          <a class="cat-chip" href={s.href} style={s.key === sort ? 'background:var(--text);color:var(--bg);border-color:var(--text);font-weight:600' : ''}>
+            {s.label}
+          </a>
+        ))
+      }
+    </div>
+
+    {
+      articles.length === 0 ? (
+        <div class="empty-state">
+          <h2>No articles in {title} yet</h2>
+          <p>Nothing has been published under this category.</p>
+        </div>
+      ) : (
+        <div class="grid-cards">
+          {articles.map((a, i) => (
+            <ArticleCard article={a} rank={sort === 'latest' ? undefined : i + 1} />
+          ))}
+        </div>
+      )
+    }
+
+    {
+      articles.length === PER_PAGE && (
+        <nav class="pager">
+          {page > 1 ? <a href={`?sort=${sort}&page=${page - 1}`}>← Newer</a> : <span />}
+          <span class="muted">Page {page}</span>
+          <a href={`?sort=${sort}&page=${page + 1}`}>Older →</a>
+        </nav>
+      )
+    }
+  </SiteHeader>
+</Base>

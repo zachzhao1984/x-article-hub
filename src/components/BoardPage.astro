@@ -1,0 +1,67 @@
+---
+// SPEC §15 — Latest / Trending / Rising share one implementation; only the
+// ordering differs. Kept as a single component so the three boards cannot drift.
+import { env } from 'cloudflare:workers';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import ArticleCard from '../components/ArticleCard.astro';
+import { listPublishedArticles, type PublicSort } from '../db/public';
+
+export interface Props {
+  sort: PublicSort;
+  heading: string;
+  lede: string;
+  path: string;
+  description: string;
+}
+
+const { sort, heading, lede, path, description } = Astro.props;
+const db = env.DB as unknown as D1Database;
+
+const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
+const PER_PAGE = 20;
+
+const articles = await listPublishedArticles(db, { sort, limit: PER_PAGE, offset: (page - 1) * PER_PAGE });
+const hasMore = articles.length === PER_PAGE;
+
+const basePath = path;
+const prevHref = page > 1 ? `${basePath}?page=${page - 1}` : null;
+const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
+---
+
+<Base title={heading} description={description} path={path}>
+  <SiteHeader>
+    <header class="hero">
+      <h1>{heading}</h1>
+      <p class="hero-sub">{lede}</p>
+    </header>
+
+    {
+      articles.length === 0 ? (
+        <div class="empty-state">
+          <h2>Nothing here yet</h2>
+          <p>
+            No published articles match this board. Import and publish some from the{' '}
+            <a href="/admin">admin</a>, or check <a href="/latest">Latest</a>.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div class="grid-cards">
+            {articles.map((a, i) => (
+              <ArticleCard article={a} rank={sort === 'latest' ? undefined : i + 1} />
+            ))}
+          </div>
+
+          {(prevHref || nextHref) && (
+            <nav class="pager">
+              {prevHref ? <a href={prevHref}>← Newer</a> : <span />}
+              <span class="muted">Page {page}</span>
+              {nextHref ? <a href={nextHref}>Older →</a> : <span />}
+            </nav>
+          )}
+        </>
+      )
+    }
+  </SiteHeader>
+</Base>

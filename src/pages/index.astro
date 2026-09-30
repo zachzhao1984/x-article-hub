@@ -1,0 +1,141 @@
+---
+// SPEC §17.3 — the homepage is a discovery surface, not a CMS dump.
+import { env } from 'cloudflare:workers';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import ArticleCard from '../components/ArticleCard.astro';
+import {
+  homepageCounts,
+  listCategoriesWithCounts,
+  listPublishedArticles,
+  listTagsWithCounts,
+} from '../db/public';
+
+const db = env.DB as unknown as D1Database;
+
+const [counts, trending, rising, featured, categories, tags] = await Promise.all([
+  homepageCounts(db),
+  listPublishedArticles(db, { sort: 'trending', limit: 5 }),
+  listPublishedArticles(db, { sort: 'rising', limit: 5 }),
+  listPublishedArticles(db, { sort: 'featured', limit: 3 }),
+  listCategoriesWithCounts(db),
+  listTagsWithCounts(db, 24),
+]);
+
+// SPEC §17.3 ordering: Today's Selection, then the machine boards, then the picks.
+const today = trending.slice(0, 3);
+const empty = counts.total === 0;
+---
+
+<Base
+  title="X Article Hub"
+  description="A human-curated, machine-archived library of X Articles — organized by topic, ranked by real engagement."
+  path="/"
+>
+  <SiteHeader>
+    <section class="hero">
+      <h1>X Article</h1>
+      <p class="hero-sub">Today's Selection</p>
+      <p class="hero-meta">
+        {counts.total} article{counts.total === 1 ? '' : 's'} · curated by hand, archived and ranked by machine
+      </p>
+    </section>
+
+    {
+      empty ? (
+        <div class="empty-state">
+          <h2>No published articles yet</h2>
+          <p>
+            Articles appear here after an editor publishes them. Paste X Article URLs in the
+            <a href="/admin/import">admin importer</a> to start the pipeline.
+          </p>
+          <pre><code>https://x.com/username/article/1234567890</code></pre>
+        </div>
+      ) : (
+        <>
+          {today.length > 0 && (
+            <section class="board board-today">
+              <h2 class="board-title">Today's Selection</h2>
+              <div class="grid-cards">
+                {today.map((a) => (
+                  <ArticleCard article={a} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div class="board-split">
+            {trending.length > 0 && (
+              <section class="board">
+                <div class="board-head">
+                  <h2 class="board-title">🔥 Trending</h2>
+                  <a class="board-more" href="/trending">All trending →</a>
+                </div>
+                <ol class="ranked-list">
+                  {trending.map((a, i) => (
+                    <li>
+                      <ArticleCard article={a} rank={i + 1} />
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            {rising.length > 0 && (
+              <section class="board">
+                <div class="board-head">
+                  <h2 class="board-title">📈 Rising Fast</h2>
+                  <a class="board-more" href="/rising">All rising →</a>
+                </div>
+                <ol class="ranked-list">
+                  {rising.map((a, i) => (
+                    <li>
+                      <ArticleCard article={a} rank={i + 1} />
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+          </div>
+
+          {featured.length > 0 && (
+            <section class="board board-picks">
+              <h2 class="board-title">⭐ Editor's Picks</h2>
+              <div class="grid-cards">
+                {featured.map((a) => (
+                  <ArticleCard article={a} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section class="board">
+            <h2 class="board-title">Browse by category</h2>
+            <div class="cat-grid">
+              {categories.map((c) => (
+                <a class="cat-card" href={`/category/${c.slug}`}>
+                  <span class="cat-name">{c.name}</span>
+                  <span class="cat-desc">{c.description}</span>
+                  <span class="cat-count">{c.count} articles</span>
+                </a>
+              ))}
+            </div>
+          </section>
+
+          {tags.length > 0 && (
+            <section class="board">
+              <h2 class="board-title">Popular tags</h2>
+              <div class="tag-cloud">
+                {tags.map((t) => (
+                  <a class="tag" href={`/tag/${t.slug}`}>
+                    {t.name} <span class="cat-count">{t.count}</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )
+    }
+  </SiteHeader>
+</Base>

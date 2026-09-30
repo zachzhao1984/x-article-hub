@@ -1,7 +1,10 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "x-article-hub",
-  "main": "src/index.ts",
+
+  // Custom entrypoint (see src/worker.ts). Needed because the adapter's default
+  // entrypoint cannot export the `queue` / `scheduled` handlers (SPEC §19 / §21).
+  "main": "./src/worker.ts",
   "compatibility_date": "2026-09-30",
   "compatibility_flags": ["nodejs_compat"],
 
@@ -74,10 +77,12 @@
     ]
   },
 
+  // SPEC §3 — Astro builds to ./dist. The adapter's `cf()` middleware serves
+  // hashed build assets from here and falls through to SSR for everything else,
+  // so no run_worker_first list is needed.
   "assets": {
-    "directory": "./public",
-    "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/admin", "/admin/*"]
+    "directory": "./dist",
+    "binding": "ASSETS"
   },
 
   "vars": {

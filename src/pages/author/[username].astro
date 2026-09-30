@@ -1,0 +1,37 @@
+---
+// SPEC §17.1 — /author/:username
+import { env } from 'cloudflare:workers';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { getAuthor, listPublishedArticles } from '../../db/public';
+
+const db = env.DB as unknown as D1Database;
+const { username = '' } = Astro.params;
+
+const author = await getAuthor(db, username);
+if (!author) return Astro.rewrite('/404');
+
+const articles = await listPublishedArticles(db, { authorUsername: username, limit: 50 });
+const display = author.display_name ?? author.username;
+---
+
+<Base
+  title={`@${author.username}`}
+  description={`${articles.length} archived X Article${articles.length === 1 ? '' : 's'} by ${display}.`}
+  path={`/author/${username}`}
+>
+  <SiteHeader>
+    <header class="hero">
+      <h1>Author</h1>
+      <p class="hero-sub">{display}</p>
+      <p class="hero-meta">
+        @{author.username} · {articles.length} article{articles.length === 1 ? '' : 's'} archived
+      </p>
+    </header>
+
+    <div class="grid-cards">
+      {articles.map((a) => <ArticleCard article={a} />)}
+    </div>
+  </SiteHeader>
+</Base>

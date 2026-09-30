@@ -1,0 +1,12 @@
+---
+// SPEC §15 — Latest: `published_at DESC`.
+import BoardPage from '../components/BoardPage.astro';
+---
+
+<BoardPage
+  sort="latest"
+  heading="Latest"
+  lede="Everything published, newest first."
+  path="/latest"
+  description="The most recently published X Articles in the archive."
+/>

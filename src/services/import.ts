@@ -8,7 +8,6 @@
  * Parser and Workers AI all happen later, in queue consumers.
  */
 
-import type { Env } from '../env';
 import { getArticleByCanonicalUrl, getArticleById } from '../db/articles';
 import { listCrawlJobsForArticle, recordRetryAttempt } from '../db/jobs';
 import { recordEvent } from '../db/events';

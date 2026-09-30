@@ -5,17 +5,24 @@
   "type": "module",
   "description": "Curated, archived and searchable hub for X Articles. Built entirely on Cloudflare.",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "deploy:dry": "wrangler deploy --dry-run",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "npm run build && wrangler deploy -c dist/server/wrangler.json",
+    "deploy:dry": "npm run build && wrangler deploy -c dist/server/wrangler.json --dry-run",
     "cf-typegen": "wrangler types",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "wrangler types && astro sync && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate:local": "wrangler d1 migrations apply x-article-hub --local",
-    "db:migrate:remote": "wrangler d1 migrations apply x-article-hub --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply x-article-hub --remote",
+    "db:query": "wrangler d1 execute x-article-hub --local",
+    "smoke": "bash scripts/smoke.sh",
+    "smoke:site": "bash scripts/smoke-site.sh"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.3.3",
+    "astro": "^7.3.5",
     "hono": "^4.7.0"
   },
   "devDependencies": {

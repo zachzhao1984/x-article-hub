@@ -12,7 +12,6 @@
  * shows the honest state and SPEC §16.4's Retry still applies.
  */
 
-import type { Env } from '../env';
 import type { JobMessage } from './types';
 import { log } from '../lib/logger';
 

@@ -6,7 +6,6 @@
  */
 
 import { Hono } from 'hono';
-import type { Env } from '../env';
 import type { AdminIdentity } from '../middleware/admin-auth';
 import { requireAdmin, setAdminCookie, clearAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { siteConfig } from '../config/site';

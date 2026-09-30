@@ -1,0 +1,107 @@
+---
+// SPEC §12 / §17.1 — /search, backed by D1 FTS5 (no Elasticsearch, SPEC §12).
+import { env } from 'cloudflare:workers';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import { searchPublishedArticles } from '../db/public';
+
+const db = env.DB as unknown as D1Database;
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
+const PER_PAGE = 20;
+
+const result = q ? await searchPublishedArticles(db, q, PER_PAGE, (page - 1) * PER_PAGE) : { items: [], total: 0 };
+---
+
+<Base
+  title={q ? `Search: ${q}` : 'Search'}
+  description="Full-text search across the archived X Article library."
+  path={q ? `/search?q=${encodeURIComponent(q)}` : '/search'}
+  noindex={Boolean(q)}
+>
+  <SiteHeader>
+    <header class="hero">
+      <h1>Search</h1>
+      <p class="hero-sub">Find anything in the archive.</p>
+    </header>
+
+    <form class="search-form" action="/search" method="get" role="search">
+      <input
+        type="search"
+        name="q"
+        value={q}
+        placeholder="Search titles, body text, authors and tags"
+        aria-label="Search articles"
+        autofocus
+      />
+      <button type="submit">Search</button>
+    </form>
+
+    {
+      !q ? (
+        <div class="empty-state">
+          <h2>Search the archive</h2>
+          <p>
+            Titles, summaries, full body text, author names and tags are all indexed. Try{' '}
+            <a href="/search?q=agents">agents</a> or <a href="/search?q=inference">inference</a>.
+          </p>
+        </div>
+      ) : result.total === 0 ? (
+        <div class="empty-state">
+          <h2>No results for &ldquo;{q}&rdquo;</h2>
+          <p>Nothing matched. Try fewer or broader terms.</p>
+        </div>
+      ) : (
+        <>
+          <p class="muted" style="margin:0 0 18px">
+            {result.total} result{result.total === 1 ? '' : 's'} for &ldquo;{q}&rdquo;
+          </p>
+
+          <div style="display:flex;flex-direction:column;gap:4px">
+            {result.items.map((item) => (
+              <article class="card-article">
+                <div class="card-body">
+                  <div class="card-meta">
+                    {item.category_name && item.category_slug && (
+                      <a class="tag-cat" href={`/category/${item.category_slug}`}>{item.category_name}</a>
+                    )}
+                    {item.published_at && (
+                      <time class="muted" datetime={new Date(item.published_at).toISOString()}>
+                        {new Date(item.published_at).toISOString().slice(0, 10)}
+                      </time>
+                    )}
+                  </div>
+
+                  <h3 class="card-title">
+                    <a href={`/article/${item.slug}`}>{item.title}</a>
+                  </h3>
+
+                  {/* SPEC §12 — FTS5 snippet() with match highlighting. */}
+                  {item.snippet && (
+                    <p class="result-snippet" set:html={item.snippet} />
+                  )}
+
+                  <div class="card-foot">
+                    {item.author_username && <span class="author">@{item.author_username}</span>}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {result.items.length === PER_PAGE && (
+            <nav class="pager">
+              {page > 1 ? (
+                <a href={`?q=${encodeURIComponent(q)}&page=${page - 1}`}>← Previous</a>
+              ) : (
+                <span />
+              )}
+              <span class="muted">Page {page}</span>
+              <a href={`?q=${encodeURIComponent(q)}&page=${page + 1}`}>Next →</a>
+            </nav>
+          )}
+        </>
+      )
+    }
+  </SiteHeader>
+</Base>

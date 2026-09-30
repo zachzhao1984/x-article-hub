@@ -1,0 +1,103 @@
+/**
+ * SPEC §9 — the internal ArticleDocument.
+ *
+ * This is the contract between the Parser (Phase 3) and everything downstream:
+ * the reading page renders blocks from it, the AI step summarises plain text
+ * derived from it, and FTS indexes plain text derived from it (SPEC §13.4, §12).
+ *
+ * SPEC §9.3: the Parser must not rewrite the author's words. Nothing in this file
+ * is a place to "improve" prose.
+ */
+
+export interface ArticleDocument {
+  title: string;
+
+  author: {
+    name: string;
+    username: string;
+    avatar?: string;
+  };
+
+  publishedAt?: string;
+
+  blocks: ArticleBlock[];
+
+  links: ArticleLink[];
+  images: ArticleImage[];
+
+  source: {
+    url: string;
+    parserVersion: number;
+    capturedAt: string;
+  };
+}
+
+export type ArticleBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'heading'; level: 1 | 2 | 3; text: string }
+  | { type: 'quote'; text: string }
+  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'image'; imageId: string }
+  | { type: 'code'; language?: string; code: string }
+  | { type: 'embed'; postId: string };
+
+export interface ArticleLink {
+  href: string;
+  text: string;
+}
+
+export interface ArticleImage {
+  imageId: string;
+  /** SPEC §10 — /media/NNN.webp in R2; null when the download failed. */
+  r2Key: string | null;
+  sourceUrl: string;
+  altText?: string;
+  width?: number;
+  height?: number;
+  /** SPEC §10 — a failed image must not fail the article. */
+  status: 'ready' | 'failed' | 'external_fallback';
+}
+
+/** SPEC §8 — R2 layout. Raw is append-only; normalized can be rebuilt by the Parser. */
+export const R2_PATHS = {
+  rawHtml: (articleId: string) => `articles/${articleId}/raw/page.html`,
+  rawMarkdown: (articleId: string) => `articles/${articleId}/raw/page.md`,
+  rawMetadata: (articleId: string) => `articles/${articleId}/raw/metadata.json`,
+  screenshot: (articleId: string) => `articles/${articleId}/raw/screenshot.webp`,
+  versionJson: (articleId: string, version: number) => `articles/${articleId}/versions/v${version}/article.json`,
+  versionMarkdown: (articleId: string, version: number) => `articles/${articleId}/versions/v${version}/article.md`,
+  versionHtml: (articleId: string, version: number) => `articles/${articleId}/versions/v${version}/article.html`,
+  media: (articleId: string, index: number) => `articles/${articleId}/media/${String(index).padStart(3, '0')}.webp`,
+} as const;
+
+/** SPEC §13.4 / §12 — derive indexable plain text. Never hand raw HTML to a model or FTS. */
+export function documentToPlainText(doc: ArticleDocument): string {
+  const parts: string[] = [doc.title];
+
+  for (const block of doc.blocks) {
+    switch (block.type) {
+      case 'paragraph':
+      case 'heading':
+      case 'quote':
+        parts.push(block.text);
+        break;
+      case 'list':
+        parts.push(block.items.join('\n'));
+        break;
+      case 'code':
+        parts.push(block.code);
+        break;
+      case 'image':
+      case 'embed':
+        break;
+    }
+  }
+
+  return parts.filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** SPEC §11.4 — `word_count` feeds the AI input cap and the reading-time estimate. */
+export function countWords(text: string): number {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}

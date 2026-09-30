@@ -8,7 +8,6 @@
  */
 
 import { Hono } from 'hono';
-import type { Env } from '../env';
 import { listArticles, getArticleBySlug } from '../db/articles';
 import { listCategories } from '../db/categories';
 import { siteConfig } from '../config/site';
@@ -16,6 +15,42 @@ import { AppError } from '../lib/errors';
 import { clampInt } from '../lib/http';
 
 type PublicEnv = { Bindings: Env };
+
+/**
+ * SPEC §22 — public API responses.
+ *
+ * `listArticles` selects `a.*` because the admin UI needs every column, so the
+ * public shape is projected explicitly here. Without this the list endpoint
+ * ships `content_text` (the whole body, mirrored for FTS per SPEC §12) on every
+ * request, and exposes internal workflow state.
+ */
+function toPublicArticle(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    excerpt: row.excerpt,
+    summary: row.editor_summary ?? row.ai_summary ?? null,
+    author: {
+      name: row.author_name,
+      username: row.author_username,
+      avatar: row.author_avatar,
+    },
+    category: row.category_slug ? { slug: row.category_slug, name: row.category_name } : null,
+    publishedAt: row.published_at,
+    publishedAtIso: row.published_at ? new Date(row.published_at as number).toISOString() : null,
+    wordCount: row.word_count,
+    displayMode: row.display_mode,
+    featured: row.featured === 1,
+    scores: {
+      final: row.final_score,
+      popularity: row.popularity_score,
+      velocity: row.velocity_score,
+      quality: row.quality_score,
+    },
+    canonicalUrl: row.canonical_url,
+  };
+}
 
 export const publicApi = new Hono<PublicEnv>();
 
@@ -45,7 +80,7 @@ publicApi.get('/articles', async (c) => {
   });
 
   c.header('Cache-Control', 'public, max-age=60, s-maxage=60'); // SPEC §23
-  return c.json({ articles, limit, offset });
+  return c.json({ articles: articles.map((a) => toPublicArticle(a as unknown as Record<string, unknown>)), limit, offset });
 });
 
 publicApi.get('/articles/:slug', async (c) => {
@@ -55,5 +90,5 @@ publicApi.get('/articles/:slug', async (c) => {
   }
 
   c.header('Cache-Control', 'public, max-age=300, s-maxage=3600'); // SPEC §23
-  return c.json({ article });
+  return c.json({ article: toPublicArticle(article as unknown as Record<string, unknown>) });
 });

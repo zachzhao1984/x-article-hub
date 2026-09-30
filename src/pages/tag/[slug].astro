@@ -1,0 +1,62 @@
+---
+// SPEC §17.1 — /tag/:slug
+import { env } from 'cloudflare:workers';
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import { listPublishedArticles } from '../../db/public';
+
+const db = env.DB as unknown as D1Database;
+const { slug = '' } = Astro.params;
+
+const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
+const PER_PAGE = 20;
+
+const { results: tagRows } = await db
+  .prepare(`SELECT slug, name FROM tags WHERE slug = ?`)
+  .bind(slug)
+  .all<{ slug: string; name: string }>();
+const tag = tagRows[0] ?? null;
+
+if (!tag) return Astro.rewrite('/404');
+
+const articles = await listPublishedArticles(db, { tagSlug: slug, limit: PER_PAGE, offset: (page - 1) * PER_PAGE });
+---
+
+<Base
+  title={`#${tag.name}`}
+  description={`X Articles tagged ${tag.name}.`}
+  path={`/tag/${slug}`}
+>
+  <SiteHeader>
+    <header class="hero">
+      <h1>Tag</h1>
+      <p class="hero-sub">#{tag.name}</p>
+    </header>
+
+    {
+      articles.length === 0 ? (
+        <div class="empty-state">
+          <h2>Nothing tagged #{tag.name} yet</h2>
+          <p>Tags are assigned during AI enrichment.</p>
+        </div>
+      ) : (
+        <div class="grid-cards">
+          {articles.map((a) => (
+            <ArticleCard article={a} />
+          ))}
+        </div>
+      )
+    }
+
+    {
+      articles.length === PER_PAGE && (
+        <nav class="pager">
+          {page > 1 ? <a href={`?page=${page - 1}`}>← Newer</a> : <span />}
+          <span class="muted">Page {page}</span>
+          <a href={`?page=${page + 1}`}>Older →</a>
+        </nav>
+      )
+    }
+  </SiteHeader>
+</Base>

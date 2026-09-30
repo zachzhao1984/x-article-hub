@@ -1,0 +1,76 @@
+---
+// SPEC §17.3 — the header is the primary navigation between the four boards
+// (SPEC §15) and the categories (SPEC §13.5).
+import { listCategoriesWithCounts } from '../db/public';
+import { env } from 'cloudflare:workers';
+
+const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
+
+const path = Astro.url.pathname;
+const nav: Array<{ href: string; label: string; icon: string }> = [
+  { href: '/', label: 'Home', icon: '◆' },
+  { href: '/latest', label: 'Latest', icon: '↓' },
+  { href: '/trending', label: 'Trending', icon: '🔥' },
+  { href: '/rising', label: 'Rising', icon: '📈' },
+  { href: '/search', label: 'Search', icon: '⌕' },
+  { href: '/about', label: 'About', icon: 'i' },
+];
+
+const categories = await listCategoriesWithCounts(env.DB as unknown as D1Database);
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="logo" href="/">
+      <span class="logo-mark">X</span>
+      <span class="logo-text">{SITE_NAME}</span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      {
+        nav.map((item) => (
+          <a href={item.href} class:list={['nav-item', { active: isActive(item.href) }]}>
+            <span class="nav-icon" aria-hidden="true">{item.icon}</span>
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <form class="search-mini" action="/search" method="get" role="search">
+      <input type="search" name="q" placeholder="Search articles" aria-label="Search articles" />
+    </form>
+  </div>
+
+  <div class="wrap category-bar" aria-label="Categories">
+    {
+      categories.map(
+        (c) => (
+          <a href={`/category/${c.slug}`} class:list={['cat-chip', { active: path === `/category/${c.slug}` }]}>
+            {c.name}
+            <span class="cat-count">{c.count}</span>
+          </a>
+        ),
+      )
+    }
+  </div>
+</header>
+
+<main class="wrap main">
+  <slot />
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p>
+      {SITE_NAME} — human-curated X Articles, archived and indexed on Cloudflare.
+    </p>
+    <p class="footer-links">
+      <a href="/about">About</a>
+      <a href="/feed.xml">RSS</a>
+      <a href="/sitemap.xml">Sitemap</a>
+      <a href="/admin">Admin</a>
+    </p>
+  </div>
+</footer>

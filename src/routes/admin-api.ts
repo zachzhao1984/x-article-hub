@@ -8,7 +8,6 @@
  */
 
 import { Hono } from 'hono';
-import type { Env } from '../env';
 import type { AdminIdentity } from '../middleware/admin-auth';
 import { clearAdminCookie, requireAdmin, setAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { importUrls } from '../services/import';
@@ -17,10 +16,21 @@ import { listCrawlJobsForArticle, getCrawlJob, listFailedJobs, updateJobStatus }
 import { listEvents } from '../db/events';
 import { listCategories } from '../db/categories';
 import { retryCrawl } from '../services/import';
+import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
+import {
+  archiveArticle,
+  overrideCategory,
+  overrideSummary,
+  publishArticle,
+  rejectArticle,
+  restoreDisplay,
+  setFeatured,
+  takedownArticle,
+} from '../services/publish';
 import { log } from '../lib/logger';
 import { AppError } from '../lib/errors';
 import { clampInt } from '../lib/http';
-import type { ArticleStatus } from '../jobs/types';
+import type { ArticleStatus, DisplayMode } from '../jobs/types';
 
 export type AdminEnv = {
   Bindings: Env;
@@ -130,6 +140,105 @@ adminApi.get('/jobs', async (c) => {
 
 /** SPEC §16.2 — category list, used by the admin review forms in later phases. */
 adminApi.get('/categories', async (c) => c.json({ categories: await listCategories(c.env.DB) }));
+
+/**
+ * SPEC §16.3 — curation actions.
+ *
+ * Each maps to one state transition in src/services/publish.ts, which validates
+ * the SPEC §6 machine and writes a curation_events row. The editor has the final
+ * say (SPEC §4.7); the AI suggestion is never what publishes anything.
+ */
+adminApi.post('/articles/:id/publish', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  await publishArticle(c.env, c.req.param('id'), actor);
+  return c.json({ id: c.req.param('id'), status: 'published' });
+});
+
+adminApi.post('/articles/:id/reject', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  await rejectArticle(c.env, c.req.param('id'), actor);
+  return c.json({ id: c.req.param('id'), status: 'rejected' });
+});
+
+adminApi.post('/articles/:id/archive', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  await archiveArticle(c.env, c.req.param('id'), actor);
+  return c.json({ id: c.req.param('id'), status: 'archived' });
+});
+
+/** SPEC §37 — takedown removes the body from the public site immediately. */
+adminApi.post('/articles/:id/takedown', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  const body = (await c.req.json().catch(() => ({}))) as { reason?: string };
+  const reason = (body.reason ?? '').trim();
+  if (!reason) throw new AppError('BAD_REQUEST', 'A takedown requires a reason', 400);
+
+  await takedownArticle(c.env, c.req.param('id'), actor, reason);
+  return c.json({ id: c.req.param('id'), status: 'takedown', displayMode: 'takedown' });
+});
+
+adminApi.post('/articles/:id/display-mode', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  const body = (await c.req.json().catch(() => ({}))) as { displayMode?: string };
+  const mode = body.displayMode as DisplayMode | undefined;
+
+  if (!mode || !['full', 'excerpt', 'link_only'].includes(mode)) {
+    throw new AppError('BAD_REQUEST', `displayMode must be one of full, excerpt, link_only`, 400);
+  }
+
+  await restoreDisplay(c.env, c.req.param('id'), actor, mode);
+  return c.json({ id: c.req.param('id'), displayMode: mode });
+});
+
+/** SPEC §15 — Editor's Pick. */
+adminApi.post('/articles/:id/featured', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  const body = (await c.req.json().catch(() => ({}))) as { featured?: boolean };
+  const featured = body.featured ?? true;
+
+  await setFeatured(c.env, c.req.param('id'), actor, featured);
+  return c.json({ id: c.req.param('id'), featured });
+});
+
+/** SPEC §16.3 — edit category / summary. Editor override beats the AI suggestion. */
+adminApi.patch('/articles/:id', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  const id = c.req.param('id');
+  const body = (await c.req.json().catch(() => ({}))) as {
+    categoryId?: string | null;
+    summary?: string;
+    displayMode?: string;
+  };
+
+  if (body.categoryId !== undefined) await overrideCategory(c.env, id, actor, body.categoryId);
+  if (typeof body.summary === 'string') await overrideSummary(c.env, id, actor, body.summary);
+  if (body.displayMode !== undefined) {
+    const mode = body.displayMode as DisplayMode;
+    if (!['full', 'excerpt', 'link_only'].includes(mode)) {
+      throw new AppError('BAD_REQUEST', 'Invalid displayMode', 400);
+    }
+    await restoreDisplay(c.env, id, actor, mode);
+  }
+
+  const article = await getArticleById(c.env.DB, id);
+  return c.json({ article });
+});
+
+/**
+ * Demo content for validating the public site while the crawl pipeline is still
+ * Phase 2. Explicitly labelled, and removable in one call.
+ */
+adminApi.post('/demo/seed', async (c) => {
+  const identity = c.get('adminIdentity');
+  const result = await seedDemoArticles(c.env, { reset: true });
+  log.info('import_created', { actor: identity.actor, demo_seeded: result.created });
+  return c.json(result, 201);
+});
+
+adminApi.post('/demo/clear', async (c) => {
+  const removed = await removeDemoArticles(c.env);
+  return c.json({ removed });
+});
 
 /** SPEC §22 — GET /api/admin/jobs/:id */
 adminApi.get('/jobs/:id', async (c) => {
