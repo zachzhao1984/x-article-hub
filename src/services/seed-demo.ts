@@ -388,7 +388,16 @@ export async function seedDemoArticles(env: Env, opts: { reset?: boolean } = {})
   return { created: created.length, removed: 0, articleIds: created };
 }
 
-/** Removes only rows this seeder created — `x_article_id` in the 9000… range. */
+/**
+ * Removes only rows this seeder created — `x_article_id` in the 9000… range.
+ *
+ * SPEC §8 requires raw to be append-only, and this deliberately does not touch R2:
+ * an append-only archive is a record of what was captured, and deleting captures
+ * because a demo fixture went away would be the wrong trade. The cost is that a
+ * demo run leaves an `articles/{id}/` prefix behind, which is why
+ * `GET /admin/storage` reports unreachable prefixes rather than pretending they
+ * are not there.
+ */
 export async function removeDemoArticles(env: Env): Promise<number> {
   const { meta } = await env.DB.prepare(`DELETE FROM articles WHERE x_article_id LIKE '9000%'`).run();
   const deleted = (meta.changes ?? 0) as number;

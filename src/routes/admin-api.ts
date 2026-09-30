@@ -18,7 +18,7 @@ import { listCategories } from '../db/categories';
 import { retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle, PARSER_VERSION } from '../services/parse';
-import { downloadArticleMedia, mediaSummary } from '../services/media';
+import { downloadArticleMedia, findOrphanedPrefixes, mediaSummary } from '../services/media';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -412,6 +412,52 @@ adminApi.get('/articles/:id/media', async (c) => {
       attempts: row.attempt_count,
       fetchedAt: row.fetched_at,
     })),
+  });
+});
+
+/**
+ * SPEC §8 / §10 — R2 storage report.
+ *
+ * SPEC §8 requires raw to be append-only, so deleting an article row leaves its
+ * captures behind on purpose. This is where that becomes visible: it lists every
+ * prefix under `articles/` and marks the ones no D1 row claims. Without it, a
+ * smoke run quietly accrues prefixes that nobody can see and nobody can account
+ * for — which is exactly how 24 of them went unnoticed.
+ *
+ * Read-only on purpose. There is no delete here: this endpoint is for seeing the
+ * state, and the decision about an append-only archive is a human one.
+ */
+adminApi.get('/storage', async (c) => {
+  const listed = await c.env.ARCHIVE.list({ prefix: 'articles/', limit: 1000 });
+
+  let objects = listed.objects.length;
+  let bytes = listed.objects.reduce((sum, o) => sum + o.size, 0);
+  let cursor = listed.truncated ? listed.cursor : undefined;
+  while (cursor) {
+    const page = await c.env.ARCHIVE.list({ prefix: 'articles/', limit: 1000, cursor });
+    objects += page.objects.length;
+    bytes += page.objects.reduce((sum, o) => sum + o.size, 0);
+    cursor = page.truncated ? page.cursor : undefined;
+  }
+
+  const orphaned = await findOrphanedPrefixes(c.env);
+
+  const media = await c.env.DB.prepare(
+    `SELECT status, COUNT(*) AS n, COALESCE(SUM(byte_size), 0) AS bytes
+       FROM media_objects GROUP BY status`,
+  )
+    .all<{ status: string; n: number; bytes: number }>();
+
+  return c.json({
+    total: { objects, bytes },
+    media: media.results.map((r) => ({ status: r.status, count: r.n, bytes: r.bytes })),
+    // SPEC §8 — these are expected after a smoke run. Reported, never auto-deleted.
+    orphanedPrefixes: orphaned,
+    orphanedTotal: {
+      prefixes: orphaned.length,
+      objects: orphaned.reduce((s, o) => s + o.objects, 0),
+      bytes: orphaned.reduce((s, o) => s + o.bytes, 0),
+    },
   });
 });
 

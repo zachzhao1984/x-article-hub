@@ -200,13 +200,25 @@ async function reconcilePositions(env: Env, articleId: string): Promise<void> {
     .bind(articleId)
     .all<{ id: string; position: number; kind: 'body' | 'avatar'; r2_key: string; content_type: string | null }>();
 
+  // The expected key is derived from the row's own position AND its own content
+  // type, so this catches both a figure that moved and a key whose extension no
+  // longer describes its bytes.
   const stale = results.filter((row) => {
     const expected =
       row.kind === 'avatar'
-        ? R2_PATHS.avatar(articleId)
+        ? R2_PATHS.avatar(articleId, extensionFor(row.content_type))
         : R2_PATHS.media(articleId, row.position, extensionFor(row.content_type));
     return row.r2_key !== expected;
   });
+
+  // Clearing a stale r2_key only stops D1 from pointing at the old key; the bytes
+  // stay in the bucket. So the whole `media/` prefix is swept afterwards and
+  // anything no row still claims is deleted. Without the sweep a re-parse that
+  // reorders figures leaves each article's old copies filed under positions that
+  // now belong to other images, and renaming the key scheme leaves a duplicate of
+  // every object — which is exactly what the avatar extension change did, leaving
+  // a JPEG at both `avatar.webp` and `avatar.jpg`.
+  await sweepUnclaimedMedia(env, articleId, results);
 
   if (stale.length === 0) return;
 
@@ -221,12 +233,47 @@ async function reconcilePositions(env: Env, articleId: string): Promise<void> {
     ),
   );
 
-  // SPEC §35 names the log vocabulary; an unexpected key is a media failure with
+  // SPEC §35 names the log vocabulary; a superseded key is a media failure with
   // its own reason rather than a new event type.
   log.warn('media_failed', {
     article_id: articleId,
     error_code: 'STALE_R2_KEY',
-    error_message: `${stale.length} stored key(s) no longer match the image position; re-downloading.`,
+    error_message: `${stale.length} stored key(s) no longer match their image; deleted and re-downloading.`,
+  });
+}
+
+/**
+ * Deletes every object under an article's `media/` prefix that no current row
+ * claims.
+ *
+ * Listing the prefix is what makes this safe to run repeatedly: the set of keys a
+ * *should* exist is derived entirely from D1, so anything in the bucket outside
+ * that set is by definition superseded. It costs one LIST per media run and it is
+ * the only way to reclaim a key whose name changed — R2 has no way to enumerate
+ * what used to be there.
+ */
+async function sweepUnclaimedMedia(
+  env: Env,
+  articleId: string,
+  rows: Array<{ r2_key: string }>,
+): Promise<void> {
+  const claimed = new Set(rows.map((r) => r.r2_key));
+  const prefix = `articles/${articleId}/media/`;
+
+  const listed = await env.ARCHIVE.list({ prefix, limit: 1000 });
+  const unclaimed = listed.objects.filter((o) => !claimed.has(o.key)).map((o) => o.key);
+
+  if (unclaimed.length === 0) return;
+
+  const results = await Promise.allSettled(unclaimed.map((key) => env.ARCHIVE.delete(key)));
+  const failed = results.filter((r) => r.status === 'rejected').length;
+
+  log.warn('media_failed', {
+    article_id: articleId,
+    error_code: 'STALE_R2_KEY',
+    error_message: `Deleted ${unclaimed.length - failed} superseded object(s) under ${prefix}${
+      failed > 0 ? `; ${failed} could not be deleted` : ''
+    }`,
   });
 }
 
@@ -351,7 +398,7 @@ async function downloadOne(env: Env, row: MediaRow): Promise<DownloadResult> {
 
   const key =
     row.kind === 'avatar'
-      ? R2_PATHS.avatar(row.article_id)
+      ? R2_PATHS.avatar(row.article_id, sniffed.extension)
       : R2_PATHS.media(row.article_id, row.position, sniffed.extension);
 
   await env.ARCHIVE.put(key, buffer, {
@@ -614,6 +661,51 @@ export async function listArticleMedia(db: D1Database, articleId: string): Promi
     errorMessage: r.error_message,
     attempts: r.attempt_count,
   }));
+}
+
+/**
+ * R2 prefixes under `articles/` that no row in D1 claims.
+ *
+ * SPEC §8 makes raw append-only, so deleting an article row does not delete its
+ * captures — and that is correct: an archive is a record of what was captured, and
+ * a smoke fixture going away is not a reason to erase evidence. The cost is that
+ * prefixes outlive their rows, and a bucket listing is the only way to notice.
+ *
+ * Reporting them is the honest option. Deleting them automatically would be the
+ * wrong default: nothing here can tell a stale prefix from a capture whose D1 row
+ * was restored deliberately, and an archive that deletes its own history because
+ * a row went missing is not an archive.
+ */
+export async function findOrphanedPrefixes(env: Env): Promise<
+  Array<{ articleId: string; objects: number; bytes: number }>
+> {
+  const listed = await env.ARCHIVE.list({ prefix: 'articles/', delimiter: '/', limit: 1000 });
+  const articleIds = listed.delimitedPrefixes
+    .map((p: string) => p.replace(/^articles\//, '').replace(/\/$/, ''))
+    .filter((id: string) => id.startsWith('art_'));
+
+  const orphans: Array<{ articleId: string; objects: number; bytes: number }> = [];
+
+  for (const articleId of articleIds) {
+    const exists = await env.DB.prepare(`SELECT 1 AS ok FROM articles WHERE id = ?`)
+      .bind(articleId)
+      .first<{ ok: number }>();
+    if (exists) continue;
+
+    let objects = 0;
+    let bytes = 0;
+    let cursor: string | undefined;
+    do {
+      const page = await env.ARCHIVE.list({ prefix: `articles/${articleId}/`, limit: 1000, cursor });
+      objects += page.objects.length;
+      bytes += page.objects.reduce((sum, o) => sum + o.size, 0);
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+
+    orphans.push({ articleId, objects, bytes });
+  }
+
+  return orphans;
 }
 
 /** Re-exported so the admin surface can show what a media run did. */

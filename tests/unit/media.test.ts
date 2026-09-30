@@ -136,7 +136,17 @@ describe('R2 media keys (SPEC §8 / §10)', () => {
   });
 
   it('gives the avatar its own key so it never takes a body ordinal', () => {
-    expect(R2_PATHS.avatar('art_1')).toBe('articles/art_1/media/avatar.webp');
+    expect(R2_PATHS.avatar('art_1', 'webp')).toBe('articles/art_1/media/avatar.webp');
+  });
+
+  it('names the avatar key after its sniffed format, like every other key', () => {
+    // X serves the profile_images avatar as JPEG, so a hardcoded `.webp` wrote
+    // JPEG bytes under a WebP name. The page still rendered because /media serves
+    // the content type from D1, which is exactly why the lie went unnoticed — and
+    // why a key that misdescribes its contents has to be impossible by construction.
+    const jpegAvatar = R2_PATHS.avatar('art_1', sniffImageType(bytes(0xff, 0xd8, 0xff, 0xe0))!.extension);
+    expect(jpegAvatar).toBe('articles/art_1/media/avatar.jpg');
+    expect(jpegAvatar).not.toBe(R2_PATHS.avatar('art_1', 'webp'));
   });
 });
 
@@ -200,5 +210,36 @@ describe('avatar image id (SPEC §10 PRIMARY KEY)', () => {
     expect(avatarImageId('art_one', url)).not.toBe(avatarImageId('art_two', url));
     // Stable within an article, or the byline avatar would re-download forever.
     expect(avatarImageId('art_one', url)).toBe(avatarImageId('art_one', url));
+  });
+});
+
+describe('R2 key honesty (SPEC §8 / §10)', () => {
+  it('never writes bytes under a key that misdescribes them', async () => {
+    // Every key the pipeline can produce is derived from a sniffed format, so the
+    // invariant is checkable per format rather than per call site. The avatar was
+    // the one that broke it: a hardcoded `.webp` holding JPEG, which rendered fine
+    // because /media serves the content type from D1 — the lie was invisible.
+    const { R2_PATHS } = await import('../../src/types/article-document');
+    const cases: Array<[number[], string, string]> = [
+      [[0xff, 0xd8, 0xff, 0xe0], 'image/jpeg', 'jpg'],
+      [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'image/png', 'png'],
+      [[...Array.from(asciiBytes('GIF89a'))], 'image/gif', 'gif'],
+    ];
+
+    for (const [header, mime, extension] of cases) {
+      const sniffed = sniffImageType(new Uint8Array(header))!;
+      expect(sniffed.mime).toBe(mime);
+      expect(R2_PATHS.media('art_1', 1, sniffed.extension)).toBe(`articles/art_1/media/001.${extension}`);
+      expect(R2_PATHS.avatar('art_1', sniffed.extension)).toBe(`articles/art_1/media/avatar.${extension}`);
+    }
+  });
+
+  it('derives the expected key from content type, so a rename is detectable', async () => {
+    // The sweep can only reclaim a renamed key because the expected key is a pure
+    // function of the row. If the two ever stopped agreeing, a re-run would keep
+    // re-downloading the same image forever instead of settling.
+    const { R2_PATHS } = await import('../../src/types/article-document');
+    expect(R2_PATHS.avatar('art_1', 'jpg')).not.toBe(R2_PATHS.avatar('art_1', 'webp'));
+    expect(R2_PATHS.media('art_1', 3, 'jpg')).not.toBe(R2_PATHS.media('art_1', 4, 'jpg'));
   });
 });

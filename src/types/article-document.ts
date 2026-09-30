@@ -79,11 +79,17 @@ export const R2_PATHS = {
   media: (articleId: string, index: number, extension: string) =>
     `articles/${articleId}/media/${String(index).padStart(3, '0')}.${extension}`,
   /**
-   * SPEC §8 lists `media/cover.webp`; the author portrait is the other X CDN
-   * hotlink on the reading page, so it is stored under its own fixed name rather
-   * than competing for a body ordinal.
+   * The author portrait: the other X CDN hotlink on the reading page, stored under
+   * its own name rather than competing for a body ordinal.
+   *
+   * The extension follows the sniffed format for the same reason `media` does, and
+   * this was the one place that still hardcoded `.webp`. X serves a JPEG for the
+   * `profile_images/..._normal.jpg` avatar, so every stored avatar was JPEG bytes
+   * under a `.webp` name. The page still rendered, because /media serves the
+   * content type from D1 rather than from the key — but a key that misdescribes
+   * its own contents is exactly the failure this parameter exists to prevent.
    */
-  avatar: (articleId: string) => `articles/${articleId}/media/avatar.webp`,
+  avatar: (articleId: string, extension: string) => `articles/${articleId}/media/avatar.${extension}`,
 } as const;
 
 /** SPEC §13.4 / §12 — derive indexable plain text. Never hand raw HTML to a model or FTS. */

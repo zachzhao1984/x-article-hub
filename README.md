@@ -268,6 +268,33 @@ scheduling its download. A failed image never fails its Article (SPEC §10) — 
 becomes `failed` or stays `external_fallback`, and the admin detail page lists
 every image with its status, dimensions and reason.
 
+### R2 keys never lie about their contents (SPEC §8 / §10)
+
+Every key the media pipeline writes is derived from the *sniffed* format, not from
+the `content-type` header and not from a constant. `R2_PATHS.avatar` originally
+hardcoded `.webp` while X serves the avatar as JPEG, so four objects sat in the
+bucket as JPEG bytes under a WebP name. The pages still rendered — `/media` serves
+the content type from D1 rather than from the key — which is exactly why the
+mismatch survived so long.
+
+Two consequences follow from the key being derived state, and both are handled:
+
+- **A row whose key no longer matches its own position is stale.** A re-parse that
+  reorders figures leaves keys pointing at another image's bytes. The run clears
+  the key and re-downloads.
+- **A key nothing claims is deleted.** Clearing `r2_key` only stops D1 pointing at
+  the old key; the bytes stay in the bucket. Every media run sweeps the article's
+  `media/` prefix and deletes anything the current rows do not claim, so a renamed
+  key scheme or a reordered article does not accumulate copies. The expected set
+  is derived entirely from D1, so the sweep is safe to run repeatedly.
+
+`GET /api/admin/storage` reports R2 prefixes that no D1 row claims. SPEC §8 makes
+raw append-only, so deleting an article row deliberately leaves its captures
+behind — an archive is a record of what was captured. That means a smoke run
+accrues prefixes, and without this endpoint they were invisible: 24 of them had
+piled up unnoticed. They are reported, never auto-deleted, because nothing in the
+Worker can tell a stale prefix from a capture whose row was restored on purpose.
+
 ### Icons
 
 `public/favicon.svg` is the single source of truth; every raster size is
@@ -477,6 +504,7 @@ search, SPEC §37 governance and public-API shape.
 | `POST /api/admin/articles/:id/crawl` | Runs Browser Run immediately, reports the exact §25 code |
 | `GET /api/admin/articles/:id/raw?format=html\|markdown` | The archived capture, not a live fetch |
 | `POST /api/admin/articles/:id/parse` | Runs the Parser now. Reads only R2 — free, no X traffic |
+| `GET /api/admin/storage` | R2 inventory: total objects/bytes, media by status, and prefixes no D1 row claims |
 | `GET /api/admin/articles/:id/media` | Per-image status: archived, on x.com, or failed, with the reason |
 | `POST /api/admin/articles/:id/media` | Downloads every image into R2. Re-run to retry failures |
 | `GET /api/admin/articles/:id/errors` | Job errors straight from the job row |
