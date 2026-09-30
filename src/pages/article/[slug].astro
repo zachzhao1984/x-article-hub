@@ -162,6 +162,23 @@ const jsonLd = isTakedown
                           );
                         case 'code':
                           return <pre><code>{block.code}</code></pre>;
+                        case 'image': {
+                          const img = document.images.find((i) => i.imageId === block.imageId);
+                          if (!img) return null;
+                          // SPEC §10 — `external_fallback` means the bytes are still
+                          // on X's CDN because media download has not run yet.
+                          return (
+                            <figure>
+                              <img
+                                src={img.r2Key ? `/media/${img.imageId}` : img.sourceUrl}
+                                alt={img.altText ?? ''}
+                                loading="lazy"
+                                referrerpolicy="no-referrer"
+                              />
+                              {img.altText && <figcaption>{img.altText}</figcaption>}
+                            </figure>
+                          );
+                        }
                         case 'paragraph':
                           return <p>{block.text}</p>;
                         case 'embed':

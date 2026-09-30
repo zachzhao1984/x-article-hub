@@ -266,6 +266,11 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
     `crawled v${version} — ${bodyChars} chars, browser ${browserMsUsed ?? '?'}ms`,
   );
 
+  // SPEC §38 Phase 3 — hand the capture to the Parser on the process queue.
+  // Without this the article sits at `review` with no ArticleDocument and the
+  // reading page has nothing to render.
+  await enqueueParseJob(env, articleId, input.actor);
+
   log.info('crawl_success', {
     article_id: articleId,
     version,
@@ -422,6 +427,35 @@ export async function readRawArchive(bucket: R2Bucket, metadataKey: string): Pro
     markdown: md ? await md.text() : null,
     html: html ? await html.text() : null,
   };
+}
+
+/**
+ * SPEC §19 — one open parse job per article. The partial unique index on
+ * (article_id, job_type) makes a duplicate enqueue impossible, so this is safe to
+ * call on every successful crawl.
+ */
+async function enqueueParseJob(env: Env, articleId: string, actor: string): Promise<void> {
+  const now = Date.now();
+  const jobId = newId('job');
+
+  const inserted = await env.DB.prepare(
+    `INSERT OR IGNORE INTO crawl_jobs (id, article_id, job_type, status, attempt_count, deliveries, created_at, updated_at)
+     VALUES (?1, ?2, 'parse', 'queued', 0, 0, ?3, ?3)`,
+  )
+    .bind(jobId, articleId, now)
+    .run();
+
+  if ((inserted.meta.changes ?? 0) === 0) {
+    log.info('ingest_deferred', {
+      article_id: articleId,
+      job_type: 'parse',
+      error_message: 'A parse job is already open for this article.',
+    });
+    return;
+  }
+
+  await env.ARTICLE_PROCESS_QUEUE.send({ jobId, articleId, type: 'parse', attempt: 1, createdAt: now });
+  log.info('queue_published', { queue: 'article-process', article_id: articleId, job_id: jobId, actor });
 }
 
 async function latestVersion(

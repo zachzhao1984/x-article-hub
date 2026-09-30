@@ -232,6 +232,8 @@ export interface ArticleDetailView {
   }>;
   events: Array<{ id: string; action: string; actor: string; note: string | null; created_at: number }>;
   raw?: { archived: boolean; markdownBytes: number; htmlBytes: number; r2Key: string | null } | null;
+  parsed?: { contentR2Key: string | null; blockCount: number; wordCount: number; parserVersion: number } | null;
+  notice?: string | null;
   error?: string | null;
 }
 
@@ -290,6 +292,12 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
       <button class="button button-secondary" type="submit">Crawl now</button>
       <span class="hint">Runs Browser Run immediately. Costs browser time.</span>
     </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/parse">
+      <button class="button button-secondary" type="submit">Parse</button>
+      <span class="hint">
+        Raw archive → ArticleDocument. Reads only R2, so it is free and never touches X.
+      </span>
+    </form>
     <form method="post" action="/admin/articles/${escapeHtml(a.id)}/featured">
       <button class="button button-secondary" type="submit">${a.featured ? 'Unfeature' : "Feature"}</button>
       <span class="hint">Editor's Pick — a human decision, not a score.</span>
@@ -338,6 +346,22 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
     <span class="hint">Removes it from lists, sitemap, feed and search immediately. The page then explains itself rather than 404ing.</span>
   </form>`
   }
+</section>
+
+<section class="card">
+  <h2>Parsed document (SPEC §9)</h2>
+  ${
+    view.parsed?.contentR2Key
+      ? `<dl class="kv">
+    <dt>R2 key</dt><dd><code>${escapeHtml(view.parsed.contentR2Key)}</code></dd>
+    <dt>Parser version</dt><dd>v${view.parsed.parserVersion}</dd>
+    <dt>Blocks</dt><dd>${view.parsed.blockCount}</dd>
+    <dt>Words</dt><dd>${view.parsed.wordCount.toLocaleString()}</dd>
+  </dl>
+  <p class="hint">The reading page renders from this document.</p>`
+      : `<p class="hint">Not parsed yet. The reading page stays empty until the Parser runs.</p>`
+  }
+  ${view.notice ? `<div class="banner banner-ok">${escapeHtml(view.notice)}</div>` : ''}
 </section>
 
 <section class="card">

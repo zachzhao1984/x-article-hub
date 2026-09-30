@@ -96,8 +96,25 @@ export function documentToPlainText(doc: ArticleDocument): string {
   return parts.filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** SPEC §11.4 — `word_count` feeds the AI input cap and the reading-time estimate. */
+/**
+ * SPEC §11.4 — `word_count` feeds the AI input cap and the reading-time estimate.
+ *
+ * Whitespace tokenisation is wrong for CJK, which is the common case here: a
+ * 10,000-character Chinese article has almost no spaces and would count as a few
+ * hundred "words", understating both the AI budget and the reading time by ~5x.
+ * Each CJK ideograph is counted as one word, and Latin runs are counted normally.
+ */
 export function countWords(text: string): number {
   const trimmed = text.trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
+  if (!trimmed) return 0;
+
+  // CJK Unified Ideographs and the Japanese kana block, plus CJK punctuation that
+  // is not whitespace-separated in practice.
+  const cjk = trimmed.match(/[\u4e00-\u9fff\u3040-\u30ff\u3400-\u4dbf]/g)?.length ?? 0;
+
+  // Remove CJK, then count what remains as whitespace-delimited Latin words.
+  const latin = trimmed.replace(/[\u4e00-\u9fff\u3040-\u30ff\u3400-\u4dbf]/g, ' ');
+  const latinWords = latin.trim() ? latin.trim().split(/\s+/).length : 0;
+
+  return cjk + latinWords;
 }

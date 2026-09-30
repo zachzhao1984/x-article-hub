@@ -17,6 +17,7 @@ import { listEvents } from '../db/events';
 import { listCategories } from '../db/categories';
 import { retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
+import { parseArticle, PARSER_VERSION } from '../services/parse';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -152,10 +153,14 @@ adminApi.post('/articles/:id/crawl', async (c) => {
   const jobs = await listCrawlJobsForArticle(c.env.DB, id, 1);
   const job = jobs[0];
   if (job) {
-    await updateJobStatus(c.env.DB, job.id, outcome.ok ? 'success' : 'failed', {
-      code: outcome.errorCode ?? 'UNEXPECTED',
-      message: outcome.errorMessage ?? '',
-    });
+    // Only record an error when there is one: writing a placeholder code on
+    // success made a healthy job read as `success(UNEXPECTED)`.
+    await updateJobStatus(
+      c.env.DB,
+      job.id,
+      outcome.ok ? 'success' : 'failed',
+      outcome.ok ? undefined : { code: outcome.errorCode ?? 'UNEXPECTED', message: outcome.errorMessage ?? '' },
+    );
   }
 
   return c.json({
@@ -297,6 +302,41 @@ adminApi.get('/articles/:id/raw', async (c) => {
     markdownBytes: archive.markdown?.length ?? 0,
     htmlBytes: archive.html?.length ?? 0,
   });
+});
+
+/**
+ * SPEC §38 Phase 3 — run the Parser now.
+ *
+ * SPEC §27: this reads only the raw archive, so it never touches X and costs no
+ * browser time. That is what makes re-parsing the right fix when the Parser
+ * improves.
+ */
+adminApi.post('/articles/:id/parse', async (c) => {
+  const actor = c.get('adminIdentity').actor;
+  const id = c.req.param('id');
+
+  const outcome = await parseArticle(c.env, id);
+
+  const jobs = await listCrawlJobsForArticle(c.env.DB, id, 20);
+  const parseJob = jobs.find((j) => j.job_type === 'parse');
+  if (parseJob) {
+    await updateJobStatus(
+      c.env.DB,
+      parseJob.id,
+      outcome.ok ? 'success' : 'failed',
+      outcome.ok ? undefined : { code: outcome.errorCode ?? 'UNEXPECTED', message: outcome.errorMessage ?? '' },
+    );
+  }
+
+  if (!outcome.ok) {
+    const { ok, ...rest } = outcome;
+    return c.json({ articleId: id, ok, ...rest }, 400);
+  }
+
+  const article = await getArticleById(c.env.DB, id);
+  log.info('publish', { article_id: id, actor, action: 'parsed', blocks: outcome.blockCount });
+  const { ok, ...rest } = outcome;
+  return c.json({ articleId: id, ok, ...rest, contentR2Key: article?.content_r2_key ?? null });
 });
 
 /** SPEC §16.4 — crawl errors, straight from the job row. */

@@ -9,15 +9,17 @@ import { isJobMessage, type JobMessage } from './types';
 import { recordDelivery } from '../db/jobs';
 import { log } from '../lib/logger';
 import { handleCrawl } from './crawl';
+import { handleParse } from './parse';
 
 type Handler = (message: JobMessage, env: Env) => Promise<void>;
 
 const handlers: Record<JobMessage['type'], Handler> = {
   // SPEC §38 Phase 2 — the real Browser Run crawl.
   crawl: handleCrawl,
-  // Phase 3 / 4 / 6 own these. Declared so an unroutable message is caught here
+  // SPEC §38 Phase 3 — raw → ArticleDocument → D1.
+  parse: handleParse,
+  // Phase 4 / 6 own these. Declared so an unroutable message is caught here
   // instead of being silently acked somewhere else.
-  parse: notImplemented('parse'),
   ai: notImplemented('ai'),
   metrics: notImplemented('metrics'),
   reindex: notImplemented('reindex'),

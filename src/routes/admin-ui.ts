@@ -15,6 +15,7 @@ import { listCrawlJobsForArticle, listFailedJobs, updateJobStatus } from '../db/
 import { listEvents } from '../db/events';
 import { importUrls, retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
+import { parseArticle } from '../services/parse';
 import {
   archiveArticle,
   publishArticle,
@@ -144,11 +145,35 @@ adminUi.get('/articles/:id', async (c) => {
     listEvents(c.env.DB, id),
     summarizeRawArchive(c.env.ARCHIVE, article.raw_r2_key),
   ]);
+  const parsed = c.req.query('parsed');
+  const blocks = Number(c.req.query('blocks') ?? '0') || 0;
+  const notice = parsed
+    ? `Parsed (${parsed}) — ${blocks} blocks. Refresh the article page to read it.`
+    : null;
+
   const error = c.req.query('error');
   const errorMessage =
     error === 'takedown-reason-missing' ? 'A takedown needs a reason — that is what the reader sees.' : error ?? null;
 
-  return c.html(articleDetailView({ article, jobs, events, raw, error: errorMessage }, siteConfig(c.env).name));
+  return c.html(
+    articleDetailView(
+      {
+        article,
+        jobs,
+        events,
+        raw,
+        parsed: {
+          contentR2Key: article.content_r2_key,
+          blockCount: article.block_count,
+          wordCount: article.word_count,
+          parserVersion: article.parser_version,
+        },
+        notice,
+        error: errorMessage,
+      },
+      siteConfig(c.env).name,
+    ),
+  );
 });
 
 /** SPEC §16.4 — Retry. Re-publishes the queue message. */
@@ -185,6 +210,30 @@ adminUi.post('/articles/:id/crawl', async (c) => {
   }
 
   const headers = new Headers({ Location: `/admin/articles/${id}` });
+  return new Response(null, { status: 303, headers });
+});
+
+/** SPEC §38 Phase 3 — parse the raw archive now. Free: no browser time, no X traffic. */
+adminUi.post('/articles/:id/parse', async (c) => {
+  const id = c.req.param('id');
+  const outcome = await parseArticle(c.env, id);
+
+  const jobs = await listCrawlJobsForArticle(c.env.DB, id, 20);
+  const parseJob = jobs.find((j) => j.job_type === 'parse');
+  if (parseJob) {
+    await updateJobStatus(
+      c.env.DB,
+      parseJob.id,
+      outcome.ok ? 'success' : 'failed',
+      outcome.ok ? undefined : { code: outcome.errorCode ?? 'UNEXPECTED', message: outcome.errorMessage ?? '' },
+    );
+  }
+
+  const headers = new Headers({
+    Location: outcome.ok
+      ? `/admin/articles/${id}?parsed=${outcome.result}&blocks=${outcome.blockCount ?? 0}`
+      : `/admin/articles/${id}?error=${encodeURIComponent(outcome.errorMessage ?? 'parse failed')}`,
+  });
   return new Response(null, { status: 303, headers });
 });
 

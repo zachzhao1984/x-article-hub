@@ -2,9 +2,9 @@
 
 A human-curated, machine-archived library of X Articles — built entirely on Cloudflare.
 
-Implements **SPEC §38 Phase 0–2**: infrastructure, human import, and the real
-Browser Run crawl — plus the public reading site (§17), ranking (§14), full-text
-search (§12), SEO (§33) and content governance (§37).
+Implements **SPEC §38 Phase 0–3**: infrastructure, human import, the real Browser
+Run crawl, and the Parser — plus the public reading site (§17), ranking (§14),
+full-text search (§12), SEO (§33) and content governance (§37).
 
 - **Live:** https://x-article-hub.zachzhao.workers.dev
 - **Admin:** https://x-article-hub.zachzhao.workers.dev/admin
@@ -34,6 +34,13 @@ Queues ── article-ingest ──▶ crawl consumer
                               ↓
                         metadata → D1, status=review
                         (published articles stay published)
+                              ↓
+                     Queues ── article-process ──▶ Parser
+                                                   raw/page.md → ArticleDocument
+                                                   (§9 — no X traffic, no browser time)
+                                                   ↓
+                                    versions/vN/article.json → R2
+                                    content_text → D1 → FTS5
 
 Astro  ── /  /latest  /trending  /rising  /category/:slug  /tag/:slug
           /author/:username  /article/:slug  /search  /about
@@ -44,7 +51,7 @@ Astro  ── /  /latest  /trending  /rising  /category/:slug  /tag/:slug
 
 | Check | Count | Command |
 |---|---:|---|
-| Unit tests (url, ranking, config, document, crawl recognition) | 93 | `npm test` |
+| Unit tests (url, ranking, config, document, crawl recognition, parser, state machine) | 129 | `npm test` |
 | Phase 1 acceptance | 44 | `npm run smoke -- <url> <token>` |
 | Public-site acceptance | 63 | `npm run smoke:site -- <url> <token>` |
 | TypeScript strict | clean | `npm run typecheck` |
@@ -201,6 +208,56 @@ Retry ladder is §25's: 1 min → 5 min → 30 min → 2 h → 24 h, then `faile
 
 ---
 
+## The Parser (SPEC §9)
+
+`raw → ArticleDocument → D1`, verified against a real capture
+(`tests/fixtures/x-article-2103788150405705870.md`, the verbatim `/markdown`
+output for a published X Article).
+
+**It parses Markdown, not the rendered HTML.** SPEC §7.2 names metadata and media
+mapping as `/markdown`'s weakness — not structure. The rendered X DOM is a React
+tree whose selectors break when the site changes (SPEC §26 item 3), while the
+Markdown already encodes the author's own headings, quotes, lists, code fences and
+image order deterministically. §26's ladder starts at "semantic selector"; Markdown
+is that, without the fragility.
+
+| Result on the fixture | |
+|---|---:|
+| Blocks | 249 |
+| Paragraphs | 209 |
+| Headings | 32 (levels preserved, clamped to 1–3 per §9.2) |
+| List items | 18 across 3 lists |
+| Quotes | 1 |
+| Images | 10, in document order |
+| Links | 15 |
+| Warnings | 0 |
+
+Acceptance (SPEC §39 Parser): title ✓ author ✓ date ✓ paragraphs ✓ images ✓ links ✓
+
+**SPEC §27 is the point of this phase.** Because raw output is kept, re-parsing is
+a local operation over R2: bumping `PARSER_VERSION` and re-running fixes every
+article without spending Browser Run time or asking X for anything. A re-parse with
+an unchanged parser version is a no-op (`unchanged`), which is what makes the queue
+consumer idempotent per SPEC §19.
+
+Four bugs the fixture tests caught, all invisible on synthetic input:
+
+- **An infinite loop.** The duplicate-title skip did `continue` without advancing
+  the line index. Harmless while the condition never matched; it hung the Worker
+  the moment it did. Found by running the parser standalone against the fixture,
+  not by a unit test — the suite simply timed out.
+- **CJK word counts.** Whitespace tokenisation made a 10,610-character Chinese
+  article 436 "words", understating both the AI input budget and the reading time
+  by ~5×. Each CJK ideograph now counts as one word.
+- **Nested lists were silently restructured.** A `-` child under an ordered `1.`
+  flushed the parent list and became a sibling. Nesting is now read from the raw
+  line's indentation before the marker-kind switch, flattened into the parent, and
+  reported as a warning — because silently reshaping a list is a data change.
+- **Handles kept their original case.** `HaibaraCrypto` and `haibaracrypto` are
+  the same author, and the dedup key is lowercased; the Parser now agrees.
+
+---
+
 ## The three boards are genuinely different
 
 SPEC §15 requires four boards that do not collapse into one ordering:
@@ -328,6 +385,7 @@ search, SPEC §37 governance and public-API shape.
 | `POST /api/admin/articles/:id/retry` | Re-publishes the queue message |
 | `POST /api/admin/articles/:id/crawl` | Runs Browser Run immediately, reports the exact §25 code |
 | `GET /api/admin/articles/:id/raw?format=html\|markdown` | The archived capture, not a live fetch |
+| `POST /api/admin/articles/:id/parse` | Runs the Parser now. Reads only R2 — free, no X traffic |
 | `GET /api/admin/articles/:id/errors` | Job errors straight from the job row |
 | `POST /api/admin/articles/:id/takedown` | §37 takedown (requires a reason) |
 
@@ -392,13 +450,16 @@ form POST, so the admin UI is unaffected — scripted clients must send it.
 
 ---
 
-## Phase 3 next steps
+## Phase 4 next steps
 
-1. **Parser** (the crawl is verified working end to end against a live article): `raw/page.html` → `ArticleDocument` (§9). The contract is already
-   defined in `src/types/article-document.ts` and the reading page already renders
-   it; the seeder writes documents in that shape. All X selectors stay in
-   `src/jobs/x-selectors.ts` (§7.4).
-2. Media: download images to `articles/{id}/media/NNN.webp` (§10). A failed image
-   must not fail the article.
-3. Then Workers AI (§4) — summary, category suggestion, tags, quality — with
-   schema validation and the editor override already in place (§4.7).
+1. **Media** (§10): download images to `articles/{id}/media/NNN.webp`. They are
+   currently `external_fallback` — rendered from X's CDN with
+   `referrerpolicy="no-referrer"`. §10 requires the front end not to depend on X's
+   URLs, and it also makes the archive self-sufficient. A failed image must not
+   fail the article.
+2. **Workers AI** (§4): summary, category suggestion, tags, quality. `AI_CONFIG`
+   exists but nothing calls it yet. Schema validation and the editor override are
+   already in place (§4.7), and the `/review` board is waiting for content.
+3. **Metrics** (§14): popularity and velocity need real engagement numbers, which
+   are not collected yet — the demo set has seeded values so the boards are not
+   empty.
