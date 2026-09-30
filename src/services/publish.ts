@@ -15,7 +15,7 @@ import { log } from '../lib/logger';
 import type { ArticleStatus, DisplayMode } from '../jobs/types';
 
 /** SPEC §6 — allowed article state transitions. Anything else is a bug, not a UX quirk. */
-const TRANSITIONS: Record<ArticleStatus, ArticleStatus[]> = {
+export const TRANSITIONS: Record<ArticleStatus, ArticleStatus[]> = {
   pending: ['fetching', 'review', 'archived', 'takedown', 'rejected', 'failed'],
   fetching: ['fetched', 'failed', 'archived', 'takedown'],
   fetched: ['parsing', 'review', 'failed', 'archived', 'takedown'],

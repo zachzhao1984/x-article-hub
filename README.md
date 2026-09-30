@@ -32,7 +32,8 @@ Queues ── article-ingest ──▶ crawl consumer
                         R2 raw archive             (§8)
                         + source/content hash       (§27, §28)
                               ↓
-                        metadata → D1, status=fetched
+                        metadata → D1, status=review
+                        (published articles stay published)
 
 Astro  ── /  /latest  /trending  /rising  /category/:slug  /tag/:slug
           /author/:username  /article/:slug  /search  /about
@@ -61,6 +62,7 @@ The crawl was exercised against real Browser Run responses, not mocks.
 |---|---|
 | Real content page (Cloudflare docs) | `archived`, 14 820 chars, HTML 152 KB + Markdown 15 KB in R2, title + avatar extracted |
 | Same page re-crawled (§28) | `unchanged` — no second version created |
+| Re-crawl of a **published** article | stays `published`, never un-published by a background job |
 | Nonexistent X article | `ARTICLE_NOT_FOUND`, nothing archived |
 | **Real X Article (logged out, no cookies)** | `archived`, 10 602 chars, HTML 133 KB + Markdown 26 KB, title/author extracted |
 | Profile page / walled capture | `LOGIN_REQUIRED`, nothing archived, operator told what to do |

@@ -6,6 +6,7 @@ import {
   extractPublishedAt,
   parseFrontmatter,
   splitXTitle,
+  stripXTitleSuffix,
 } from '../../src/jobs/x-selectors';
 
 /**
@@ -93,6 +94,35 @@ describe('parseFrontmatter', () => {
   });
 });
 
+describe('stripXTitleSuffix', () => {
+  it('removes the author and platform X appends to the document title', () => {
+    // Observed on a real capture; the <title> tag, not og:title.
+    expect(stripXTitleSuffix('小白入门美股指南（建议收藏学习） | 灰原学姐 (@HaibaraCrypto) on X')).toBe(
+      '小白入门美股指南（建议收藏学习）',
+    );
+  });
+
+  it('removes the " / X" and " | X" forms', () => {
+    // "Andrej Karpathy (@karpathy) / X" is a verbatim capture.
+    expect(stripXTitleSuffix('Andrej Karpathy (@karpathy) / X')).toBe('Andrej Karpathy (@karpathy)');
+    expect(stripXTitleSuffix('A Title | X')).toBe('A Title');
+  });
+
+  it('removes an author segment marked only by the separator', () => {
+    expect(stripXTitleSuffix('A Title | Some Author on X')).toBe('A Title');
+  });
+
+  it('leaves a clean title untouched', () => {
+    expect(stripXTitleSuffix('A Perfectly Fine Title')).toBe('A Perfectly Fine Title');
+    // A real title that happens to contain "X" must not lose it.
+    expect(stripXTitleSuffix('Learning X in 2026')).toBe('Learning X in 2026');
+  });
+
+  it('keeps a title whose author name contains X', () => {
+    expect(stripXTitleSuffix('Deep Dive | X Corp Research (@xcorp) on X')).toBe('Deep Dive');
+  });
+});
+
 describe('splitXTitle', () => {
   it('splits an X page title into display name and handle', () => {
     expect(splitXTitle('Andrej Karpathy (@karpathy) / X')).toEqual({ name: 'Andrej Karpathy', username: 'karpathy' });
@@ -174,9 +204,30 @@ describe('extractMetadata', () => {
     expect(meta.authorUsername).toBe('realthing');
   });
 
-  it('strips the trailing " / X" from the title', () => {
-    const meta = extractMetadata('https://x.com/karpathy/article/1', X_LOGGED_OUT_PROFILE, '', null);
-    expect(meta.title).toBe('Andrej Karpathy (@karpathy)');
+  it('prefers og:title over the <title> tag, which carries X branding', () => {
+    // og:title is the clean headline; <title> is "Title | Author (@handle) on X".
+    const meta = extractMetadata(
+      'https://x.com/haibaracrypto/article/2103788150405705870',
+      REAL_ARTICLE,
+      '',
+      null,
+    );
+    expect(meta.title).toBe("On Giant Language Models and Why They're Few-Shot Parsers");
+  });
+
+  it('falls back to <title> with the branding stripped when og:title is absent', () => {
+    // A profile page has no og:title worth preferring; its <title> still carries
+    // X branding, which must come off.
+    const noOgTitle = `---\ntitle: "Deep Dive | X Corp Research (@xcorp) on X"\n---\n\nBody.\n`;
+    const meta = extractMetadata('https://x.com/xcorp/article/1', noOgTitle, '', null);
+    expect(meta.title).toBe('Deep Dive');
+    expect(meta.authorUsername).toBe('xcorp');
+  });
+
+  it('does not mangle a profile page title, which has no title part to keep', () => {
+    // og:title on a profile is the whole identity, so nothing is stripped.
+    const meta = extractMetadata('https://x.com/karpathy', X_LOGGED_OUT_PROFILE, '', null);
+    expect(meta.title).toBe('Andrej Karpathy (@karpathy) on X');
   });
 
   it('reads a published date out of a <time> tag', () => {

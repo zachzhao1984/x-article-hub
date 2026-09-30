@@ -19,13 +19,36 @@ import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { newId } from '../lib/ids';
 import { recordEvent } from '../db/events';
-import { setArticleStatus } from '../db/articles';
+import { getArticleById, setArticleStatus } from '../db/articles';
 import { classifyContent, extractAvatarUrl, extractMetadata } from '../jobs/x-selectors';
 import type { CrawlMetadata } from '../jobs/x-selectors';
 import { runQuickAction, runSnapshot, SCREENSHOT_FORMAT } from './browser';
 
 /** SPEC §27 — bump when the Phase 3 Parser changes; raw is kept so it can re-run. */
 export const PARSER_VERSION = 1;
+
+/**
+ * SPEC §6 routes `fetched → parsing → parsed → enriching → ai_ready → review`,
+ * and §16.3 puts publishing in the review queue.
+ *
+ * Parsing (Phase 3) and AI enrichment (Phase 4) do not exist yet, so those
+ * intermediate states would be fiction. Handing the article straight to `review`
+ * keeps the machine honest: an editor is looking at a real archive and decides.
+ * Landing on `fetched` instead would be a dead end — `fetched` cannot reach
+ * `published`, so nothing could ever be published until Phase 3 shipped.
+ */
+export const CRAWL_TERMINAL_STATUS = 'review' as const;
+
+/**
+ * A crawl is a content operation, never an editorial one.
+ *
+ * SPEC §4.7 gives the editor the final say on publication, so a re-crawl must not
+ * quietly un-publish something a human published. A published article keeps its
+ * status; everything else advances to the review queue.
+ */
+function nextStatusAfterCrawl(current: string): string {
+  return current === 'published' ? 'published' : CRAWL_TERMINAL_STATUS;
+}
 
 export type CrawlResultKind = 'archived' | 'unchanged' | 'failed';
 
@@ -53,7 +76,16 @@ export interface CrawlInput {
 
 export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOutcome> {
   const { articleId, url } = input;
-  await setArticleStatus(env.DB, articleId, 'fetching');
+
+  // Read before mutating. A published article stays published for the whole
+  // crawl: dropping it to `fetching` would make its public URL 404 for the
+  // duration of a background job, which is not a trade any reader should pay.
+  const existing = await getArticleById(env.DB, articleId);
+  const startStatus = existing?.status ?? 'pending';
+
+  if (startStatus !== 'published') {
+    await setArticleStatus(env.DB, articleId, 'fetching');
+  }
 
   const cookies = readCookies(env);
 
@@ -185,7 +217,18 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
   const sourceHash = await sha256Hex(markdown);
 
   if (latest && latest.source_hash === sourceHash) {
-    await setArticleStatus(env.DB, articleId, 'fetched');
+    // SPEC §28 — no new version, because the source is identical. Derived fields
+    // are still refreshed: they are a function of the capture *and* of the
+    // recognizer, so an improved extractor must not leave stale titles behind.
+    // Editor overrides (editor_summary, editor_category_id) are untouched.
+    await applyCrawlMetadata(env, {
+      articleId,
+      metadata,
+      html,
+      rawMetadataKey: archive.metadataKey,
+      status: nextStatusAfterCrawl(startStatus),
+      capturedAt,
+    });
     log.info('crawl_success', {
       article_id: articleId,
       browser_ms_used: browserMsUsed ?? undefined,
@@ -206,29 +249,14 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
   // --- metadata onto the article row ------------------------------------------
   // SPEC §27: until Phase 3, the archive is the source of truth. These columns
   // exist so the review UI is usable, and Phase 3 will overwrite them properly.
-  await env.DB.prepare(
-    `UPDATE articles
-        SET title = COALESCE(NULLIF(?2, ''), title),
-            author_name = COALESCE(?3, author_name),
-            author_username = COALESCE(?4, author_username),
-            author_avatar = COALESCE(?5, author_avatar),
-            raw_r2_key = ?6,
-            published_at = COALESCE(?7, published_at),
-            status = 'fetched',
-            updated_at = ?8
-      WHERE id = ?1`,
-  )
-    .bind(
-      articleId,
-      metadata.title ?? '',
-      metadata.authorName,
-      metadata.authorUsername,
-      html ? extractAvatarUrl(html) : null,
-      archive.metadataKey,
-      metadata.publishedAt ? Date.parse(metadata.publishedAt) || null : null,
-      capturedAt,
-    )
-    .run();
+  await applyCrawlMetadata(env, {
+    articleId,
+    metadata,
+    html,
+    rawMetadataKey: archive.metadataKey,
+    status: nextStatusAfterCrawl(startStatus),
+    capturedAt,
+  });
 
   await recordEvent(
     env.DB,
@@ -244,10 +272,54 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
     parser_version: PARSER_VERSION,
     browser_ms_used: browserMsUsed ?? undefined,
     body_chars: bodyChars,
-    status: 'fetched',
+    status: CRAWL_TERMINAL_STATUS,
   });
 
   return { ok: true, result: 'archived', browserMsUsed, title: metadata.title, bodyChars, htmlError };
+}
+
+/**
+ * Writes the crawler-derived fields onto the article row.
+ *
+ * Every field is COALESCE-guarded except `title`, which falls back to the
+ * existing value when the capture yielded nothing. Editor overrides are never
+ * written here (SPEC §4.7).
+ */
+async function applyCrawlMetadata(
+  env: Env,
+  args: {
+    articleId: string;
+    metadata: CrawlMetadata;
+    html: string | null;
+    rawMetadataKey: string;
+    status: string;
+    capturedAt: number;
+  },
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE articles
+        SET title = COALESCE(NULLIF(?2, ''), title),
+            author_name = COALESCE(?3, author_name),
+            author_username = COALESCE(?4, author_username),
+            author_avatar = COALESCE(?5, author_avatar),
+            raw_r2_key = ?6,
+            published_at = COALESCE(?7, published_at),
+            status = ?8,
+            updated_at = ?9
+      WHERE id = ?1`,
+  )
+    .bind(
+      args.articleId,
+      args.metadata.title ?? '',
+      args.metadata.authorName,
+      args.metadata.authorUsername,
+      args.html ? extractAvatarUrl(args.html) : null,
+      args.rawMetadataKey,
+      args.metadata.publishedAt ? Date.parse(args.metadata.publishedAt) || null : null,
+      args.status,
+      args.capturedAt,
+    )
+    .run();
 }
 
 interface RawArchive {

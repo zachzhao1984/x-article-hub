@@ -126,6 +126,30 @@ export function parseFrontmatter(markdown: string): Record<string, string> {
   return out;
 }
 
+/**
+ * X appends its own branding to the document title. Both observed forms:
+ *   "Title | 灰原学姐 (@HaibaraCrypto) on X"
+ *   "Title / X"
+ * Neither belongs in a headline or an OG tag.
+ */
+export function stripXTitleSuffix(title: string): string {
+  // Observed on a real capture:
+  //   "\u5c0f\u767d\u5165\u95e8\u7f8e\u80a1\u6307\u5357\uff08\u5efa\u8bae\u6536\u85cf\u5b66\u4e60\uff09 | \u7070\u539f\u5b66\u59d0 (@HaibaraCrypto) on X"
+  // The @handle makes the trailing author segment unambiguous, and it must not be
+  // matched with \w -- that class does not cover non-Latin names, which is
+  // exactly the case that matters here.
+  const withHandle = /^(.*?)\s*[|/]\s*[^|/]*@([A-Za-z0-9_]{1,15})[^|/]*\s+on\s+X\s*$/i.exec(title);
+  if (withHandle?.[1]) return withHandle[1].trim();
+
+  // "Title | Author on X" -- only stripped when a separator marks the boundary,
+  // so a real title that merely ends in the word "X" survives.
+  const withOn = /^(.*?)\s*[|/]\s*.*\s+on\s+X\s*$/i.exec(title);
+  if (withOn?.[1]) return withOn[1].trim();
+
+  // "Title / X" and "Title | X"
+  return title.replace(/\s*[|/]\s*X\s*$/i, '').trim();
+}
+
 /** `"Andrej Karpathy (@karpathy) / X"` → display name + username. */
 export function splitXTitle(title: string): { name: string | null; username: string | null } {
   const at = /^(.*?)\s*\(@([A-Za-z0-9_]{1,15})\)/.exec(title);
@@ -210,13 +234,17 @@ export function extractMetadata(
   fallbackUsername: string | null,
 ): CrawlMetadata {
   const fm = parseFrontmatter(markdown);
-  const rawTitle = fm.title ?? fm['og:title'] ?? null;
-  const fromTitle = rawTitle ? splitXTitle(rawTitle) : { name: null, username: null };
+  const fromTitle = fm.title ? splitXTitle(fm.title) : { name: null, username: null };
 
   const urlUsername = /x\.com\/([A-Za-z0-9_]{1,15})\/article\//.exec(url)?.[1] ?? null;
 
+  // `og:title` is the clean human title; the `<title>` tag is X's own, which
+  // appends the author and platform ("... | 灰原学姐 (@HaibaraCrypto) on X").
+  // Prefer og:title, and strip the suffix if only `<title>` is available.
+  const rawTitle = fm['og:title'] ?? fm.title ?? null;
+
   return {
-    title: rawTitle ? rawTitle.replace(/\s*\/\s*X$/, '').trim() || null : null,
+    title: rawTitle ? stripXTitleSuffix(rawTitle) : null,
     authorName: fromTitle.name ?? fm.author ?? null,
     // The URL is authoritative for the handle: it is the dedup key's own input.
     authorUsername: urlUsername ?? fromTitle.username ?? fallbackUsername,
