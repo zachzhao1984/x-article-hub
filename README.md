@@ -321,6 +321,46 @@ later and more honestly: X serves its "page does not exist" for `/article/<id>`,
 which the crawler reports as `ARTICLE_NOT_FOUND`. Probing first would cost a request
 on every import and X is unreliable about that when logged out.
 
+### Typography
+
+The type stack is the one in the brief, with one thing added that the brief's
+snippet does not need and this site does: the reading surface.
+
+The CJK families are not an appendix. The archive is mostly Chinese, so they are
+the primary rendering and Latin is the fallback *within* each family — `Inter` has
+no CJK coverage, so it paints Latin only, and the browser skips a face that cannot
+render a glyph and takes the next one per character. That is also why a locally
+installed Inter changes the Latin text and leaves the Chinese alone, which is
+correct. No webfont is loaded: the stack is a local-name lookup, so it costs
+nothing when the face is absent and falls through to the OS.
+
+Body prose is **16px / 1.75 in the sans family**, not the serif. `ui-serif`
+resolves Chinese to Songti SC, whose hairline strokes go grey on a light ground
+and muddy on a dark one; the archive is mostly Chinese, and a 17.5px reading
+surface is most of the product. A PingFang / Noto Sans face keeps a consistent
+stem weight and actually uses the 1.75. Serif is kept for one thing — the ranking
+digit, where the contrast is a design choice and there is no CJK to clash with.
+
+Two things that only surfaced by looking at the rendered result:
+
+- **The leading had to be split, not just raised.** 1.75 on `body` cascaded to
+  every 11–13px label and put them in 21px line boxes, which showed as a visible
+  gap between a card title and its author. Prose gets 1.75; everything else gets
+  1.5, and the reading surface is restated *after* that fallback so a bare `p`
+  cannot win on source order. The restatement is load-bearing: with it in the
+  wrong place, body text measured 26.25px instead of 30.6px, which is the exact
+  leading the change was meant to fix. `:not(.article-body p)` also works but puts
+  a compound selector inside `:not()`, i.e. Selectors 4, unsupported before
+  Safari 16.
+- **The headline tracking had to go.** `-0.03em` is tuned for Latin counters, and
+  CJK glyphs already fill the em box, so tracking them in squeezes the ideographs
+  together and reads as a rendering fault.
+
+`tests/unit/typography.test.ts` covers the stack order, the reading-surface family
+and leading, the split, the restatement's position, and that no small label is left
+inheriting the prose leading. The two orderings were each verified to fail by
+breaking them.
+
 ### Colour themes
 
 The palette follows [aihot.news](https://aihot.news): a warm paper ground rather

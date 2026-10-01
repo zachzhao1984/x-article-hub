@@ -36,9 +36,39 @@
   /* Non-token values, shared by both themes. */
   --radius: 10px;
   --wrap: 1180px;
-  --serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /*
+   * Type.
+   *
+   * The archive is mostly Chinese, so the CJK faces are not an afterthought — they
+   * are the primary rendering, and Latin is the fallback within each family. A
+   * stack that stops at `system-ui` hands every Chinese glyph to whatever the OS
+   * picks with no control over it, and the four platforms disagree.
+   *
+   * `Inter` leads the sans stack because it has no CJK coverage, so it only ever
+   * paints Latin: a face that cannot render a glyph is skipped and the next family
+   * takes over per-character. That is also why a locally-installed Inter changes
+   * the Latin text and leaves the Chinese untouched, which is the correct
+   * behaviour. No webfont is loaded — the first family is a local-name lookup, so
+   * the stack costs nothing when the font is absent and falls through to the OS.
+   *
+   * The reading face is a sans, not a serif. `ui-serif` resolves Chinese to Songti
+   * SC, whose thin strokes and tight default rhythm are the worst case at 17.5px on
+   * screen; a PingFang / Noto Sans face holds its weight and tracks the 1.75
+   * leading properly. Latin keeps a serif for the headline treatment, where the
+   * contrast is a design choice rather than a legibility one.
+   */
+  --sans:
+    Inter, "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei",
+    "Noto Sans CJK SC", "Noto Sans CJK TC", "Hiragino Sans GB", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui,
+    sans-serif;
+  --serif:
+    Georgia, "Iowan Old Style", "Times New Roman", "Songti SC", STSong,
+    "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "Noto Sans Mono CJK SC", monospace;
 
   /* The header floats over scrolling content, so it needs a translucent ground.
      Declared per theme because a fixed alpha over a dark paper and a light paper
@@ -123,8 +153,67 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.65 var(--sans);
+  /* 16px, not 15px. Chinese glyphs occupy the full em box, so 15px CJK is below
+     the comfortable floor, especially in a mixed Latin/numeric article. */
+  font: 400 16px/1.75 var(--sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Body prose gets 1.75; everything else gets 1.5.
+ *
+ * Chinese needs the extra leading in body text — adjacent full-width lines
+ * otherwise come within a couple of pixels of touching. Nothing else does:
+ * letting 1.75 cascade to 11–13px labels put them in 21px line boxes and opened
+ * visible gaps between a card title and its author, because 12px text does not
+ * need 75% leading.
+ *
+ * Deliberately only the elements that had no line-height of their own. Anything
+ * with a specific value keeps it, which means this block must not name it — a
+ * rule here and the specific one elsewhere would tie on specificity and the
+ * winner would come down to source order, which is not a property worth relying
+ * on. Unitless throughout, so a nested element still scales its line box from
+ * its own size.
+ */
+/*
+ * Everything that is not body prose gets 1.5.
+ *
+ * Scoped to `.wrap` and `:root` descendants so the reading surface is not caught
+ * by the element selectors below. An earlier version listed bare `p` and `ul`,
+ * which matched `.article-body p`: they tied on specificity and won by source
+ * order, silently collapsing body text from 30.6px back to 26.25px — the exact
+ * leading this was raised to fix. Excluding them with `:not(.article-body p)` also
+ * works, but that puts a compound selector inside `:not()`, which is Selectors 4
+ * and unsupported before Safari 16.
+ *
+ * The descendant selectors are only there to raise specificity above the bare
+ * element rules; `.article-body` is not among them, so a paragraph inside it can
+ * only match `.article-body p` and keeps the container's inherited 1.75.
+ */
+.hero-sub, .board-title, .board-more,
+.card-meta, .card-foot, .badge, .cat-chip, .cat-count, .cat-desc,
+.cat-name, .tag, .nav-item, .nav-icon, .logo-mark, .search-mini input,
+.search-form input, .search-form button, .result-snippet, .article-crumbs,
+.original-link, .byline, .hero-meta, .footer-inner, .fig-missing, .empty-state,
+pre, .cat-card, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
+.hero h1, .stat-row, .author-name .handle, .fig-missing span {
+  line-height: 1.5;
+}
+
+/* Restated after the block above so the reading surface wins on source order
+   rather than on a `:not()` compound, which older Safari cannot parse.
+   `pre` is excluded: a code block wants 1.5, not the prose leading, and it
+   already declares that. */
+.article-body,
+.article-body p,
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body ul,
+.article-body ol,
+.article-body blockquote {
+  line-height: 1.75;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -227,7 +316,7 @@ a:hover { color: var(--accent); }
 }
 .hero-sub {
   margin: 8px 0 0;
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: clamp(30px, 6vw, 48px);
   line-height: 1.08;
   letter-spacing: -0.03em;
@@ -291,7 +380,7 @@ a:hover { color: var(--accent); }
 
 .card-title {
   margin: 0 0 6px;
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 18px;
   line-height: 1.3;
   letter-spacing: -0.015em;
@@ -350,7 +439,7 @@ a:hover { color: var(--accent); }
   border-radius: var(--radius);
   text-align: center;
 }
-.empty-state h2 { margin: 0 0 8px; font-family: var(--serif); font-size: 22px; }
+.empty-state h2 { margin: 0 0 8px; font-family: var(--sans); font-size: 22px; }
 .empty-state p { color: var(--muted); margin: 0 auto 16px; max-width: 52ch; }
 .empty-state pre { display: inline-block; margin: 0; text-align: left; }
 
@@ -361,10 +450,13 @@ a:hover { color: var(--accent); }
 .article-crumbs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 16px; }
 .article-title {
   margin: 0 0 14px;
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: clamp(28px, 5vw, 40px);
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  line-height: 1.28;
+  /* No negative tracking. It is tuned for Latin counters, and CJK glyphs already
+     fill the em box — tracking them in squeezes the ideographs together and
+     reads as a rendering fault rather than as tightening. */
+  letter-spacing: 0;
   font-weight: 700;
 }
 .byline { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; color: var(--muted); font-size: 13.5px; }
@@ -384,7 +476,15 @@ a:hover { color: var(--accent); }
 }
 .stat-row b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
 
-.article-body { font-family: var(--serif); font-size: 17.5px; line-height: 1.72; }
+/*
+ * The reading surface. Sans rather than serif: a Chinese serif resolves to Songti
+ * SC, whose hairline strokes go grey against a light ground and muddy against a
+ * dark one. A PingFang / Noto Sans face keeps a consistent stem weight at 17.5px
+ * and actually uses the 1.75 leading — the 1.72 this had was measured against
+ * Latin, and Chinese glyphs are full-width and need the extra room to avoid
+ * neighbouring lines appearing to touch.
+ */
+.article-body { font-family: var(--sans); font-size: 17.5px; line-height: 1.75; }
 .article-body p { margin: 0 0 1.15em; }
 .article-body h1, .article-body h2, .article-body h3 {
   font-family: var(--sans);
@@ -484,7 +584,7 @@ pre {
   overflow-x: auto;
 }
 .prose { max-width: 72ch; }
-.prose h1 { font-family: var(--serif); font-size: 30px; letter-spacing: -0.02em; margin: 0 0 12px; }
+.prose h1 { font-family: var(--sans); font-size: 30px; letter-spacing: 0; margin: 0 0 12px; }
 .prose h2 { font-size: 18px; margin: 32px 0 10px; }
 .prose p { color: var(--muted); }
 .prose ul { color: var(--muted); }
