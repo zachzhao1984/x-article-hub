@@ -80,6 +80,58 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
       (function () {
         var STORAGE_KEY = 'xah-theme';
         var root = document.documentElement;
+        var VALID = ['light', 'dark', 'system'];
+        var BAR = { dark: '#13191c', light: '#faf9f6' };
+        var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        /**
+         * Paints a choice. Exposed as `window.__xahTheme` so the change handler
+         * below reuses it instead of reimplementing the attribute write, the
+         * theme-color tag and the media listener — the two call sites drifting is
+         * how clicking stopped repainting the page in the first place.
+         *
+         * The attribute always holds the literal choice, including `system`, so
+         * the stylesheet's `:root:not([data-theme='light'])` and
+         * `[data-theme='dark']` rules keep deciding the repaint. Only the
+         * theme-color tag needs the OS resolved down to a concrete colour.
+         */
+        function apply(choice) {
+          if (VALID.indexOf(choice) === -1) return;
+          root.setAttribute('data-theme', choice);
+
+          var resolved = choice === 'system' ? (darkQuery.matches ? 'dark' : 'light') : choice;
+
+          // The media-scoped <meta name="theme-color"> tags cannot express a stored
+          // choice, so an unscoped one is added. Mobile Safari reads that one.
+          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'theme-color';
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', BAR[resolved]);
+
+          // Follow the OS, but only while the reader has not chosen otherwise.
+          // Attaching this unconditionally would let the OS override an explicit
+          // pick the moment the machine switched appearance.
+          if (choice === 'system') {
+            if (typeof darkQuery.addEventListener === 'function') {
+              darkQuery.addEventListener('change', onSystemChange);
+            } else if (typeof darkQuery.addListener === 'function') {
+              darkQuery.addListener(onSystemChange);
+            }
+          }
+        }
+
+        function onSystemChange(event) {
+          if (root.getAttribute('data-theme') !== 'system') return;
+          root.setAttribute('data-theme', event.matches ? 'dark' : 'light');
+          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
+          if (meta) meta.setAttribute('content', event.matches ? BAR.dark : BAR.light);
+        }
+
+        window.__xahTheme = apply;
+
         try {
           var stored = localStorage.getItem(STORAGE_KEY);
 
@@ -92,40 +144,11 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
           var match = document.cookie.match(/(?:^|;\s*)xah_theme=(light|dark|system)/);
           if (match) stored = match[1];
 
-          if (stored !== 'light' && stored !== 'dark' && stored !== 'system') stored = 'system';
-          root.setAttribute('data-theme', stored);
-
-          // The two <meta name="theme-color"> tags are media-scoped, so a stored
-          // choice needs its own tag to override the OS preference. A single unscoped
-          // one is what mobile Safari actually reads for the toolbar tint.
-          var resolved = stored === 'system'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : stored;
-          var meta = document.createElement('meta');
-          meta.name = 'theme-color';
-          meta.content = resolved === 'dark' ? '#13191c' : '#faf9f6';
-          document.head.appendChild(meta);
-
-          // Follow the OS while the reader has not chosen. `addEventListener` rather
-          // than `addListener`, and the listener is only attached in the system
-          // state, so an explicit choice is not overridden when the OS flips.
-          if (stored === 'system') {
-            var query = window.matchMedia('(prefers-color-scheme: dark)');
-            var onChange = function (event) {
-              root.setAttribute('data-theme', event.matches ? 'dark' : 'light');
-              var tag = document.querySelector('meta[name="theme-color"]:not([media])');
-              if (tag) tag.setAttribute('content', event.matches ? '#13191c' : '#faf9f6');
-            };
-            if (typeof query.addEventListener === 'function') {
-              query.addEventListener('change', onChange);
-            } else if (typeof query.addListener === 'function') {
-              query.addListener(onChange);
-            }
-          }
+          apply(VALID.indexOf(stored) === -1 ? 'system' : stored);
         } catch (error) {
           // Storage unavailable. `system` is still correct, because the stylesheet
           // resolves it through prefers-color-scheme on its own.
-          root.setAttribute('data-theme', 'system');
+          apply('system');
         }
       })();
     </script>
@@ -135,17 +158,30 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
   <body>
     <slot />
     {/*
-      Persists a change from the switcher. CSS applies the selection immediately —
-      the radio is checked and `:has(input:checked)` responds with no JavaScript at
-      all — so this only has to record the choice for the next page load.
+      Applies a change from the switcher, then remembers it.
+
+      Applying is not optional and was the bug this replaced: the handler used to
+      only write localStorage and the cookie, on the assumption that the radio's
+      `:checked` state plus CSS would repaint the page. It does not — that rule
+      only highlights the control. The theme is driven by `data-theme` on <html>,
+      which nothing was writing, so clicking "dark" moved the highlight and left
+      the page light until a reload.
+
+      `window.__xahTheme` is the shared apply function installed by the head script
+      above, so the two call sites cannot drift. The inline-script guard is because
+      a reader can reach this code with the head script having thrown.
     */}
     <script is:inline>
       document.addEventListener('change', function (event) {
         var input = event.target;
         if (!input || input.name !== 'theme') return;
         // Validated against the same three states the control offers, so a
-        // synthetic `change` event carrying anything else cannot be persisted.
+        // synthetic `change` event carrying anything else cannot be applied or
+        // persisted.
         if (['light', 'dark', 'system'].indexOf(input.value) === -1) return;
+
+        if (typeof window.__xahTheme === 'function') window.__xahTheme(input.value);
+
         try {
           localStorage.setItem('xah-theme', input.value);
         } catch (error) {

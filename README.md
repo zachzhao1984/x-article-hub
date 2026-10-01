@@ -344,6 +344,14 @@ Three implementation choices carry the behaviour:
   or module script runs after the first paint, which is exactly the
   white-flash-then-dark flash this exists to prevent: the stylesheet cannot know
   the reader's choice until something tells it.
+- **A change repaints the page, and the paint is one shared function.** The first
+  version persisted the choice and nothing else, on the assumption that the radio's
+  `:checked` state plus CSS would follow. It does not: that rule only highlights the
+  control. The theme is driven by `data-theme` on `<html>`, so clicking "dark" moved
+  the highlight and left the page light until a reload. The attribute write, the
+  `theme-color` tag and the OS listener now live in one `apply()` exposed as
+  `window.__xahTheme`, and both the head script and the change handler call it —
+  duplicating that logic across the two is what let them drift.
 - **The choice is stored in both a cookie and `localStorage`, and the cookie
   wins.** `localStorage` is invisible to the server, so without the cookie the
   switcher would render in the `system` position on every page load even though

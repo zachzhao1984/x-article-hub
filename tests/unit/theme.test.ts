@@ -161,8 +161,11 @@ describe('colour themes', () => {
   it('validates the stored value instead of trusting it', () => {
     // It is client-controlled input reaching a cookie, an attribute and a
     // comparison. Anything outside the three known states must collapse to
-    // `system` rather than being written through.
-    expect(base).toContain("stored !== 'light' && stored !== 'dark' && stored !== 'system'");
+    // `system` rather than being written through. `apply()` is the single choke
+    // point, so guarding there covers both the stored value and a live change.
+    expect(base).toContain("var VALID = ['light', 'dark', 'system'];");
+    expect(base).toMatch(/function apply\(choice\) \{\s*if \(VALID\.indexOf\(choice\) === -1\) return;/);
+    expect(base).toMatch(/apply\(VALID\.indexOf\(stored\) === -1 \? 'system' : stored\)/);
     expect(header).toMatch(/raw === 'light' \|\| raw === 'dark' \|\| raw === 'system'/);
   });
 
@@ -230,5 +233,39 @@ describe('admin palette', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '');
     const literals = [...outside.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g)];
     expect(literals.map((m) => m[0]), 'hard-coded colour outside the theme tokens').toEqual([]);
+  });
+});
+
+describe('applying a theme change', () => {
+  const handler = base.slice(base.lastIndexOf("<script"));
+
+  it('repaints on change, not just on the next load', () => {
+    // The bug this file exists because of. The handler persisted the choice and
+    // nothing else, on the assumption that the radio's :checked state plus CSS would
+    // repaint the page. It does not: that rule only highlights the control, and the
+    // theme is driven by data-theme on <html>, which nothing was writing. Clicking
+    // "dark" moved the highlight and left the page light until a reload.
+    expect(handler).toContain('window.__xahTheme(input.value)');
+    expect(handler).not.toMatch(/localStorage\.setItem\('xah-theme', input\.value\);?\s*\}\);?\s*$/);
+  });
+
+  it('exposes one apply function rather than two implementations', () => {
+    // The attribute write, the theme-color tag and the media listener all have to
+    // happen. Duplicating that across the head script and the change handler is how
+    // they drift, and the drift is what shipped the bug.
+    expect(base).toContain('window.__xahTheme = apply');
+    expect(base).toMatch(/function apply\(choice\)/);
+    expect(base).toContain("root.setAttribute('data-theme', choice)");
+    // The change handler calls the shared function rather than writing the attribute.
+    const changeBody = handler.slice(handler.indexOf("addEventListener"));
+    expect(changeBody).not.toContain("setAttribute('data-theme'");
+    expect(changeBody).toContain('__xahTheme');
+  });
+
+  it('keeps following the OS in the system state, and stops when overridden', () => {
+    // The listener is attached only for `system`. Attaching it unconditionally would
+    // let the OS override an explicit pick the moment the machine switched appearance.
+    expect(base).toMatch(/if \(choice === 'system'\) \{[\s\S]{0,320}addEventListener|addListener/);
+    expect(base).toContain("if (root.getAttribute('data-theme') !== 'system') return;");
   });
 });
