@@ -1,15 +1,45 @@
+/**
+ * The same tokens as public/site.css, so /admin is recognisably the same product
+ * rather than a separate tool pasted next to it. It used to carry GitHub's dark
+ * palette, which meant the two surfaces had nothing in common but a logo.
+ *
+ * Follows the system scheme only — the admin has no switcher, and a person editing
+ * content is not browsing. `prefers-color-scheme` alone is the right scope here: an
+ * explicit override would need the same inline script the public site uses, and
+ * there is no control on this surface to express the choice.
+ */
 :root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --panel-2: #1c2128;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #58a6ff;
-  --ok: #3fb950;
-  --warn: #d29922;
-  --error: #f85149;
+  color-scheme: light;
+
+  --bg: #faf9f6;
+  --panel: #fff;
+  --panel-2: #f3f3ef;
+  --border: #dfe4e1;
+  --text: #202a30;
+  --muted: #59656b;
+  --accent: #176b75;
+  --accent-ink: #fff;
+  --ok: #2f7d5c;
+  --warn: #b8873a;
+  --error: #b3402a;
   --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #13191c;
+    --panel: #1a2226;
+    --panel-2: #202a2f;
+    --border: #ffffff26;
+    --text: #e7eceb;
+    --muted: #a5b0b3;
+    --accent: #12ccd8;
+    --accent-ink: #06222a;
+    --ok: #5fc79a;
+    --warn: #d3b26a;
+    --error: #d86a52;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -100,7 +130,7 @@ textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 
 .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .button {
   background: var(--accent);
-  color: #04121f;
+  color: var(--accent-ink);
   border: 0;
   border-radius: var(--radius);
   padding: 8px 18px;
@@ -131,7 +161,7 @@ textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 
   font-size: 12px;
 }
 .chip:hover { color: var(--text); text-decoration: none; border-color: var(--muted); }
-.chip.is-active { background: var(--accent); border-color: var(--accent); color: #04121f; font-weight: 600; }
+.chip.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
 .pill {
   display: inline-block;
@@ -214,6 +244,6 @@ form + form { margin-top: 10px; }
   font-size: 13px;
   width: 100%;
 }
-.button-danger { background: transparent; color: #f26a5a; border: 1px solid #f26a5a; }
-.button-danger:hover { background: rgba(242, 106, 90, 0.12); }
+.button-danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+.button-danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .button[disabled] { opacity: 0.45; cursor: not-allowed; }

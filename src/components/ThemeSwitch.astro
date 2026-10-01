@@ -1,0 +1,52 @@
+---
+/**
+ * SPEC §33 — a three-state theme control: light, dark, follow the system.
+ *
+ * Built as radios so the selected state lives in the form, not in JavaScript. CSS
+ * does the highlighting (`:has(input:checked)`), which means the control renders
+ * and responds correctly before — and without — any script, and stays keyboard
+ * navigable. The inline script in Base.astro reads the stored choice and writes
+ * `data-theme` before first paint; this component only persists a change.
+ *
+ * The `system` option deliberately does not clear the attribute. It writes the
+ * value `system`, and the stylesheet treats anything other than `light`/`dark` as
+ * "no explicit choice", so the media query governs. Deleting the attribute instead
+ * would leave `:root[data-theme='light']` matching nothing while the media query's
+ * `:root:not([data-theme='light'])` also stopped applying, which is a subtle way to
+ * lose the light theme on a dark-mode machine.
+ */
+export interface Props {
+  /** The choice persisted by the last visit, so the control starts in the right state. */
+  current?: 'light' | 'dark' | 'system';
+}
+
+const { current = 'system' } = Astro.props;
+
+const OPTIONS = [
+  { value: 'light', label: 'Light', icon: 'M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M18.4 5.6l-1.1 1.1M6.7 17.3l-1.1 1.1M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z' },
+  { value: 'dark', label: 'Dark', icon: 'M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z' },
+  { value: 'system', label: 'Match system', icon: 'M3.5 5.5h17v9h-17zM8.5 18.5h7M12 14.5v4' },
+] as const;
+---
+
+<fieldset class="theme-switch">
+  <legend class="visually-hidden">Colour theme</legend>
+  <div class="theme-switch__options" role="radiogroup" aria-label="Colour theme">
+    {
+      OPTIONS.map((option) => (
+        <label class="theme-switch__option" title={option.label}>
+          <input
+            type="radio"
+            name="theme"
+            value={option.value}
+            checked={current === option.value}
+            aria-label={option.label}
+          />
+          <svg class="theme-switch__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d={option.icon} />
+          </svg>
+        </label>
+      ))
+    }
+  </div>
+</fieldset>

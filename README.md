@@ -321,6 +321,54 @@ later and more honestly: X serves its "page does not exist" for `/article/<id>`,
 which the crawler reports as `ARTICLE_NOT_FOUND`. Probing first would cost a request
 on every import and X is unreliable about that when logged out.
 
+### Colour themes
+
+The palette follows [aihot.news](https://aihot.news): a warm paper ground rather
+than pure white, a deep teal accent instead of a bright blue, and four ink steps
+instead of one. The dark theme is a separately chosen set of values, not an
+inversion — an inverted palette lands on muddy greys. The accent keeps one hue
+across both themes and changes only lightness, because the contrast ratio has to
+work in both directions.
+
+Three states, not a toggle: light, dark, and follow the system. "Follow the
+system" has to be expressible, or a reader whose OS flips at sunset touches the
+control twice every evening.
+
+Three implementation choices carry the behaviour:
+
+- **The switcher is radios, not buttons.** The selected state lives in the form
+  and CSS does the highlighting with `:has(input:checked)`, so the control renders
+  and responds before — and without — any script, and stays keyboard navigable.
+  JavaScript only persists the choice.
+- **The theme is applied by a synchronous inline script in `<head>`.** A deferred
+  or module script runs after the first paint, which is exactly the
+  white-flash-then-dark flash this exists to prevent: the stylesheet cannot know
+  the reader's choice until something tells it.
+- **The choice is stored in both a cookie and `localStorage`, and the cookie
+  wins.** `localStorage` is invisible to the server, so without the cookie the
+  switcher would render in the `system` position on every page load even though
+  the theme itself was right — which reads as the control not taking the click.
+
+With scripting off, `data-theme` is never written and `prefers-color-scheme`
+governs, so the page still respects the OS rather than pinning everyone to light.
+
+`/admin` uses the same token names, so the two surfaces read as one product. It
+had been carrying GitHub's dark palette, which meant the only thing the public
+site and the admin shared was a logo. It follows the system scheme only — an
+explicit override would need the inline script above, and there is no control on
+that surface to express the choice.
+
+One deliberate exception to theming: the logo tile stays a dark square with a light
+X in both themes. A favicon cannot adapt to a colour scheme, so the in-page mark
+inverting meant the same brand read two different ways depending on where you
+looked.
+
+`tests/unit/theme.test.ts` guards the properties that are easy to break silently:
+both themes declare the same token set, the light values agree whether they come
+from `:root` or `[data-theme='light']`, no colour is hard-coded outside the token
+blocks, the apply script precedes `</head>`, the stored value is validated rather
+than trusted, and the logo tile is theme-invariant.
+
 ### Icons
 
 The mark is the favicon.io set: a black X folded from envelope flaps with a gold

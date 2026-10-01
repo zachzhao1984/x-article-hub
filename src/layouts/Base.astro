@@ -59,9 +59,106 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
     <meta name="apple-mobile-web-app-title" content={SITE_NAME} />
     <link rel="mask-icon" href="/safari-pinned-tab.svg" color={THEME_COLOR} />
 
+    {/*
+      Applies the stored theme before first paint.
+
+      This has to be a synchronous inline script in <head>, ahead of the
+      stylesheet's first use. A deferred or module script runs after the HTML is
+      parsed and the page has already painted at least once, which is exactly the
+      white-flash-then-dark flash this exists to prevent — the stylesheet cannot
+      know the reader's choice until something tells it, and by the time a deferred
+      script runs that something is too late.
+
+      It writes the literal value `system` for the follow-the-system choice rather
+      than removing the attribute, so the stylesheet's `:root:not([data-theme='light'])`
+      and `[data-theme='dark']` rules both keep applying.
+
+      Every step is wrapped: a storage-denied browser (Safari in private mode) must
+      fall back to the system preference, not to a blank page.
+    */}
+    <script is:inline>
+      (function () {
+        var STORAGE_KEY = 'xah-theme';
+        var root = document.documentElement;
+        try {
+          var stored = localStorage.getItem(STORAGE_KEY);
+
+          // The cookie is read as well as localStorage, and wins when both are
+          // present. It is what the server used to render the switcher's checked
+          // state, so preferring it keeps the control and the painted theme in
+          // agreement. A reader with an old cookie and no localStorage entry — or
+          // the reverse, after clearing one but not the other — would otherwise see
+          // the control show one state and the page paint in another.
+          var match = document.cookie.match(/(?:^|;\s*)xah_theme=(light|dark|system)/);
+          if (match) stored = match[1];
+
+          if (stored !== 'light' && stored !== 'dark' && stored !== 'system') stored = 'system';
+          root.setAttribute('data-theme', stored);
+
+          // The two <meta name="theme-color"> tags are media-scoped, so a stored
+          // choice needs its own tag to override the OS preference. A single unscoped
+          // one is what mobile Safari actually reads for the toolbar tint.
+          var resolved = stored === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : stored;
+          var meta = document.createElement('meta');
+          meta.name = 'theme-color';
+          meta.content = resolved === 'dark' ? '#13191c' : '#faf9f6';
+          document.head.appendChild(meta);
+
+          // Follow the OS while the reader has not chosen. `addEventListener` rather
+          // than `addListener`, and the listener is only attached in the system
+          // state, so an explicit choice is not overridden when the OS flips.
+          if (stored === 'system') {
+            var query = window.matchMedia('(prefers-color-scheme: dark)');
+            var onChange = function (event) {
+              root.setAttribute('data-theme', event.matches ? 'dark' : 'light');
+              var tag = document.querySelector('meta[name="theme-color"]:not([media])');
+              if (tag) tag.setAttribute('content', event.matches ? '#13191c' : '#faf9f6');
+            };
+            if (typeof query.addEventListener === 'function') {
+              query.addEventListener('change', onChange);
+            } else if (typeof query.addListener === 'function') {
+              query.addListener(onChange);
+            }
+          }
+        } catch (error) {
+          // Storage unavailable. `system` is still correct, because the stylesheet
+          // resolves it through prefers-color-scheme on its own.
+          root.setAttribute('data-theme', 'system');
+        }
+      })();
+    </script>
+
     <slot name="head" />
   </head>
   <body>
     <slot />
+    {/*
+      Persists a change from the switcher. CSS applies the selection immediately —
+      the radio is checked and `:has(input:checked)` responds with no JavaScript at
+      all — so this only has to record the choice for the next page load.
+    */}
+    <script is:inline>
+      document.addEventListener('change', function (event) {
+        var input = event.target;
+        if (!input || input.name !== 'theme') return;
+        // Validated against the same three states the control offers, so a
+        // synthetic `change` event carrying anything else cannot be persisted.
+        if (['light', 'dark', 'system'].indexOf(input.value) === -1) return;
+        try {
+          localStorage.setItem('xah-theme', input.value);
+        } catch (error) {
+          // Private browsing. The cookie below still carries the choice across
+          // navigations, and the theme applies for this page view regardless.
+        }
+        // A cookie as well as localStorage, because localStorage is invisible to the
+        // server. Without it the switcher would render in the `system` position on
+        // every page load even though the theme itself was right, which reads as the
+        // control not having taken the click.
+        document.cookie =
+          'xah_theme=' + input.value + '; path=/; max-age=31536000; samesite=lax';
+      });
+    </script>
   </body>
 </html>

@@ -3,8 +3,25 @@
 // (SPEC §15) and the categories (SPEC §13.5).
 import { listCategoriesWithCounts } from '../db/public';
 import { env } from 'cloudflare:workers';
+import ThemeSwitch from './ThemeSwitch.astro';
 
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
+
+/**
+ * The theme the reader last chose, read from the same cookie the inline script in
+ * Base.astro writes, so the control renders already holding the right option.
+ *
+ * `system` is the default and is also what an unrecognised stored value collapses
+ * to. A stored value is validated rather than trusted because it is a cookie the
+ * client controls: anything that is not one of the three states is treated as no
+ * choice, and a cookie containing markup or a stray quote must never reach the
+ * `checked` comparison or the `value` attribute.
+ */
+const THEME_COOKIE = 'xah_theme';
+const theme = (() => {
+  const raw = Astro.cookies.get(THEME_COOKIE)?.value;
+  return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system';
+})();
 
 const path = Astro.url.pathname;
 const nav: Array<{ href: string; label: string; icon: string }> = [
@@ -41,6 +58,8 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     <form class="search-mini" action="/search" method="get" role="search">
       <input type="search" name="q" placeholder="Search articles" aria-label="Search articles" />
     </form>
+
+    <ThemeSwitch current={theme} />
   </div>
 
   <div class="wrap category-bar" aria-label="Categories">

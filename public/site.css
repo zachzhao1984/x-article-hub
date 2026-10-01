@@ -1,22 +1,118 @@
+/**
+ * Theme tokens.
+ *
+ * The palette follows aihot.news: a warm paper ground rather than pure white, a
+ * deep teal accent instead of a bright blue, and four ink steps instead of one.
+ * The dark theme is a separately chosen set of values, not an inversion — an
+ * inverted palette lands on muddy greys, and this one is picked so the teal reads
+ * as brighter on the dark ground (#12ccd8) while the paper one stays a deep ink
+ * (#176b75) on the light ground. Same hue family, different lightness, because the
+ * contrast ratio has to work in both directions.
+ *
+ * `data-theme` on <html> is set by an inline script before first paint (see
+ * Base.astro), so there is no flash. The media query is a fallback for the no-JS
+ * case: with scripting off, `data-theme` is never written and the system preference
+ * decides.
+ */
+
 :root {
-  --bg: #0b0e13;
-  --panel: #141922;
-  --panel-2: #1b222d;
-  --border: #262e3b;
-  --border-soft: #1e2530;
-  --text: #e8eef6;
-  --muted: #8794a5;
-  --faint: #5c6775;
-  --accent: #5aa9ff;
-  --accent-dim: #2d5f96;
-  --ok: #46c46a;
-  --warn: #e0a83a;
-  --danger: #f26a5a;
+  color-scheme: light;
+
+  --bg: #faf9f6;
+  --panel: #fff;
+  --panel-2: #f3f3ef;
+  --border: #dfe4e1;
+  --border-soft: #e9ede9;
+  --text: #202a30;
+  --muted: #59656b;
+  --faint: #657176;
+  --accent: #176b75;
+  --accent-dim: #145f68;
+  --accent-contrast: #fff;
+  --ok: #2f7d5c;
+  --warn: #b8873a;
+  --danger: #b3402a;
+
+  /* Non-token values, shared by both themes. */
   --radius: 10px;
   --wrap: 1180px;
   --serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
   --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* The header floats over scrolling content, so it needs a translucent ground.
+     Declared per theme because a fixed alpha over a dark paper and a light paper
+     do not produce the same result. */
+  --header-bg: #faf9f6e8;
+
+  /* The logo tile, deliberately NOT themed. A favicon cannot adapt to a colour
+     scheme, so this one stays a dark tile with a light X in both themes to match
+     what the browser tab shows. Inverting it per theme made the in-page mark the
+     same brand read two different ways. */
+  --logo-bg: #202a30;
+  --logo-ink: #faf9f6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #13191c;
+    --panel: #1a2226;
+    --panel-2: #202a2f;
+    --border: #ffffff26;
+    --border-soft: #ffffff17;
+    --text: #e7eceb;
+    --muted: #a5b0b3;
+    --faint: #89979d;
+    --accent: #12ccd8;
+    --accent-dim: #2ce2e8;
+    --accent-contrast: #000;
+    --ok: #5fc79a;
+    --warn: #d3b26a;
+    --danger: #d86a52;
+    --header-bg: #13191ce8;
+  }
+}
+
+/* The explicit dark choice, and the explicit light choice. Both are needed: the
+   media query above only covers "the user has expressed no preference", so a
+   reader who picked light on a dark-mode machine needs this to win. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #13191c;
+  --panel: #1a2226;
+  --panel-2: #202a2f;
+  --border: #ffffff26;
+  --border-soft: #ffffff17;
+  --text: #e7eceb;
+  --muted: #a5b0b3;
+  --faint: #89979d;
+  --accent: #12ccd8;
+  --accent-dim: #2ce2e8;
+  --accent-contrast: #000;
+  --ok: #5fc79a;
+  --warn: #d3b26a;
+  --danger: #d86a52;
+  --header-bg: #13191ce8;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #faf9f6;
+  --panel: #fff;
+  --panel-2: #f3f3ef;
+  --border: #dfe4e1;
+  --border-soft: #e9ede9;
+  --text: #202a30;
+  --muted: #59656b;
+  --faint: #657176;
+  --accent: #176b75;
+  --accent-dim: #145f68;
+  --accent-contrast: #fff;
+  --ok: #2f7d5c;
+  --warn: #b8873a;
+  --danger: #b3402a;
+  --header-bg: #faf9f6e8;
 }
 
 * { box-sizing: border-box; }
@@ -40,7 +136,7 @@ a:hover { color: var(--accent); }
 
 .site-header {
   border-bottom: 1px solid var(--border);
-  background: rgba(11, 14, 19, 0.9);
+  background: var(--header-bg);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
@@ -60,8 +156,8 @@ a:hover { color: var(--accent); }
   place-items: center;
   width: 24px; height: 24px;
   border-radius: 6px;
-  background: var(--text);
-  color: var(--bg);
+  background: var(--logo-bg);
+  color: var(--logo-ink);
   font-size: 14px;
   font-weight: 800;
 }
@@ -363,7 +459,7 @@ a:hover { color: var(--accent); }
 .search-form input:focus { outline: none; border-color: var(--accent-dim); }
 .search-form button {
   background: var(--accent);
-  color: #06121f;
+  color: var(--accent-contrast);
   border: 0;
   border-radius: var(--radius);
   padding: 11px 22px;
@@ -372,7 +468,9 @@ a:hover { color: var(--accent); }
   cursor: pointer;
 }
 .result-snippet { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
-.result-snippet mark { background: rgba(90, 169, 255, 0.18); color: var(--text); padding: 0 2px; border-radius: 3px; }
+/* A tinted accent, derived so the highlight follows the theme rather than pinning
+   the old blue. color-mix keeps one rule for both themes. */
+.result-snippet mark { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); padding: 0 2px; border-radius: 3px; }
 
 /* --- misc --- */
 
@@ -473,3 +571,104 @@ pre {
 }
 
 .avatar.is-remote { opacity: 0.75; }
+
+/* --- theme switcher -------------------------------------------------------
+ *
+ * A three-state segmented control rather than a single toggle, because "follow the
+ * system" is a real third state and a toggle cannot express it: flipping back to
+ * light would be indistinguishable from choosing light, so a reader whose OS
+ * switches to dark at sunset would need to touch the control twice every evening.
+ *
+ * Radios rather than buttons so the current choice is in the form state, which is
+ * what lets the CSS highlight the selected segment without JavaScript and keeps it
+ * keyboard-navigable. The fieldset is `display: contents` so it does not add a box.
+ */
+
+.theme-switch {
+  display: contents;
+}
+
+.theme-switch__options {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+
+.theme-switch__option {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--faint);
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.theme-switch__option:hover { color: var(--muted); }
+
+.theme-switch__option:has(input:checked) {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.theme-switch__option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Visually hidden but still focusable and still read by assistive tech. A
+   `display: none` input would drop the radio group out of the tab order. */
+.theme-switch__option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.theme-switch__icon {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-switch__option { transition: none; }
+}
+
+/* Compact on narrow screens: the header already carries a search box and six nav
+   items, and the switch is the first thing that should give up width. */
+@media (max-width: 720px) {
+  .theme-switch__option { width: 27px; }
+}
+
+/* Hidden visually, still available to a screen reader.
+   `display: none` and `visibility: hidden` would remove the element from the
+   accessibility tree, which for a <legend> also strips the fieldset of its
+   accessible name — the control would announce as an unlabelled group. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
