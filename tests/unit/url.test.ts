@@ -84,14 +84,65 @@ describe('normalizeArticleUrl', () => {
     expect(() => normalizeArticleUrl('https://x.com/%zz/article/123')).not.toThrow();
   });
 
+  it('accepts the /status/ permalink of an Article', () => {
+    // This is the URL people actually copy off X. Confirmed against a live
+    // capture: the /status/ page renders a generic post shell, but the id is the
+    // same snowflake and /article/<id> serves the Article.
+    const result = normalizeArticleUrl('https://x.com/AlchainHust/status/2105259951639638267');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual({
+      // Always rewritten to /article/, which is the page that holds the content.
+      canonicalUrl: 'https://x.com/alchainhust/article/2105259951639638267',
+      sourceUrl: 'https://x.com/alchainhust/article/2105259951639638267',
+      xArticleId: '2105259951639638267',
+      username: 'alchainhust',
+    });
+  });
+
+  it('collapses the permalink and the canonical URL onto one dedup key', () => {
+    // The whole reason the canonical form is fixed: SPEC §5.3 dedups on
+    // canonical_url, so the two spellings of the same Article must not become two
+    // rows. x_article_id is UNIQUE too, so that is the second line of defence.
+    const permalink = normalizeArticleUrl('https://x.com/SomeOne/status/999888777666555444');
+    const canonical = normalizeArticleUrl('https://x.com/SomeOne/article/999888777666555444');
+    expect(permalink.ok && canonical.ok).toBe(true);
+    if (!permalink.ok || !canonical.ok) return;
+    expect(permalink.value.canonicalUrl).toBe(canonical.value.canonicalUrl);
+    expect(permalink.value.xArticleId).toBe(canonical.value.xArticleId);
+    expect(permalink.value.username).toBe(canonical.value.username);
+  });
+
+  it('normalizes the permalink through twitter.com and tracking params too', () => {
+    const result = normalizeArticleUrl('https://twitter.com/SomeOne/status/123?s=20&t=xyz#frag');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.canonicalUrl).toBe('https://x.com/someone/article/123');
+    expect(result.value.sourceUrl).toBe('https://x.com/someone/article/123');
+  });
+
+  it('keeps a meaningful query param on a permalink too', () => {
+    const result = normalizeArticleUrl('https://x.com/foo/status/123?lang=en');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.canonicalUrl).toBe('https://x.com/foo/article/123');
+    expect(result.value.sourceUrl).toBe('https://x.com/foo/article/123?lang=en');
+  });
+
   it.each([
     ['https://example.com/foo/article/123', 'UNSUPPORTED_HOST'],
-    ['https://x.com/foo/status/123', 'NOT_AN_ARTICLE'],
     ['https://x.com/foo', 'NOT_AN_ARTICLE'],
     ['https://x.com/', 'NOT_AN_ARTICLE'],
     ['https://x.com/foo/article/', 'NOT_AN_ARTICLE'],
     ['https://x.com/foo/article/abc', 'NOT_AN_ARTICLE'],
     ['https://x.com/this_username_is_far_too_long/article/123', 'NOT_AN_ARTICLE'],
+    // Accepting /status/ must not become accepting every path shape: the segment
+    // is still required, and so is a numeric id.
+    ['https://x.com/foo/status/', 'NOT_AN_ARTICLE'],
+    ['https://x.com/foo/status/abc', 'NOT_AN_ARTICLE'],
+    ['https://x.com/foo/status/123/extra', 'NOT_AN_ARTICLE'],
+    ['https://x.com/foo/photo/123', 'NOT_AN_ARTICLE'],
+    ['https://x.com/foo/statuses/123', 'NOT_AN_ARTICLE'],
     ['not a url at all', 'INVALID_URL'],
     ['ftp://x.com/foo/article/123', 'INVALID_URL'],
     ['', 'EMPTY_INPUT'],

@@ -230,6 +230,51 @@ describe('extractMetadata', () => {
     expect(meta.title).toBe('Andrej Karpathy (@karpathy) on X');
   });
 
+  it('prefers meta.author over the name split out of <title>', () => {
+    // The bug this locks down. X titles an Article "Headline | Author (@handle) on
+    // X", so splitXTitle returns "Headline | Author" — while `meta.author` holds the
+    // clean display name. Taking the split first put
+    // "0基础速通！…小程序 | 花叔" in the byline of a live article, and it survived
+    // because the stored column is what the Parser falls back to.
+    const capture = [
+      '---',
+      'title: "0基础速通！手把手教你用WorkBuddy开发出自己的第一个微信小程序 | 花叔 (@AlchainHust) on X"',
+      'meta:',
+      '  author: 花叔',
+      '  "og:title": 0基础速通！手把手教你用WorkBuddy开发出自己的第一个微信小程序',
+      '---',
+      '',
+      'Body.',
+    ].join('\n');
+
+    const meta = extractMetadata(
+      'https://x.com/alchainhust/article/2105259951639638267',
+      capture,
+      '',
+      null,
+    );
+
+    expect(meta.authorName).toBe('花叔');
+    expect(meta.authorName).not.toContain('|');
+    // The headline and the byline must not be the same string.
+    expect(meta.title).not.toBe(meta.authorName);
+  });
+
+  it('still uses the title-split name when the capture has no meta.author', () => {
+    // A mangled name beats no name, so the fallback stays — just below the clean one.
+    const noAuthor = [
+      '---',
+      'title: "Deep Dive | Grace Hopper (@amazinggrace) on X"',
+      'meta:',
+      '  "og:title": Deep Dive',
+      '---',
+      '',
+      'Body.',
+    ].join('\n');
+    const meta = extractMetadata('https://x.com/amazinggrace/article/7', noAuthor, '', null);
+    expect(meta.authorName).toBe('Deep Dive | Grace Hopper');
+  });
+
   it('reads a published date out of a <time> tag', () => {
     expect(extractPublishedAt('<time datetime="2024-01-11T09:30:00.000Z">Jan 11</time>', '')).toBe(
       '2024-01-11T09:30:00.000Z',
@@ -260,5 +305,38 @@ describe('extractAvatarUrl', () => {
 
   it('returns null when neither is present', () => {
     expect(extractAvatarUrl('<html></html>')).toBeNull();
+  });
+});
+
+describe('archived avatars are not overwritten (SPEC §10)', () => {
+  /**
+   * Both the crawl and the Parser write `articles.author_avatar`, and both sources
+   * are remote URLs. Once the media job has archived the portrait the column holds a
+   * local `/media/...` path, and a later write puts the CDN dependency SPEC §10 just
+   * removed straight back. Both were found in production: the crawl replaced the
+   * local path with `og:image`, which on an X Article is the cover rather than a
+   * face, and the Parser replaced it with the chip's remote URL on every re-parse.
+   *
+   * The invariant is a string check on the column value, so these are the exact
+   * conditions the two write sites test.
+   */
+  const ARCHIVED = '/media/av_kb1yty';
+  const REMOTE = 'https://pbs.twimg.com/profile_images/2041105413505220608/Xgv1FKSS_normal.jpg';
+
+  it('treats a local /media path as final and a remote URL as provisional', () => {
+    const shouldPreserve = (current: string | null) => Boolean(current?.startsWith('/media/'));
+
+    expect(shouldPreserve(ARCHIVED)).toBe(true);
+    expect(shouldPreserve(REMOTE)).toBe(false);
+    expect(shouldPreserve(null)).toBe(false);
+    // A protocol-relative or otherwise odd remote value is not "archived".
+    expect(shouldPreserve('//pbs.twimg.com/x.jpg')).toBe(false);
+  });
+
+  it('does not mistake a cover image for an archived avatar', () => {
+    // The crawler's og:image on an X Article is the cover, so the value it writes
+    // is a remote media URL — never something that should win over a local one.
+    const cover = 'https://pbs.twimg.com/media/HTInbYuaIAAq4Ae';
+    expect(cover.startsWith('/media/')).toBe(false);
   });
 });

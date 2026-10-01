@@ -237,11 +237,6 @@ export function classifyContent(markdown: string, html?: string): ContentVerdict
   return { kind: 'ok', bodyChars };
 }
 
-/** A bare profile URL has no headline, so its <title> is trustworthy identity. */
-function isProfileUrl(url: string): boolean {
-  return /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/?$/i.test(url);
-}
-
 /** Builds the full metadata set from both captures plus the canonical URL. */
 export function extractMetadata(
   url: string,
@@ -252,6 +247,10 @@ export function extractMetadata(
   const fm = parseFrontmatter(markdown);
   const fromTitle = fm.title ? splitXTitle(fm.title) : { name: null, username: null };
 
+  // Matching only the canonical /article/ form is deliberate rather than an
+  // oversight: `normalizeArticleUrl` rewrites every accepted input to that shape
+  // before the crawl is queued, so a /status/ permalink never reaches this function.
+  // Widening the pattern would silently accept a URL that skipped normalization.
   const urlUsername = /x\.com\/([A-Za-z0-9_]{1,15})\/article\//.exec(url)?.[1] ?? null;
 
   // `og:title` is the clean human title; the `<title>` tag is X's own, which
@@ -261,7 +260,17 @@ export function extractMetadata(
 
   return {
     title: rawTitle ? stripXTitleSuffix(rawTitle) : null,
-    authorName: fromTitle.name ?? fm.author ?? null,
+    // `meta.author` first, and it must stay first. It is the clean display name
+    // ("花叔"), where splitXTitle on an Article's <title> returns the headline
+    // glued to it ("0基础速通！…小程序 | 花叔") because X titles are
+    // "Headline | Author (@handle) on X". Taking fromTitle first put that string in
+    // the byline, and the Parser cannot fix it afterwards — it prefers frontmatter
+    // over the stored column precisely so a bad value here is not permanent, but a
+    // column that is already wrong is what it falls back to.
+    //
+    // fromTitle stays as the last resort: a capture with no `meta.author` at all
+    // is better served by a mangled name than by none.
+    authorName: fm.author ?? fromTitle.name ?? null,
     // The URL is authoritative for the handle: it is the dedup key's own input.
     authorUsername: urlUsername ?? fromTitle.username ?? fallbackUsername,
     description: fm.description ?? fm['og:description'] ?? null,

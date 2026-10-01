@@ -164,6 +164,10 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
   }
 
   // ---- D1 (SPEC §12 needs the plain-text mirror for FTS) ---------------------
+  // Captured before the UPDATE below, which is what decides whether the avatar stays
+  // local. See the note on the bound value.
+  const currentAvatar = article.author_avatar;
+
   await env.DB.prepare(
     `UPDATE articles
         SET content_r2_key = ?2,
@@ -192,7 +196,13 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
       document.author.username,
       // SPEC §9 — the Parser is the metadata authority. The crawl's avatar came
       // from og:image, which on an X Article is the cover image, not a face.
-      document.author.avatar ?? null,
+      //
+      // The chip's avatar is correct but remote, and once the media job has
+      // archived the portrait the column holds a local /media/... path. Writing the
+      // remote URL back over it would put the CDN dependency SPEC §10 just removed
+      // straight back, and it would happen on every re-parse. So an archived avatar
+      // wins, exactly as it does against the crawl.
+      currentAvatar?.startsWith('/media/') ? null : (document.author.avatar ?? null),
       Date.now(),
     )
     .run();

@@ -301,6 +301,26 @@ async function applyCrawlMetadata(
     capturedAt: number;
   },
 ): Promise<void> {
+  // `author_avatar` is COALESCE-guarded and additionally refuses to replace a value
+  // the media pipeline already archived.
+  //
+  // Every other field here falls back to the existing value when the crawl learns
+  // nothing, but the avatar is different in kind: the crawl's only source is
+  // `og:image`, and on an X Article that is the COVER, not a face. Once the Parser
+  // and the media job have written a local `/media/...` path for the real portrait,
+  // a later crawl silently replaced it with a remote cover URL — the byline went
+  // back to hotlinking the CDN, which is the dependency SPEC §10 exists to remove.
+  //
+  // Guarding on "already local" rather than on "already non-null" is the point: a
+  // remote URL in this column is always provisional, because it came from a source
+  // that cannot be trusted to be a portrait.
+  const crawledAvatar = args.html ? extractAvatarUrl(args.html) : null;
+  const avatarIsArchived = (await env.DB.prepare(`SELECT author_avatar FROM articles WHERE id = ?`)
+    .bind(args.articleId)
+    .first<{ author_avatar: string | null }>())?.author_avatar;
+  const keepArchivedAvatar =
+    typeof avatarIsArchived === 'string' && avatarIsArchived.startsWith('/media/');
+
   await env.DB.prepare(
     `UPDATE articles
         SET title = COALESCE(NULLIF(?2, ''), title),
@@ -318,7 +338,7 @@ async function applyCrawlMetadata(
       args.metadata.title ?? '',
       args.metadata.authorName,
       args.metadata.authorUsername,
-      args.html ? extractAvatarUrl(args.html) : null,
+      keepArchivedAvatar ? null : crawledAvatar,
       args.rawMetadataKey,
       args.metadata.publishedAt ? Date.parse(args.metadata.publishedAt) || null : null,
       args.status,

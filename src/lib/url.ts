@@ -5,6 +5,10 @@
  * an X Article we can archive, and what its identity key is. Dedup (SPEC §5.3)
  * is keyed off the `canonicalUrl` it returns, so this function must be stable:
  * the same input must always produce the same output, on any machine, forever.
+ *
+ * That stability is why the canonical form is always `/article/<id>`. An Article
+ * is reachable at two URLs, and both spellings must collapse onto one key or the
+ * same article imports twice.
  */
 
 import type { ImportErrorCode } from './errors';
@@ -41,19 +45,24 @@ const TRACKING_PARAMS = new Set([
 const USERNAME_RE = /^[A-Za-z0-9_]{1,15}$/;
 const ARTICLE_ID_RE = /^\d{1,25}$/;
 
+/** The path segment a long-form Article is served at, and the permalink people copy. */
+const CANONICAL_ARTICLE_SEGMENT = 'article';
+const ARTICLE_PATH_NAMES = new Set([CANONICAL_ARTICLE_SEGMENT, 'status']);
+
 export interface NormalizedUrl {
   /** Cleaned, https, no fragment, no tracking params. What the admin pasted, normalized. */
   sourceUrl: string;
   /** Dedup key (SPEC §5.3). Unique constraint target on `articles.canonical_url`. */
   canonicalUrl: string;
-  /** Extracted from `/<username>/article/<id>`; null when the path is not a known article shape. */
+  /** Extracted from the path; null when it is not a known article shape. */
   xArticleId: string | null;
   username: string | null;
 }
 
 /**
- * On success `username` and `xArticleId` are guaranteed non-null: the function
- * only returns `ok: true` for the `/<username>/article/<id>` shape.
+ * On success `username` and `xArticleId` are guaranteed non-null: the function only
+ * returns `ok: true` for the `/<username>/article/<id>` shape or its `/status/`
+ * permalink, and always rewrites the result to the `/article/` form.
  */
 export type NormalizeResult =
   | { ok: true; value: NormalizedUrl & { xArticleId: string; username: string } }
@@ -112,9 +121,25 @@ export function normalizeArticleUrl(raw: string): NormalizeResult {
   // article, so the username must be lowercased before it becomes a dedup key.
   const username = segments[0] && USERNAME_RE.test(segments[0]) ? segments[0].toLowerCase() : null;
 
-  // X serves long-form posts at /<username>/article/<id>. Anything else on the
-  // host (a profile, a status permalink, the homepage) is not archivable here.
-  const isArticlePath = segments.length === 3 && segments[1] === 'article' && !!username;
+  // X serves long-form posts at /<username>/article/<id>, and the same Article is
+  // also reachable at /<username>/status/<id> — the permalink of the post that
+  // announced it. Both are the same snowflake in the same id space, verified against
+  // a live capture: for one Article the /status/ page renders a generic post shell
+  // ("<author> on X: \"https://t.co/...\"") while /article/ renders the Article
+  // itself, but the id matches and /article/ is the better representation.
+  //
+  // Accepting the permalink matters because that is the URL people copy. It is
+  // also why the canonical form below is always /article/: both spellings must
+  // collapse onto one dedup key (SPEC §5.3), and the crawler must fetch the page
+  // that actually contains the article rather than the shell.
+  //
+  // A plain short post at /<username>/status/<id> is therefore also accepted, and
+  // it fails later and more honestly: X serves its "page does not exist" for
+  // /article/<id>, which classifyContent reports as ARTICLE_NOT_FOUND. Probing
+  // first would cost a request on every import and X is unreliable about it when
+  // logged out.
+  const isArticlePath =
+    segments.length === 3 && ARTICLE_PATH_NAMES.has(segments[1] ?? '') && !!username;
   const xArticleId =
     isArticlePath && segments[2] && ARTICLE_ID_RE.test(segments[2]) ? segments[2] : null;
 
@@ -122,12 +147,12 @@ export function normalizeArticleUrl(raw: string): NormalizeResult {
     return {
       ok: false,
       code: 'NOT_AN_ARTICLE',
-      message: `Expected https://x.com/<username>/article/<id>, got: ${url.pathname}`,
+      message: `Expected https://x.com/<username>/article/<id> (or its /status/ permalink), got: ${url.pathname}`,
     };
   }
 
-  const canonicalUrl = `https://x.com/${username}/article/${xArticleId}`;
-  const sourceUrl = `https://x.com/${username}/article/${xArticleId}${url.search}`;
+  const canonicalUrl = `https://x.com/${username}/${CANONICAL_ARTICLE_SEGMENT}/${xArticleId}`;
+  const sourceUrl = `${canonicalUrl}${url.search}`;
 
   return { ok: true, value: { sourceUrl, canonicalUrl, xArticleId, username } };
 }

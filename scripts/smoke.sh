@@ -76,18 +76,28 @@ twitter.com/karpathy/article/${A1}?s=20&t=xyz
 https://x.com/someone/article/${A2}
 https://x.com/karpathy/article/${A1}
 https://example.com/not-x/article/${A3}
-https://x.com/karpathy/status/${A3}"
+https://x.com/karpathy/status/${A1}
+https://x.com/karpathy/photo/${A3}"
 
 MIXED="$("${CURL[@]}" -fsS "${AUTH[@]}" "${ORIGIN[@]}" -H 'Content-Type: text/plain' --data-binary "$BATCH" "${BASE}/api/admin/articles/import")"
-check "4 already-known URLs collapse to duplicates, incl. an in-batch repeat" "$(echo "$MIXED" | jqv '.duplicates')" "4"
+check "5 already-known URLs collapse to duplicates, incl. an in-batch repeat" "$(echo "$MIXED" | jqv '.duplicates')" "5"
 check "duplicate input reports the existing article id" \
   "$(echo "$MIXED" | jqv '.outcomes.filter(o=>o.status==="duplicate").every(o=>typeof o.articleId==="string")')" "true"
 check "the foreign host reports UNSUPPORTED_HOST" \
   "$(echo "$MIXED" | jqv '.outcomes.filter(o=>o.code==="UNSUPPORTED_HOST").length')" "1"
-check "the status permalink reports NOT_AN_ARTICLE" \
+check "a non-article path segment reports NOT_AN_ARTICLE" \
   "$(echo "$MIXED" | jqv '.outcomes.filter(o=>o.code==="NOT_AN_ARTICLE").length')" "1"
 check "2 invalid URLs are rejected" "$(echo "$MIXED" | jqv '.failed')" "2"
 check "the mixed batch created no new article" "$(echo "$MIXED" | jqv '.created')" "0"
+# The /status/ permalink of an Article is the URL people actually copy. It must
+# resolve to the same row as the /article/ form and normalize to the /article/ URL,
+# which is the page that holds the content. Before normalization this was rejected
+# outright, and a naive relaxation would have created a second article — the exact
+# failure SPEC §5.3's dedup exists to prevent.
+check "an Article's /status/ permalink normalizes to the /article/ URL" \
+  "$(echo "$MIXED" | jqv ".outcomes.filter(o=>o.input==='https://x.com/karpathy/status/${A1}').every(o=>o.canonicalUrl==='https://x.com/karpathy/article/${A1}')")" "true"
+check "that permalink is reported as a duplicate, not a new article" \
+  "$(echo "$MIXED" | jqv ".outcomes.filter(o=>o.input==='https://x.com/karpathy/status/${A1}').every(o=>o.status==='duplicate')")" "true"
 
 # SPEC §6 — only `published` rows are public. The rows created above are all
 # `pending`, so none of them may appear in the public list. Asserting on the ids

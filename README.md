@@ -295,6 +295,32 @@ accrues prefixes, and without this endpoint they were invisible: 24 of them had
 piled up unnoticed. They are reported, never auto-deleted, because nothing in the
 Worker can tell a stale prefix from a capture whose row was restored on purpose.
 
+### An Article's `/status/` permalink
+
+X serves a long-form Article at two URLs, and the second is the one people copy:
+
+```
+https://x.com/<user>/article/<id>     the Article itself
+https://x.com/<user>/status/<id>      the permalink of the post that announced it
+```
+
+Both are the same snowflake in the same id space, confirmed against a live capture.
+The two are not interchangeable as pages: the `/status/` one renders a generic post
+shell (`<author> on X: "https://t.co/..."`, with 9,350 visible characters of mostly
+chrome), while `/article/` renders the Article (4,351 characters, clean
+`og:title`). So `normalizeArticleUrl` accepts both and always rewrites the result
+to the `/article/` form.
+
+That rewrite is the whole design. `canonical_url` is UNIQUE (SPEC §5.3) and is the
+dedup key, so both spellings collapse onto one row instead of importing the same
+article twice, and the crawler is handed the URL that actually contains the content.
+A test asserts the two spellings produce an identical canonical URL, id and handle.
+
+A plain short post at `/<user>/status/<id>` is therefore also accepted, and it fails
+later and more honestly: X serves its "page does not exist" for `/article/<id>`,
+which the crawler reports as `ARTICLE_NOT_FOUND`. Probing first would cost a request
+on every import and X is unreliable about that when logged out.
+
 ### Icons
 
 The mark is the favicon.io set: a black X folded from envelope flaps with a gold
