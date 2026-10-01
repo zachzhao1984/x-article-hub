@@ -1,24 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="X Article Hub">
   <!--
-    Identity: the X brand blue tile carries the association; the glyph is the X
-    mark sitting over a single text rule, which reads as "an article" rather than
-    "a logo". The tile has its own background so it stays legible against both
-    light and dark browser chrome, where favicons actually live.
+    A sealed envelope with a gold four-point star at the point where the four flaps
+    meet: the archive is a letter, opened once and kept.
+
+    The envelope is near-black on a warm paper tile. A dark tile was tried first and
+    is the obvious choice for a favicon, but at 32px the black envelope dissolves
+    into the black background and all that survives is a gold dot — the shape that
+    carries the identity is the one thing that vanishes. Paper keeps the silhouette
+    legible at every size a favicon is actually viewed at.
+
+    The four facets are the reference's folded-paper shading, and the tonal split
+    between them is the only fold detail that survives at 16px: a single flat
+    envelope reads as a plain square at that size. The sharp corners are deliberate
+    too — rounding them turns a piece of paper into a generic app icon.
   -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2b9cf5"/>
-      <stop offset="1" stop-color="#0d7ac2"/>
+    <linearGradient id="gold" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#FBE9B4"/>
+      <stop offset="0.45" stop-color="#E8BC5E"/>
+      <stop offset="1" stop-color="#B07F22"/>
     </linearGradient>
   </defs>
 
-  <rect width="64" height="64" rx="14" fill="url(#tile)"/>
+  <rect width="64" height="64" rx="13" fill="#F4F1EA"/>
 
-  <!-- X mark -->
-  <g transform="translate(18 12.5) scale(1.1667)" fill="#ffffff">
-    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  <!-- Four flaps, meeting at the centre. Top-left catches the light, bottom-left
+       falls into shadow; the split is what reads as folded paper. -->
+  <g>
+    <path d="M9,10 L55,10 L32,32 Z" fill="#2A323C"/>
+    <path d="M9,10 L32,32 L9,54 Z" fill="#1B212A"/>
+    <path d="M55,10 L32,32 L55,54 Z" fill="#232A34"/>
+    <path d="M9,54 L32,32 L55,54 Z" fill="#141920"/>
   </g>
 
-  <!-- the article's text rule -->
-  <rect x="17" y="45.5" width="30" height="6" rx="3" fill="#ffffff" opacity="0.92"/>
+  <path d="M9,10 L55,10 L55,54 L9,54 Z" fill="none" stroke="#0B0E13" stroke-width="1.1"/>
+
+  <!-- The seal. Control points sit at a third of the radius along each axis, which
+       makes the sides concave rather than straight — a four-pointed star with
+       straight sides reads as a diamond. -->
+  <path d="M32,25.6
+           C32,23.6 34.0,32 38.4,32
+           C34.0,32 32,40.4 32,38.4
+           C32,40.4 30.0,32 25.6,32
+           C30.0,32 32,23.6 32,25.6 Z"
+        fill="url(#gold)"/>
 </svg>

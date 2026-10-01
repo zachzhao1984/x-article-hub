@@ -297,6 +297,17 @@ Worker can tell a stale prefix from a capture whose row was restored on purpose.
 
 ### Icons
 
+The mark is a sealed envelope with a gold four-point star where the four flaps
+meet: the archive is a letter, opened once and kept.
+
+It sits on a warm paper tile rather than a dark one. A black envelope on a dark
+tile is the obvious choice and it was tried first, but at 32px the two blacks merge
+and all that survives is a gold dot — the shape carrying the identity is the one
+thing that disappears. Paper keeps the silhouette legible at every size a favicon
+is actually viewed at. The four facets are the reference's folded-paper shading;
+the tonal split between them is the only fold detail that survives at 16px, since a
+single flat envelope reads as a plain square at that size.
+
 `public/favicon.svg` is the single source of truth; every raster size is
 generated from it, so the vector can be edited and re-derived rather than
 hand-tweaked per size:

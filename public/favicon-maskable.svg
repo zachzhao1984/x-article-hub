@@ -2,31 +2,37 @@
   <!--
     Maskable variant, source for public/icon-512-maskable.png.
 
-    An installed icon may be cropped to any shape within the middle 80% of the
-    canvas, so the tile is full-bleed (a shape mask would otherwise expose
-    transparency) while the glyph is pulled inward to stay inside that safe zone.
-    Regenerate with: rsvg-convert -w 512 -h 512 favicon-maskable.svg -o icon-512-maskable.png
-  -->
-  <!--
-    Identity: the X brand blue tile carries the association; the glyph is the X
-    mark sitting over a single text rule, which reads as "an article" rather than
-    "a logo". The tile has its own background so it stays legible against both
-    light and dark browser chrome, where favicons actually live.
+    Same mark, full-bleed tile and the artwork pulled into the middle 80% safe zone.
+    An installed icon may be cropped to any shape within that zone — a circle on
+    Android, a squircle on iOS — so the paper background has to reach every edge or
+    the mask exposes transparency as a dark halo.
+
+    Regenerate with:
+      rsvg-convert -w 512 -h 512 public/favicon-maskable.svg -o public/icon-512-maskable.png
   -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2b9cf5"/>
-      <stop offset="1" stop-color="#0d7ac2"/>
+    <linearGradient id="gold" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#FBE9B4"/>
+      <stop offset="0.45" stop-color="#E8BC5E"/>
+      <stop offset="1" stop-color="#B07F22"/>
     </linearGradient>
   </defs>
 
-  <rect width="64" height="64" rx="0" fill="url(#tile)"/>
+  <rect width="64" height="64" fill="#F4F1EA"/>
 
-  <!-- X mark -->
-  <g transform="translate(20 15) scale(1.0)" fill="#ffffff">
-    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  <g>
+    <path d="M12,13 L52,13 L32,32 Z" fill="#2A323C"/>
+    <path d="M12,13 L32,32 L12,51 Z" fill="#1B212A"/>
+    <path d="M52,13 L32,32 L52,51 Z" fill="#232A34"/>
+    <path d="M12,51 L32,32 L52,51 Z" fill="#141920"/>
   </g>
 
-  <!-- the article's text rule -->
-  <rect x="21" y="43" width="22" height="4.5" rx="2.25" fill="#ffffff" opacity="0.92"/>
+  <path d="M12,13 L52,13 L52,51 L12,51 Z" fill="none" stroke="#0B0E13" stroke-width="1.1"/>
+
+  <path d="M32,27.0
+           C32,25.1 33.9,32 37.0,32
+           C33.9,32 32,38.9 32,36.9
+           C32,38.9 30.1,32 27.0,32
+           C30.1,32 32,25.1 32,27.0 Z"
+        fill="url(#gold)"/>
 </svg>

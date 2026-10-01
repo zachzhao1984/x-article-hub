@@ -67,20 +67,28 @@ describe('site icons (SPEC §33)', () => {
       const svg = readFileSync(resolve(file), 'utf8');
       expect(svg).toMatch(/viewBox="0 0 64 64"/);
     }
-    // The maskable glyph is scaled down relative to the default mark, which is
-    // the whole point of the variant.
+    // The default mark may round its corners; the maskable one must not, because a
+    // platform mask cropping inside the safe zone would otherwise expose
+    // transparency at the corners. Asserted as "the tile is not rounded" rather
+    // than as a literal rx, so redrawing the mark does not fail this test.
     const def = readFileSync(resolve('public/favicon.svg'), 'utf8');
     const maskable = readFileSync(resolve('public/favicon-maskable.svg'), 'utf8');
     expect(maskable).not.toBe(def);
-    expect(maskable).toMatch(/rx="0"/);
-    expect(def).toMatch(/rx="14"/);
+    expect(maskable).not.toMatch(/<rect[^>]*\brx=/);
+    expect(def).toMatch(/<rect[^>]*\brx="13"/);
   });
 
-  it('has a real PNG for the Apple touch icon, not a renamed SVG', () => {
+  it('has a real 180×180 PNG for the Apple touch icon, not a renamed SVG', () => {
     const png = readFileSync(resolve('public/apple-touch-icon.png'));
     // PNG magic number.
     expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     expect(png.readUInt32BE(16)).toBe(180);
     expect(png.readUInt32BE(20)).toBe(180);
+    // No alpha channel, or iOS renders the transparent pixels black. Colour type
+    // sits after the 8-byte signature, the 4-byte IHDR length, the 4-byte chunk
+    // name, width and height, then the bit depth: 8 + 4 + 4 + 4 + 4 + 1 = 25.
+    // 2 is truecolour, 3 is palette — neither carries alpha.
+    const colourType = png[25];
+    expect([2, 3], 'apple-touch-icon must not carry transparency').toContain(colourType);
   });
 });
