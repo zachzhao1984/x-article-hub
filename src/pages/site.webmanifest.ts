@@ -7,8 +7,9 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
+import { THEME_COLOR } from '../config/icons';
+
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
-const THEME_COLOR = '#1d9bf0';
 
 export const GET: APIRoute = () => {
   const body = {
@@ -18,16 +19,18 @@ export const GET: APIRoute = () => {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    // The tile is a saturated blue with white artwork, so both surfaces want a
-    // neutral: white behind the icon, near-black behind the text.
-    background_color: '#ffffff',
+    // The mark is near-black on transparency, so the splash surface must be light
+    // or the icon is invisible until the app has painted its own background.
+    background_color: THEME_COLOR,
     theme_color: THEME_COLOR,
+    // Only the shipped sizes. There is no maskable entry: the source artwork is a
+    // floating mark with no full-bleed background, so an Android launcher cropping
+    // it to a circle would cut into the glyph. Advertising one anyway would make
+    // Chrome pick it and clip the mark on install.
     icons: [
-      { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
       { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
 

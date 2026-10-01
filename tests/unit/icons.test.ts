@@ -4,11 +4,43 @@ import { MANIFEST_HREF, SITE_ICONS, THEME_COLOR, iconLinkHtml } from '../../src/
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+/** IHDR is the first chunk: 8-byte signature, 4-byte length, 4-byte name. */
+function readPngHeader(file: string): {
+  width: number;
+  height: number;
+  colourType: number;
+  opaque: boolean;
+} {
+  const png = readFileSync(resolve('public', file));
+  if ([...png.subarray(0, 4)].join(',') !== '137,80,78,71') {
+    throw new Error(`${file} is not a PNG`);
+  }
+  const colourType = png[25] ?? -1;
+  return {
+    width: png.readUInt32BE(16),
+    height: png.readUInt32BE(20),
+    // 0 grey, 2 truecolour, 3 palette carry no alpha; 4 and 6 do.
+    colourType,
+    opaque: colourType === 0 || colourType === 2 || colourType === 3,
+  };
+}
+
 describe('site icons (SPEC §33)', () => {
-  it('declares the SVG first, then a raster fallback for engines without SVG', () => {
-    expect(SITE_ICONS[0]).toEqual({ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' });
-    expect(SITE_ICONS.some((i) => i.rel === 'icon' && i.href === '/favicon.ico')).toBe(true);
-    expect(SITE_ICONS.some((i) => i.rel === 'apple-touch-icon')).toBe(true);
+  it('advertises the hand-tuned small sizes explicitly', () => {
+    // Without `sizes` a browser may treat a PNG as scalable and pick the 512 for a
+    // 16px tab, which throws away the artwork that was drawn for that size.
+    const byHref = new Map(SITE_ICONS.map((i) => [i.href, i]));
+    expect(byHref.get('/favicon-16x16.png')).toMatchObject({ rel: 'icon', sizes: '16x16' });
+    expect(byHref.get('/favicon-32x32.png')).toMatchObject({ rel: 'icon', sizes: '32x32' });
+    expect(byHref.get('/apple-touch-icon.png')).toMatchObject({ rel: 'apple-touch-icon' });
+  });
+
+  it('ships no SVG icon, which would silently outrank the raster set', () => {
+    // A vector `rel="icon"` takes precedence over every raster alternative. The
+    // source artwork has no vector form, so one shipping here would override the
+    // favicon.io files and none of the tuning below would reach a browser.
+    expect(SITE_ICONS.some((i) => i.href.endsWith('.svg'))).toBe(false);
+    expect(existsSync(resolve('public/favicon.svg'))).toBe(false);
   });
 
   it('puts every icon in the admin head, not just the public pages', () => {
@@ -22,16 +54,15 @@ describe('site icons (SPEC §33)', () => {
     expect(html).toContain(`content="${THEME_COLOR}"`);
   });
 
-  it('ships every file the manifest and head advertise', () => {
+  it('ships every file the head and the manifest advertise', () => {
     const advertised = [
-      '/favicon.svg',
+      '/favicon-16x16.png',
+      '/favicon-32x32.png',
       '/favicon.ico',
       '/apple-touch-icon.png',
       '/icon-192.png',
       '/icon-512.png',
-      '/icon-512-maskable.png',
       '/safari-pinned-tab.svg',
-      '/favicon-maskable.svg',
     ];
     for (const file of advertised) {
       expect(existsSync(resolve('public', file.slice(1))), `${file} is advertised but missing`).toBe(
@@ -40,13 +71,39 @@ describe('site icons (SPEC §33)', () => {
     }
   });
 
+  it('has each advertised PNG at the size it claims', () => {
+    // A 16x16 `sizes` on a 512px file is a lie the browser will believe.
+    expect(readPngHeader('favicon-16x16.png')).toMatchObject({ width: 16, height: 16 });
+    expect(readPngHeader('favicon-32x32.png')).toMatchObject({ width: 32, height: 32 });
+    expect(readPngHeader('apple-touch-icon.png')).toMatchObject({ width: 180, height: 180 });
+    expect(readPngHeader('icon-192.png')).toMatchObject({ width: 192, height: 192 });
+    expect(readPngHeader('icon-512.png')).toMatchObject({ width: 512, height: 512 });
+  });
+
+  it('has an opaque Apple touch icon, or iOS renders the corners black', () => {
+    // iOS applies its own mask and draws transparency as black, so a transparent
+    // touch icon ships black corners. The source art is a near-black mark on a light
+    // field, and the shipped file bakes that field in.
+    const header = readPngHeader('apple-touch-icon.png');
+    expect(header.width).toBe(180);
+    expect(header.opaque, 'apple-touch-icon must not carry an alpha channel').toBe(true);
+  });
+
+  it('keeps a light theme colour, since the mark is near-black', () => {
+    // A dark theme colour behind a near-black mark is the icon disappearing into
+    // the browser chrome. This is a value assertion, not a format one: any colour
+    // that is genuinely light passes, a saturated blue does not.
+    const hex = THEME_COLOR.replace('#', '');
+    const channels: number[] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) || 0);
+    expect(Math.max(...channels) - Math.min(...channels)).toBeLessThan(24);
+    expect(channels.reduce((sum, c) => sum + c, 0) / 3).toBeGreaterThan(180);
+  });
+
   it('keeps the pinned-tab mask a pure alpha stencil', () => {
     // Safari paints the alpha channel with the user's own toolbar colour. Any
-    // colour of its own is ignored at best and a solid background renders a
-    // pinned tab as a black square, so the file must be black-and-white only,
-    // with the artwork knocked out of the disc rather than painted on it.
+    // colour of its own is ignored at best, and a solid background renders a pinned
+    // tab as a black square, so the file must be black-and-white only.
     const svg = readFileSync(resolve('public/safari-pinned-tab.svg'), 'utf8');
-    // Comments explain the rule; assert against the markup only.
     const markup = svg.replace(/<!--[\s\S]*?-->/g, '');
     const colors = [...markup.matchAll(/(?:fill|stroke)="([^"]+)"/g)].map((m) => m[1]);
     expect(colors.length).toBeGreaterThan(0);
@@ -58,37 +115,26 @@ describe('site icons (SPEC §33)', () => {
     expect(markup).toMatch(/mask=/);
   });
 
-  it('keeps the maskable and Apple variants full-bleed so no mask exposes transparency', () => {
-    // A shape mask crops to whatever the platform uses — a circle on Android, a
-    // squircle on iOS. A tile with its own rounded corners and transparent
-    // corners shows a dark halo around the icon on those launchers. Both
-    // variants therefore square the tile off, and only the glyph moves.
-    for (const file of ['public/favicon-maskable.svg', 'public/safari-pinned-tab.svg']) {
-      const svg = readFileSync(resolve(file), 'utf8');
-      expect(svg).toMatch(/viewBox="0 0 64 64"/);
+  it('keeps the traced stencil inside its own viewBox', () => {
+    // The trace is a grid of rectangles derived from a 512px raster, and an
+    // off-by-one in the centring pushes coordinates past 64. SVG clips silently, so
+    // the result is a pinned tab showing only the top of the mark with nothing
+    // reporting a problem.
+    const svg = readFileSync(resolve('public/safari-pinned-tab.svg'), 'utf8');
+    const d = svg.match(/<path d="([^"]+)"/)?.[1] ?? '';
+    expect(d.length).toBeGreaterThan(0);
+    const numbers = [...d.matchAll(/-?\d+\.?\d*/g)].map((m) => Number(m[0]));
+    expect(numbers.length).toBeGreaterThan(0);
+    for (const n of numbers) {
+      expect(n).toBeGreaterThanOrEqual(0);
+      expect(n).toBeLessThanOrEqual(64);
     }
-    // The default mark may round its corners; the maskable one must not, because a
-    // platform mask cropping inside the safe zone would otherwise expose
-    // transparency at the corners. Asserted as "the tile is not rounded" rather
-    // than as a literal rx, so redrawing the mark does not fail this test.
-    const def = readFileSync(resolve('public/favicon.svg'), 'utf8');
-    const maskable = readFileSync(resolve('public/favicon-maskable.svg'), 'utf8');
-    expect(maskable).not.toBe(def);
-    expect(maskable).not.toMatch(/<rect[^>]*\brx=/);
-    expect(def).toMatch(/<rect[^>]*\brx="13"/);
   });
 
-  it('has a real 180×180 PNG for the Apple touch icon, not a renamed SVG', () => {
-    const png = readFileSync(resolve('public/apple-touch-icon.png'));
-    // PNG magic number.
-    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-    expect(png.readUInt32BE(16)).toBe(180);
-    expect(png.readUInt32BE(20)).toBe(180);
-    // No alpha channel, or iOS renders the transparent pixels black. Colour type
-    // sits after the 8-byte signature, the 4-byte IHDR length, the 4-byte chunk
-    // name, width and height, then the bit depth: 8 + 4 + 4 + 4 + 4 + 1 = 25.
-    // 2 is truecolour, 3 is palette — neither carries alpha.
-    const colourType = png[25];
-    expect([2, 3], 'apple-touch-icon must not carry transparency').toContain(colourType);
+  it('advertises no maskable icon, because the artwork cannot survive one', () => {
+    // The mark is a floating shape with no full-bleed background. Android crops a
+    // maskable icon to a circle, which would cut into the glyph. Claiming one
+    // anyway makes Chrome prefer it on install and clip the mark.
+    expect(existsSync(resolve('public/icon-512-maskable.png'))).toBe(false);
   });
 });

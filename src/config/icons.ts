@@ -7,8 +7,12 @@
  * showing a different icon than the article pages is exactly the kind of thing
  * nobody notices until it is wrong in a screenshot.
  *
- * The mark itself lives in `public/favicon.svg` and is rasterised from it, so
- * the vector file stays the single source of truth for every size.
+ * The mark is a hand-tuned raster set from favicon.io — a black X folded from
+ * envelope flaps, with a gold star at the crossing. There is deliberately no
+ * `favicon.svg`: a vector `rel="icon"` outranks every raster alternative, so
+ * shipping one would silently override the artwork. That matters here because the
+ * 16px and 32px files are not downscales of the 512 — they were drawn for their
+ * size, and the star is legible in the 32px version while a downscale loses it.
  */
 
 export interface IconLink {
@@ -20,11 +24,15 @@ export interface IconLink {
 
 /**
  * SPEC §33 — a document needs to be identifiable outside the site too: browser
- * tabs, bookmarks, and installed-to-homescreen. SVG first because it is sharp
- * at any density, then the multi-size ICO for engines without SVG support.
+ * tabs, bookmarks, and installed-to-homescreen.
+ *
+ * The explicit `sizes` on each PNG is not decoration: without it a browser treats
+ * a PNG as scalable and may pick the 512 for a 16px tab, which is the blurry
+ * outcome the small files exist to avoid.
  */
 export const SITE_ICONS: IconLink[] = [
-  { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+  { rel: 'icon', href: '/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
+  { rel: 'icon', href: '/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
   { rel: 'icon', href: '/favicon.ico' },
   { rel: 'apple-touch-icon', href: '/apple-touch-icon.png', sizes: '180x180' },
 ];
@@ -32,10 +40,12 @@ export const SITE_ICONS: IconLink[] = [
 export const MANIFEST_HREF = '/site.webmanifest';
 
 /**
- * X brand blue, matching the favicon tile. Drives the browser chrome on mobile
- * and the splash colour of an installed PWA.
+ * The source artwork is a near-black mark on transparency, so the tile behind it
+ * has to be light or the mark disappears into a dark tab bar. The touch icon
+ * already bakes in an opaque light background; this is the same value, used for
+ * mobile browser chrome and the installed-app splash.
  */
-export const THEME_COLOR = '#1d9bf0';
+export const THEME_COLOR = '#f4f1ea';
 
 /** Renders one icon link as HTML. Shared by the string-template head. */
 export function iconLinkHtml(icon: IconLink): string {

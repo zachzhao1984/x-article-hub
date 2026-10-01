@@ -297,44 +297,47 @@ Worker can tell a stale prefix from a capture whose row was restored on purpose.
 
 ### Icons
 
-The mark is a sealed envelope with a gold four-point star where the four flaps
-meet: the archive is a letter, opened once and kept.
+The mark is the favicon.io set: a black X folded from envelope flaps with a gold
+star at the crossing. It ships as raster only — the 16px, 32px, 180px, 192px and
+512px files are used as authored.
 
-It sits on a warm paper tile rather than a dark one. A black envelope on a dark
-tile is the obvious choice and it was tried first, but at 32px the two blacks merge
-and all that survives is a gold dot — the shape carrying the identity is the one
-thing that disappears. Paper keeps the silhouette legible at every size a favicon
-is actually viewed at. The four facets are the reference's folded-paper shading;
-the tonal split between them is the only fold detail that survives at 16px, since a
-single flat envelope reads as a plain square at that size.
+Three things about that set are load-bearing:
 
-`public/favicon.svg` is the single source of truth; every raster size is
-generated from it, so the vector can be edited and re-derived rather than
-hand-tweaked per size:
+- **No `favicon.svg`.** A vector `rel="icon"` outranks every raster alternative, so
+  shipping one would silently override the favicon.io files and none of their tuning
+  would reach a browser. The small sizes are not downscales of the 512 — the 32px
+  was drawn for its size, and the star is legible in it while a downscale loses it.
+- **`sizes` is declared on every PNG.** Without it a browser may treat a PNG as
+  scalable and pick the 512 for a 16px tab, which is the exact outcome the small
+  files exist to prevent.
+- **The Apple touch icon is flattened to no alpha.** iOS applies its own mask and
+  draws transparency as black, so a touch icon that merely happens to be fully
+  opaque still risks black corners. The shipped file has no alpha channel at all.
 
-```bash
-rsvg-convert -w 180   -h 180   public/favicon.svg -o public/apple-touch-icon.png
-rsvg-convert -w 192   -h 192   public/favicon.svg -o public/icon-192.png
-rsvg-convert -w 512   -h 512   public/favicon.svg -o public/icon-512.png
-rsvg-convert -w 512   -h 512   public/favicon-maskable.svg -o public/icon-512-maskable.png
-magick public/favicon.svg -define icon:auto-resize=16,32,48,64 -background none public/favicon.ico
-```
+`safari-pinned-tab.svg` is traced from the 512 rather than redrawn, so it is
+provably the same mark. Safari reads its alpha channel as a stencil and paints the
+surviving shape in the user's own toolbar colour, so it is a flat silhouette with no
+background, no gradient, and no fill colour of its own. The gold star is not
+represented: at one bit it would either vanish or become a hole, and since Safari
+tints the whole shape one colour, a cut-out star reads as a defect rather than a
+seal. A test asserts every traced coordinate lands inside the viewBox, because SVG
+clips silently and a centring slip shows up as a pinned tab with only the top of
+the X and nothing reporting a problem.
+
+The manifest lists no maskable icon. The artwork is a floating shape with no
+full-bleed background, so an Android launcher cropping it to a circle would cut
+into the glyph; claiming one anyway makes Chrome prefer it on install.
+
+`THEME_COLOR` is a light paper tone rather than a saturated brand blue, because the
+mark is near-black and a dark theme colour renders the icon invisible against the
+browser chrome. A test asserts the theme colour is actually light, since a colour
+that merely has the right format would pass a format check.
 
 The link tags live in `src/config/icons.ts` rather than in either head template.
 There are two independent heads — `src/layouts/Base.astro` for public pages and
 the string template in `src/routes/views.ts` for `/admin` — and an admin page
-showing a different favicon than an article page is exactly the drift nobody
-notices until it appears in a screenshot.
-
-Three variants exist because each platform crops differently, and a
-favicon that renders as a black square or a haloed blob is a real bug:
-
-| File | Why it differs |
-|---|---|
-| `favicon.svg` / `.ico` | Rounded tile, inset artwork |
-| `apple-touch-icon.png` | Full-bleed square — iOS applies its own mask and renders transparency as black |
-| `icon-512-maskable.png` | Full-bleed square, artwork pulled into the middle 80% so a circular Android mask cannot clip the X |
-| `safari-pinned-tab.svg` | A pure alpha stencil, no colour of its own; Safari paints it with the user's toolbar colour |
+showing a different icon than the article pages is exactly the kind of thing nobody
+notices until it is wrong in a screenshot.
 
 `/site.webmanifest` is server-rendered rather than a static file, so `name` and
 `theme_color` track `SITE_NAME` the way `/robots.txt` tracks `SITE_ORIGIN`.

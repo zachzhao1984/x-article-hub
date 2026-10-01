@@ -3,25 +3,22 @@
     Safari pinned-tab mask. Safari reads the alpha channel as a stencil and paints
     whatever survives with the user's own toolbar colour, so this file is a flat
     silhouette: no background, no gradient, no fill colour of its own. Omitting the
-    paper tile here is what keeps a pinned tab from rendering as a solid square.
+    tile here is what keeps a pinned tab from rendering as a solid square.
 
-    The seal is knocked OUT of the envelope rather than painted on it, which is why
-    it is drawn through a mask — filling it white would make it opaque and the
-    stencil would come out a featureless rectangle.
+    Traced from android-chrome-512x512.png rather than redrawn by hand, so it is
+    provably the same mark as every other icon. The source has no vector form, so
+    this is a 96x96 luminance threshold with vertically merged runs — coarse
+    enough to be honest about being a stencil, fine enough that the envelope folds
+    and the upper notch survive.
+
+    The gold star is not represented: at 1-bit it would either vanish or turn into
+    a hole, and Safari tints the whole shape one colour anyway, so a cut-out star
+    would read as a defect rather than a seal.
   -->
   <defs>
     <mask id="stencil">
       <rect width="64" height="64" fill="#000"/>
-      <path d="M8,9 L56,9 L56,55 L8,55 Z" fill="#fff"/>
-      <!-- the four flap seams, cut out -->
-      <path d="M8,9 L32,32 L56,9" stroke="#000" stroke-width="1.6" fill="none"/>
-      <path d="M8,55 L32,32 L56,55" stroke="#000" stroke-width="1.6" fill="none"/>
-      <!-- the seal, cut out -->
-      <path d="M32,25.4
-               C32,23.4 33.9,32 38.6,32
-               C33.9,32 32,40.6 32,38.6
-               C32,40.6 30.1,32 25.4,32
-               C30.1,32 32,23.4 32,25.4 Z" fill="#000"/>
+      <path d="M10.4,5L26.6,5L26.6,5.9L10.4,5.9ZM47.3,5L53.6,5L53.6,5.9L47.3,5.9ZM10.4,5.9L27.5,5.9L27.5,6.8L10.4,6.8ZM41.9,5.9L53.6,5.9L53.6,6.8L41.9,6.8ZM10.4,6.8L28.4,6.8L28.4,7.7L10.4,7.7ZM41,6.8L53.6,6.8L53.6,7.7L41,7.7ZM10.4,7.7L28.4,7.7L28.4,8.6L10.4,8.6ZM41,7.7L53.6,7.7L53.6,8.6L41,8.6ZM10.4,8.6L29.3,8.6L29.3,9.5L10.4,9.5ZM40.1,8.6L53.6,8.6L53.6,9.5L40.1,9.5ZM11.3,9.5L29.3,9.5L29.3,10.4L11.3,10.4ZM40.1,9.5L53.6,9.5L53.6,10.4L40.1,10.4ZM11.3,10.4L30.2,10.4L30.2,11.3L11.3,11.3ZM39.2,10.4L53.6,10.4L53.6,11.3L39.2,11.3ZM11.3,11.3L30.2,11.3L30.2,12.2L11.3,12.2ZM39.2,11.3L53.6,11.3L53.6,12.2L39.2,12.2ZM11.3,12.2L31.1,12.2L31.1,13.1L11.3,13.1ZM38.3,12.2L53.6,12.2L53.6,13.1L38.3,13.1ZM11.3,13.1L32,13.1L32,14L11.3,14ZM37.4,13.1L53.6,13.1L53.6,14L37.4,14ZM11.3,14L32,14L32,14.9L11.3,14.9ZM37.4,14L53.6,14L53.6,14.9L37.4,14.9ZM11.3,14.9L32.9,14.9L32.9,15.8L11.3,15.8ZM36.5,14.9L52.7,14.9L52.7,15.8L36.5,15.8ZM12.2,15.8L32.9,15.8L32.9,16.7L12.2,16.7ZM36.5,15.8L52.7,15.8L52.7,16.7L36.5,16.7ZM12.2,16.7L33.8,16.7L33.8,17.6L12.2,17.6ZM35.6,16.7L52.7,16.7L52.7,17.6L35.6,17.6ZM12.2,17.6L33.8,17.6L33.8,18.5L12.2,18.5ZM35.6,17.6L52.7,17.6L52.7,18.5L35.6,18.5ZM12.2,18.5L52.7,18.5L52.7,21.2L12.2,21.2ZM13.1,21.2L52.7,21.2L52.7,25.7L13.1,25.7ZM14,25.7L52.7,25.7L52.7,32L14,32ZM14.9,32L52.7,32L52.7,37.4L14.9,37.4ZM15.8,37.4L52.7,37.4L52.7,41.9L15.8,41.9ZM16.7,41.9L52.7,41.9L52.7,44.6L16.7,44.6ZM15.8,44.6L52.7,44.6L52.7,45.5L15.8,45.5ZM14.9,45.5L52.7,45.5L52.7,47.3L14.9,47.3ZM14,47.3L32,47.3L32,48.2L14,48.2ZM32.9,47.3L52.7,47.3L52.7,48.2L32.9,48.2ZM14,48.2L31.1,48.2L31.1,49.1L14,49.1ZM32.9,48.2L52.7,48.2L52.7,49.1L32.9,49.1ZM14,49.1L31.1,49.1L31.1,50L14,50ZM33.8,49.1L52.7,49.1L52.7,50L33.8,50ZM13.1,50L30.2,50L30.2,50.9L13.1,50.9ZM33.8,50L52.7,50L52.7,50.9L33.8,50.9ZM13.1,50.9L30.2,50.9L30.2,51.8L13.1,51.8ZM34.7,50.9L52.7,50.9L52.7,51.8L34.7,51.8ZM12.2,51.8L29.3,51.8L29.3,52.7L12.2,52.7ZM34.7,51.8L52.7,51.8L52.7,52.7L34.7,52.7ZM11.3,52.7L28.4,52.7L28.4,53.6L11.3,53.6ZM35.6,52.7L52.7,52.7L52.7,53.6L35.6,53.6ZM11.3,53.6L28.4,53.6L28.4,54.5L11.3,54.5ZM35.6,53.6L52.7,53.6L52.7,54.5L35.6,54.5ZM11.3,54.5L27.5,54.5L27.5,55.4L11.3,55.4ZM36.5,54.5L52.7,54.5L52.7,55.4L36.5,55.4ZM11.3,55.4L27.5,55.4L27.5,56.3L11.3,56.3ZM37.4,55.4L52.7,55.4L52.7,56.3L37.4,56.3ZM11.3,56.3L26.6,56.3L26.6,57.2L11.3,57.2ZM37.4,56.3L52.7,56.3L52.7,57.2L37.4,57.2ZM11.3,57.2L26.6,57.2L26.6,58.1L11.3,58.1ZM38.3,57.2L52.7,57.2L52.7,58.1L38.3,58.1ZM11.3,58.1L25.7,58.1L25.7,59L11.3,59ZM38.3,58.1L52.7,58.1L52.7,59L38.3,59Z" fill="#fff"/>
     </mask>
   </defs>
   <rect width="64" height="64" fill="#000" mask="url(#stencil)"/>
