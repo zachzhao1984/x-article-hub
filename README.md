@@ -869,6 +869,64 @@ a successful no-op. `smoke.sh` asserts every one of these.
 | `POST /api/admin/articles/:id/media` | Downloads every image into R2. Re-run to retry failures |
 | `GET /api/admin/articles/:id/errors` | Job errors straight from the job row |
 | `POST /api/admin/articles/:id/takedown` | §37 takedown (requires a reason) |
+| `PATCH /api/admin/articles/:id` | §16.3 editor overrides: `categoryId`, `summary`, `displayMode` |
+
+### The category control, and the gap it came from
+
+Every article on the site sat in **no** category for the length of a phase, and every
+header chip read `0`. The cause was not the count query, and not the join:
+
+- `articles.category_id` has **no writer** in `src/` outside the demo seeder.
+- `ai_category`, the column an AI suggestion would land in, has no producer — AI
+  enrichment is Phase 4 and does not exist. `src/services/crawl.ts` says so in its own
+  comment, which is why a crawl hands the article straight to `review`.
+- `overrideCategory` existed the whole time and was reachable through
+  `PATCH /api/admin/articles/:id` — and the admin page had no control for it.
+
+So the columns were genuinely NULL and `COALESCE(editor_category_id, category_id)`
+correctly resolved to nothing. The fix is a `<select>` on the article page posting to a
+new `POST /admin/articles/:id/category`, calling the service that was already there.
+
+Three things that were easy to get wrong:
+
+- **A plain form, not a fetch.** The rest of this surface is forms precisely so it works
+  without scripting. A control that needs JavaScript is a control that silently does
+  nothing for anyone who disabled it. It also inherits Astro's same-origin CSRF check
+  for free — a POST without a matching `Origin` never reaches the Worker.
+- **The empty value clears the override** rather than storing a category called `""`.
+  `editor_category_id` has no foreign key and every read joins through it, so a bogus
+  value is invisible: the article reappears as uncategorised and the `category_override`
+  audit event names a category that does not exist. `resolveCategoryOverride` therefore
+  validates against the live list, and an unknown id is a 400 with the id named. The
+  same guard covers the API path, which had the hole too.
+- **The picker states where the value came from.** It shows the effective category — the
+  same `COALESCE` precedence every read uses — and says whether that is your override,
+  a direct assignment, or an accepted AI suggestion. A picker that shows a value without
+  saying which column supplied it is how an editor "fixes" something that was never
+  wrong. A stored id that matches no category is shown as "— none —" and named as stale,
+  rather than rendered as a selection.
+
+`tests/unit/curation-actions.test.ts` holds the generalisation: **every exported action
+in `publish.ts` is either reachable from a surface or on a reviewed exception list with a
+reason**, and **every `POST /articles/:id/*` route has a form**. Both directions failed
+when the feature was removed, which is the run that proves the guard is not vacuous.
+
+The same sweep found two things this change does not fix, listed so they are not lost:
+
+- **`overrideSummary` has the identical gap** — API only, no form. One control to add.
+- **`restoreArticle` is a dead export.** Nothing calls it anywhere; `restoreDisplay` is
+  what the Restore button uses.
+
+And the scores are still absent, which is the larger gap: `applyRankingScores` has zero
+callers and no cron is registered, so `final_score` and `velocity_score` are NULL and
+`/latest`, `/trending` and `/rising` currently return **identical orderings**. The "three
+boards are genuinely different" table further up holds for the demo set only.
+
+The five published articles were categorised through the new form once it shipped —
+three AI, one Technology, one Business, judged from each article's own content rather
+than its title alone. `Jev Search` is the one judgement call: its subject is an
+open-source project, which `Technology`'s description names explicitly, though it is
+framed against AI-generated search answers.
 
 ---
 

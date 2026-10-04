@@ -13,12 +13,14 @@ import { dashboardStats } from '../db/stats';
 import { getArticleById, listArticles } from '../db/articles';
 import { listCrawlJobsForArticle, listFailedJobs, updateJobStatus } from '../db/jobs';
 import { listEvents } from '../db/events';
+import { listCategories } from '../db/categories';
 import { importUrls, retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle } from '../services/parse';
 import { downloadArticleMedia, listArticleMedia } from '../services/media';
 import {
   archiveArticle,
+  overrideCategory,
   publishArticle,
   rejectArticle,
   restoreDisplay,
@@ -141,13 +143,17 @@ adminUi.get('/articles/:id', async (c) => {
   const article = await getArticleById(c.env.DB, id);
   if (!article) throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
 
-  const [jobs, events, raw, media] = await Promise.all([
+  const [jobs, events, raw, media, categories] = await Promise.all([
     listCrawlJobsForArticle(c.env.DB, id),
     listEvents(c.env.DB, id),
     summarizeRawArchive(c.env.ARCHIVE, article.raw_r2_key),
     // SPEC §10 — per-image state, so it is visible which figures are archived
     // and which are still hotlinking X.
     listArticleMedia(c.env.DB, id),
+    // SPEC §13.5 — the picker's options. Without this the category control cannot be
+    // rendered at all, which is exactly how the API's category endpoint ended up
+    // reachable by nothing.
+    listCategories(c.env.DB),
   ]);
   const parsed = c.req.query('parsed');
   const blocks = Number(c.req.query('blocks') ?? '0') || 0;
@@ -155,11 +161,17 @@ adminUi.get('/articles/:id', async (c) => {
     ? `Parsed (${parsed}) — ${blocks} blocks. Refresh the article page to read it.`
     : c.req.query('media')
       ? `Media run ${c.req.query('media')} — ${c.req.query('ready') ?? 0} archived, ${c.req.query('failed') ?? 0} still on X's CDN.`
-      : null;
+      : c.req.query('notice') === 'category-saved'
+        ? 'Category saved. It counts on the category page and in the header chips immediately.'
+        : null;
 
   const error = c.req.query('error');
   const errorMessage =
-    error === 'takedown-reason-missing' ? 'A takedown needs a reason — that is what the reader sees.' : error ?? null;
+    error === 'takedown-reason-missing'
+      ? 'A takedown needs a reason — that is what the reader sees.'
+      : error === 'unknown-category'
+        ? 'That category does not exist. The article was left untouched — reload to pick from the current list.'
+        : error ?? null;
 
   return c.html(
     articleDetailView(
@@ -167,6 +179,7 @@ adminUi.get('/articles/:id', async (c) => {
         article,
         jobs,
         events,
+        categories: categories.map((c) => ({ id: c.id, slug: c.slug, name: c.name })),
         raw,
         parsed: {
           contentR2Key: article.content_r2_key,
@@ -310,6 +323,34 @@ adminUi.post('/articles/:id/archive', async (c) => {
   return redirectToArticle(c, c.req.param('id'));
 });
 
+/**
+ * SPEC §16.3 — set the category from the admin page.
+ *
+ * A plain form POST rather than a fetch to `PATCH /api/admin/articles/:id`, for the
+ * same reason the rest of this surface is forms: it works with scripting off, and a
+ * control that needs JavaScript is a control that silently does nothing for anyone who
+ * has it disabled.
+ *
+ * The empty value is the clear action, not a category called "". `overrideCategory`
+ * validates whatever arrives against the live category list, so an unknown id is a 400
+ * with a message rather than a stored value no join can match.
+ */
+adminUi.post('/articles/:id/category', async (c) => {
+  const form = await c.req.parseBody();
+  const raw = typeof form.categoryId === 'string' ? form.categoryId.trim() : '';
+  const id = c.req.param('id');
+
+  try {
+    await overrideCategory(c.env, id, c.get('adminIdentity').actor, raw === '' ? null : raw);
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'BAD_REQUEST') {
+      return redirectToArticle(c, id, 'unknown-category');
+    }
+    throw error;
+  }
+  return redirectToArticle(c, id, undefined, 'category-saved');
+});
+
 adminUi.post('/articles/:id/featured', async (c) => {
   const article = await getArticleById(c.env.DB, c.req.param('id'));
   await setFeatured(c.env, c.req.param('id'), c.get('adminIdentity').actor, article?.featured !== 1);
@@ -335,11 +376,24 @@ adminUi.post('/articles/:id/restore', async (c) => {
   return redirectToArticle(c, c.req.param('id'));
 });
 
-function redirectToArticle(c: Context, id: string, error?: string): Response {
-  const headers = new Headers({
-    Location: error ? `/admin/articles/${id}?error=${encodeURIComponent(error)}` : `/admin/articles/${id}`,
+/**
+ * Post-redirect-get back to the article page.
+ *
+ * `notice` and `error` are separate query keys rather than one `message`, because the
+ * page renders them differently — a confirmation in the green banner, a refusal in the
+ * red one — and overloading a single key means a success has to be styled as a failure
+ * or the other way round. The `?` guard keeps an absent value from leaving a bare
+ * `?notice=` behind for the view to render as literal text.
+ */
+function redirectToArticle(c: Context, id: string, error?: string, notice?: string): Response {
+  const params = new URLSearchParams();
+  if (error) params.set('error', error);
+  if (notice) params.set('notice', notice);
+  const query = params.toString();
+  return new Response(null, {
+    status: 303,
+    headers: { Location: `/admin/articles/${id}${query ? `?${query}` : ''}` },
   });
-  return new Response(null, { status: 303, headers });
 }
 
 adminUi.get('/jobs', async (c) => {

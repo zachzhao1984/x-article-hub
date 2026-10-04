@@ -9,6 +9,7 @@
  */
 
 import { getArticleById, setArticleStatus, setDisplayMode } from '../db/articles';
+import { listCategories } from '../db/categories';
 import { recordEvent } from '../db/events';
 import { AppError } from '../lib/errors';
 import { log } from '../lib/logger';
@@ -116,7 +117,40 @@ export async function setFeatured(env: Env, articleId: string, actor: string, fe
   await recordEvent(env.DB, articleId, featured ? 'featured' : 'unfeatured', actor);
 }
 
-/** SPEC §16.3 — Edit category. The editor override always wins over the AI suggestion. */
+/**
+ * SPEC §16.3 — the submitted form value turned into the stored value.
+ *
+ * Pure, because this is where the decisions live and none of them need a database: an
+ * empty submission is the *clear* action rather than a category called "", a known id
+ * passes through, and anything else is refused by name.
+ *
+ * The refusal is the point. `editor_category_id` is a soft reference — nothing in the
+ * schema declares a foreign key and every read joins through it — so a typo would not
+ * fail loudly. It would store a value no join can match, the article would silently
+ * reappear as uncategorised, and the `category_override` audit event would name a
+ * category that does not exist. Nothing on the article page reports any of that, which
+ * is why the check lives here and not in whichever form happened to submit the value.
+ */
+export function resolveCategoryOverride(
+  categories: ReadonlyArray<{ id: string }>,
+  submitted: string | null,
+): string | null {
+  const id = (submitted ?? '').trim();
+  if (id === '') return null;
+  if (!categories.some((c) => c.id === id)) {
+    throw new AppError('BAD_REQUEST', `Unknown category: ${id}`, 400);
+  }
+  return id;
+}
+
+/**
+ * SPEC §16.3 — Edit category. The editor override always wins over the AI suggestion.
+ *
+ * Passing `null` clears the override, which is how an editor hands the article back to
+ * whatever the AI proposed — the two columns are read as
+ * `COALESCE(editor_category_id, category_id)`. The category list is only fetched when
+ * there is something to check, so clearing stays a single write.
+ */
 export async function overrideCategory(
   env: Env,
   articleId: string,
@@ -124,12 +158,14 @@ export async function overrideCategory(
   categoryId: string | null,
 ): Promise<void> {
   await loadArticle(env, articleId);
+
+  const resolved = resolveCategoryOverride(categoryId === null ? [] : await listCategories(env.DB), categoryId);
   const now = Date.now();
 
   await env.DB.prepare(`UPDATE articles SET editor_category_id = ?2, updated_at = ?3 WHERE id = ?1`)
-    .bind(articleId, categoryId, now)
+    .bind(articleId, resolved, now)
     .run();
-  await recordEvent(env.DB, articleId, 'category_override', actor, categoryId ?? 'none');
+  await recordEvent(env.DB, articleId, 'category_override', actor, resolved ?? 'none');
 }
 
 /** SPEC §16.3 — Edit summary. The editor override always wins over the AI summary. */

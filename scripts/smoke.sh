@@ -42,6 +42,12 @@ pass() { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 fail() { printf '  \033[31m✗\033[0m %s\n' "$1"; exit 1; }
 check() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1 (expected '$3', got '$2')"; fi; }
 
+# Occurrences rather than lines. The admin pages are emitted as one long line, so
+# `grep -c` answers "is this present" and not "how many of these are there" — which is
+# how a five-option assertion silently becomes a one. `|| true` because grep exits 1 on
+# no match, and `pipefail` would turn that into a failed substitution.
+count() { printf '%s' "$1" | grep -oE "$2" | wc -l | tr -d ' ' || true; }
+
 jqv() { node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(eval('j'+process.argv[1]))})" "$1"; }
 
 echo "▸ SPEC §38 Phase 1 acceptance against ${BASE}  (run id ${RUN_ID})"
@@ -141,6 +147,42 @@ check "the jobs page renders" \
   "$("${CURL[@]}" -fsS -o /dev/null -w '%{http_code}' "${AUTH[@]}" "${BASE}/admin/jobs")" "200"
 check "admin responses are not cached (SPEC §23)" \
   "$("${CURL[@]}" -sI "${AUTH[@]}" "${BASE}/admin" | tr -d '\r' | grep -ci '^cache-control: no-store')" "1"
+
+echo
+echo "Curation: category (SPEC §16.3)"
+# This control was missing for the length of a phase while the service function and the
+# API endpoint for it both existed, so every article sat in no category and every chip
+# read zero. A check that only "the pages render" would have kept passing; what failed
+# was the control being absent, so that is what is asserted.
+DETAIL_HTML="$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/admin/articles/${ARTICLE_ID}")"
+check "the article page offers a category control" \
+  "$(count "$DETAIL_HTML" 'name="categoryId"')" "1"
+check "all five seeded categories are offered" \
+  "$(count "$DETAIL_HTML" '<option value="cat_(ai|technology|business|science|ideas)"')" "5"
+check "there is a way to clear the category" \
+  "$(count "$DETAIL_HTML" '<option value=""[^>]*>[^<]*none')" "1"
+check "an uncategorised article starts on none" \
+  "$(count "$DETAIL_HTML" '<option value="" selected>')" "1"
+
+# Sent the way a browser sends it: form encoding, plus the same-origin Origin that
+# Cloudflare's CSRF check demands before the Worker runs at all.
+"${CURL[@]}" -fsS -o /dev/null -X POST "${AUTH[@]}" "${ORIGIN[@]}" \
+  --data-urlencode 'categoryId=cat_ai' "${BASE}/admin/articles/${ARTICLE_ID}/category"
+check "saving a category preselects it on reload" \
+  "$(count "$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/admin/articles/${ARTICLE_ID}")" '<option value="cat_ai" selected>')" "1"
+
+# The soft-reference guard. `editor_category_id` has no foreign key and every read joins
+# through it, so an unvalidated value is stored silently and the article simply
+# reappears as uncategorised — which nothing on the page reports.
+"${CURL[@]}" -fsS -o /dev/null -X POST "${AUTH[@]}" "${ORIGIN[@]}" \
+  --data-urlencode 'categoryId=cat_nope' "${BASE}/admin/articles/${ARTICLE_ID}/category"
+check "an unknown category is refused and the stored value survives" \
+  "$(count "$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/admin/articles/${ARTICLE_ID}")" '<option value="cat_ai" selected>')" "1"
+
+"${CURL[@]}" -fsS -o /dev/null -X POST "${AUTH[@]}" "${ORIGIN[@]}" \
+  --data-urlencode 'categoryId=' "${BASE}/admin/articles/${ARTICLE_ID}/category"
+check "clearing the category returns the article to none" \
+  "$(count "$("${CURL[@]}" -fsS "${AUTH[@]}" "${BASE}/admin/articles/${ARTICLE_ID}")" '<option value="" selected>')" "1"
 
 echo
 echo "Browser login flow (SPEC §24)"

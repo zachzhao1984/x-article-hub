@@ -235,6 +235,12 @@ export interface ArticleDetailView {
     updated_at: number;
   }>;
   events: Array<{ id: string; action: string; actor: string; note: string | null; created_at: number }>;
+  /**
+   * SPEC §13.5 — every category, so the editor can pick one. Loaded here rather than
+   * joined into the article row because this is the only admin surface that offers the
+   * choice, and a picker with no options is how a feature ends up looking absent.
+   */
+  categories: Array<{ id: string; slug: string; name: string }>;
   raw?: { archived: boolean; markdownBytes: number; htmlBytes: number; r2Key: string | null } | null;
   parsed?: { contentR2Key: string | null; blockCount: number; wordCount: number; parserVersion: number } | null;
   /** SPEC §10 — per-image media state, so "archived" is a claim you can check. */
@@ -283,6 +289,43 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
     </tr>`,
     )
     .join('');
+
+  /**
+   * Which of the three columns is currently deciding the article's category, and what the
+   * picker can honestly show.
+   *
+   * They are read as `COALESCE(editor_category_id, category_id)` everywhere, so this is
+   * the same precedence — stated rather than recomputed, because a picker that shows the
+   * effective value without saying where it came from is how an editor ends up "fixing"
+   * a value that was never wrong.
+   *
+   * The stored id is then checked against the list before it is offered back. A dangling
+   * one predates the service validating its input, and it is invisible by construction:
+   * the join cannot match it, so the article is in no category, while the column still
+   * holds a value. Rendering that as a selection would claim otherwise, and leaving the
+   * select with nothing selected would make the page depend on which option a browser
+   * happens to default to. `ai_category` holds a slug where the other two hold ids, so
+   * it is compared as text only.
+   */
+  const storedCategoryId = a.editor_category_id ?? a.category_id;
+  const effectiveCategoryId = view.categories.some((c) => c.id === storedCategoryId) ? storedCategoryId : null;
+  const categorySource = !effectiveCategoryId && storedCategoryId
+    ? `a stale value (${storedCategoryId}) that no longer matches any category — saving will clear it`
+    : a.editor_category_id
+      ? 'from your override'
+      : a.category_id
+        ? a.ai_category
+          ? 'from the AI suggestion, which has been accepted'
+          : 'assigned directly'
+        : 'nothing has categorised this article — the AI step does not exist yet, so this is the only way in';
+
+  const categoryOptions = [
+    `<option value=""${effectiveCategoryId ? '' : ' selected'}>— none —</option>`,
+    ...view.categories.map(
+      (c) =>
+        `<option value="${escapeHtml(c.id)}"${c.id === effectiveCategoryId ? ' selected' : ''}>${escapeHtml(c.name)}</option>`,
+    ),
+  ].join('');
 
   const body = `<p class="crumb"><a href="/admin/articles">← All articles</a></p>
 <h1>${escapeHtml(a.title || a.canonical_url)}</h1>
@@ -351,6 +394,16 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
       <span class="hint">Keep the capture, hide it.</span>
     </form>
   </div>
+
+  <form method="post" action="/admin/articles/${escapeHtml(a.id)}/category" class="action-inline">
+    <label class="label" for="categoryId">Category</label>
+    <select id="categoryId" name="categoryId">${categoryOptions}</select>
+    <button class="button" type="submit">Save</button>
+    <span class="hint">
+      Counts toward the category pages and the header chips. Your choice wins over an
+      AI suggestion; pick "— none —" to hand it back. Currently ${escapeHtml(categorySource)}.
+    </span>
+  </form>
 
   ${
     a.display_mode === 'takedown' || a.status === 'takedown'
