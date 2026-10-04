@@ -75,12 +75,18 @@
      do not produce the same result. */
   --header-bg: #faf9f6e8;
 
-  /* The logo tile, deliberately NOT themed. A favicon cannot adapt to a colour
-     scheme, so this one stays a dark tile with a light X in both themes to match
-     what the browser tab shows. Inverting it per theme made the in-page mark the
-     same brand read two different ways. */
-  --logo-bg: #202a30;
-  --logo-ink: #faf9f6;
+  /*
+   * The logo is not a token any more.
+   *
+   * It used to be a dark tile with a light letter in it, deliberately unthemed so
+   * that it kept matching a favicon which could not adapt — inverting the in-page
+   * mark while the tab stayed fixed would have made one brand read two ways. That
+   * premise is gone: the favicon now ships its own inverse and the tab adapts with
+   * the page, so the two agree in both themes and there is nothing left to hold
+   * still. The mark is also a near-black silhouette rather than a coloured tile, so
+   * on the dark ground it would not be a mismatch but an absence — pinned, it
+   * measures a contrast ratio near 1.1 against #13191c. See `.logo-mark` below.
+   */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -240,15 +246,40 @@ a:hover { color: var(--accent); }
 }
 
 .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.02em; }
+/*
+ * The brand mark, as the artwork from Logo.jpg rather than a tile and a letter.
+ *
+ * Two rasters ship and one is shown: the mark is near-black by construction, so on
+ * the dark ground it is not low contrast, it is absent. A CSS filter is not the
+ * answer either — inverting the gold star through the complement lands on teal,
+ * which on this palette is the accent colour, so the star would read as interface
+ * rather than as artwork. Two files also means the dark variant is the same
+ * artwork, not a filter's idea of it.
+ *
+ * The intrinsic size is 809x887, so at 24px tall the mark is 22px wide. Sizing by
+ * height and letting the width follow the element's own aspect ratio is what keeps
+ * it undistorted; the `width`/`height` attributes on the element hold the same
+ * ratio so the flex row reserves the right box before the image loads.
+ */
 .logo-mark {
-  display: grid;
-  place-items: center;
-  width: 24px; height: 24px;
-  border-radius: 6px;
-  background: var(--logo-bg);
-  color: var(--logo-ink);
-  font-size: 14px;
-  font-weight: 800;
+  display: block;
+  height: 24px;
+  width: auto;
+}
+.logo-mark-inverse { display: none; }
+:root[data-theme='dark'] .logo-mark { display: none; }
+:root[data-theme='dark'] .logo-mark-inverse { display: block; }
+
+/*
+ * The no-JS case. `data-theme` is written by the inline script in Base.astro, so
+ * without scripting it is never set and the system preference is the only signal
+ * there is — the same fallback the token blocks above make, and the same shape:
+ * `:not([data-theme='light'])` rather than a bare media query, so a reader who
+ * chose light on a dark-mode machine still gets light.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .logo-mark { display: none; }
+  :root:not([data-theme='light']) .logo-mark-inverse { display: block; }
 }
 .logo-text { white-space: nowrap; }
 

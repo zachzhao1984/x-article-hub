@@ -40,7 +40,29 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 <header class="site-header">
   <div class="wrap header-inner">
     <a class="logo" href="/">
-      <span class="logo-mark">X</span>
+      {/*
+        Two rasters, one shown per theme. The mark is near-black by construction,
+        so on the dark ground it is not low contrast, it is absent, and a CSS filter
+        is not the answer: inverting the gold star sends it through the complement to
+        teal, which on this palette is the accent colour, so it would read as
+        interface rather than as artwork.
+
+        Both are decorative — the site name follows as text, so the link is announced
+        once, by that text — hence `alt=""`. The `width`/`height` attributes carry
+        each PNG's own dimensions so the flex row reserves the right box before the
+        images land. They are the square of the canvas, not of the mark inside it:
+        sizing by the artwork's own extent would reserve a box 2% narrower than the
+        one the browser reserves, and the mark would jump on every load that raced.
+      */}
+      <img class="logo-mark" src="/logo-mark.png" width="72" height="72" alt="" decoding="async" />
+      <img
+        class="logo-mark logo-mark-inverse"
+        src="/logo-mark-inverse.png"
+        width="72"
+        height="72"
+        alt=""
+        decoding="async"
+      />
       <span class="logo-text">{SITE_NAME}</span>
     </a>
 

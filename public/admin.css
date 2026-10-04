@@ -68,7 +68,24 @@ code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; f
   z-index: 10;
 }
 
-.brand { font-weight: 600; letter-spacing: -0.01em; }
+/*
+ * The brand mark is the artwork from Logo.jpg, the same two rasters the public
+ * header uses, and only one of them is shown: the mark is near-black by
+ * construction, so on the dark ground it is not low contrast, it is absent.
+ *
+ * The swap here is a plain `prefers-color-scheme` query with no `data-theme`
+ * escape, and that is deliberate rather than an omission — this surface has no
+ * switcher, so there is no choice to honour, which is the same reasoning the
+ * palette above is scoped by.
+ */
+.brand { font-weight: 600; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 8px; }
+.brand-mark { display: block; height: 22px; width: auto; }
+.brand-mark-inverse { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  .brand-mark { display: none; }
+  .brand-mark-inverse { display: block; }
+}
 .brand-tag {
   font-size: 11px;
   text-transform: uppercase;

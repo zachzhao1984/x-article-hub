@@ -7,12 +7,21 @@
  * showing a different icon than the article pages is exactly the kind of thing
  * nobody notices until it is wrong in a screenshot.
  *
- * The mark is a hand-tuned raster set from favicon.io — a black X folded from
- * envelope flaps, with a gold star at the crossing. There is deliberately no
- * `favicon.svg`: a vector `rel="icon"` outranks every raster alternative, so
- * shipping one would silently override the artwork. That matters here because the
- * 16px and 32px files are not downscales of the 512 — they were drawn for their
- * size, and the star is legible in the 32px version while a downscale loses it.
+ * The artwork is `Logo.jpg` at the repo root: a near-black X folded from envelope
+ * flaps with a gold star at the crossing. Every asset below is generated from it by
+ * `scripts/build-logo.py`, so there is one source rather than a hand-tuned set that
+ * drifts.
+ *
+ * That script exists because `Logo.jpg` is a JPEG, and a JPEG cannot hold
+ * transparency. The mark was exported over a grey/white checkerboard, so that
+ * checkerboard is real pixels in the file — and the rasters this list used to point
+ * at were transparent PNGs that still had it baked in at full opacity, which is why
+ * tabs and home screens drew a grey checkerboard around the mark. The script removes
+ * it.
+ *
+ * There is deliberately still no `favicon.svg`: a vector `rel="icon"` outranks every
+ * raster alternative, so shipping one would silently override the artwork rather than
+ * sit beside it.
  */
 
 export interface IconLink {
@@ -20,7 +29,16 @@ export interface IconLink {
   href: string;
   type?: string;
   sizes?: string;
+  /**
+   * A media query gating the icon, which is how a raster can answer a dark tab bar.
+   * A browser that does not understand it uses the ungated entry of the same size,
+   * so every gated icon here has an ungated twin.
+   */
+  media?: string;
 }
+
+/** The gate that lets a raster answer a dark tab bar. See `SITE_ICONS`. */
+const DARK_SCHEME = '(prefers-color-scheme: dark)';
 
 /**
  * SPEC §33 — a document needs to be identifiable outside the site too: browser
@@ -29,10 +47,18 @@ export interface IconLink {
  * The explicit `sizes` on each PNG is not decoration: without it a browser treats
  * a PNG as scalable and may pick the 512 for a 16px tab, which is the blurry
  * outcome the small files exist to avoid.
+ *
+ * The dark-scheme pair is not a nicety. The mark is near-black *by construction*,
+ * so on a dark tab bar it is not low contrast, it is absent — measured against the
+ * dark theme's #13191c the body sits near a contrast ratio of 1.1. Declaring a
+ * second file with `media` is cheaper than the alternative, which would be baking a
+ * light tile into the favicon and showing that tile's own edge against a white tab.
  */
 export const SITE_ICONS: IconLink[] = [
   { rel: 'icon', href: '/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
   { rel: 'icon', href: '/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
+  { rel: 'icon', href: '/favicon-16x16-inverse.png', type: 'image/png', sizes: '16x16', media: DARK_SCHEME },
+  { rel: 'icon', href: '/favicon-32x32-inverse.png', type: 'image/png', sizes: '32x32', media: DARK_SCHEME },
   { rel: 'icon', href: '/favicon.ico' },
   { rel: 'apple-touch-icon', href: '/apple-touch-icon.png', sizes: '180x180' },
 ];
@@ -47,13 +73,21 @@ export const MANIFEST_HREF = '/site.webmanifest';
  */
 export const THEME_COLOR = '#f4f1ea';
 
-/** Renders one icon link as HTML. Shared by the string-template head. */
+/**
+ * Renders one icon link as HTML. Shared by the string-template head.
+ *
+ * `media` is here for the same reason the PNG sizes are: the admin head builds its
+ * links by string concatenation rather than through Astro, so an attribute the
+ * helper does not know about is dropped on one surface only. That is the exact
+ * drift this module exists to prevent.
+ */
 export function iconLinkHtml(icon: IconLink): string {
   const attrs = [
     `rel="${icon.rel}"`,
     `href="${icon.href}"`,
     icon.type ? `type="${icon.type}"` : '',
     icon.sizes ? `sizes="${icon.sizes}"` : '',
+    icon.media ? `media="${icon.media}"` : '',
   ]
     .filter(Boolean)
     .join(' ');

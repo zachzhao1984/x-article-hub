@@ -30,20 +30,16 @@ function tokensIn(body: string): string[] {
 }
 
 /**
- * Tokens that describe the mark rather than the surface. `--logo-bg` is
- * deliberately identical in both themes because a favicon cannot adapt, and
- * `--radius` / `--wrap` / the font stacks are theme-invariant, so they belong in
- * :root only. Everything else has to be restated per theme.
+ * Tokens that are theme-invariant, so a mismatch between the two theme blocks is
+ * not a defect. `--radius` / `--wrap` / the font stacks are geometry and type that
+ * should not move with the scheme.
+ *
+ * `--logo-bg` and `--logo-ink` used to be here, on the reasoning that a favicon
+ * cannot adapt and the in-page mark had to keep matching it. They are gone with the
+ * tile they described: the mark is now artwork from `Logo.jpg` and it *is* themed,
+ * because the favicon ships a matching inverse. See the mark assertion at the end.
  */
-const THEME_INVARIANT = new Set([
-  '--radius',
-  '--wrap',
-  '--serif',
-  '--sans',
-  '--mono',
-  '--logo-bg',
-  '--logo-ink',
-]);
+const THEME_INVARIANT = new Set(['--radius', '--wrap', '--serif', '--sans', '--mono']);
 
 /** `#rrggbb` to 0–255 channels. Off-by-one here silently reads shifted bytes, so
  *  it lives in one place rather than being re-derived per assertion. */
@@ -193,15 +189,21 @@ describe('colour themes', () => {
     expect(css).toMatch(/:root:not\(\[data-theme='light'\]\)/);
   });
 
-  it('keeps the logo tile identical in both themes', () => {
-    // A favicon cannot adapt to a colour scheme. The in-page mark inverting with
-    // the theme meant the same brand read two different ways depending on where
-    // you looked.
-    expect(css).toMatch(/--logo-bg:\s*#202a30/);
-    expect(css).toMatch(/--logo-ink:\s*#faf9f6/);
-    // Declared once, on :root, and not repeated in either theme block.
-    expect(DARK).not.toContain('--logo-bg');
-    expect(EXPLICIT_LIGHT).not.toContain('--logo-bg');
+  it('adapts the brand mark per theme rather than pinning it', () => {
+    // This inverts a decision that used to go the other way, and the reason matters
+    // enough to keep asserted. The mark was a dark tile with a light letter, held
+    // identical in both themes so it kept matching a favicon that could not adapt —
+    // two ways to read one brand depending on where you looked. The favicon now ships
+    // its own inverse, so the tab adapts with the page and there is nothing left to
+    // hold still; and the mark is a near-black silhouette rather than a tile, so
+    // pinned it measures a contrast ratio near 1.1 on #13191c.
+    //
+    // The tokens that used to carry the tile are gone with it. Asserted as dead, not
+    // merely unused: a token left declared reads as live and gets restyled later.
+    expect(css).not.toContain('--logo-bg');
+    expect(css).not.toContain('--logo-ink');
+    expect(DARK).not.toContain('--logo-mark');
+    expect(EXPLICIT_LIGHT).not.toContain('--logo-mark');
   });
 
   it('hides the fieldset label from sight but not from assistive tech', () => {
