@@ -199,7 +199,7 @@ body {
  */
 .hero-sub, .board-title, .board-more,
 .card-meta, .card-foot, .badge, .cat-chip, .cat-count, .cat-desc,
-.cat-name, .tag, .nav-item, .nav-icon, .logo-mark, .search-mini input,
+.cat-name, .tag, .nav-item, .search-mini input,
 .search-form input, .search-form button, .result-snippet, .article-crumbs,
 .original-link, .byline, .hero-meta, .footer-inner, .fig-missing, .empty-state,
 pre, .cat-card, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
@@ -294,7 +294,20 @@ a:hover { color: var(--accent); }
 }
 .nav-item:hover { background: var(--panel); color: var(--text); }
 .nav-item.active { background: var(--panel-2); color: var(--text); }
-.nav-icon { font-size: 12px; opacity: 0.85; }
+/*
+ * The nav glyph is a filled Phosphor path inlined by `Icon.astro`, at the size the call
+ * site asks for rather than one fixed here.
+ *
+ * `flex: none` is the load-bearing part. The nav row is `overflow-x: auto` so it can
+ * scroll on a narrow screen, and a flex item's default is to shrink — without this the
+ * glyphs would be the first thing to squash, and all six would deform before any label
+ * did. Dimming slightly puts the icon behind its label instead of beside it at equal
+ * weight.
+ */
+.nav-icon {
+  flex: none;
+  opacity: 0.85;
+}
 
 .search-mini input {
   background: var(--panel);
@@ -766,14 +779,20 @@ pre {
   cursor: pointer;
 }
 
+/*
+ * The glyph is a filled Phosphor path, so this rule carries no `fill` and no `stroke`.
+ *
+ * Both were here for the hand-drawn 24-grid icons that used to sit in this control,
+ * and leaving them behind would fail silently: a CSS declaration beats the SVG
+ * `fill="currentColor"` presentation attribute, so `fill: none` with no stroke renders
+ * all three options as blank squares inside a still-clickable radio group.
+ *
+ * Size is not set here either — `Icon.astro` takes it, so the box the browser reserves
+ * before this stylesheet loads is already the real one.
+ */
 .theme-switch__icon {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  /* The input covers the whole label, so the icon sits on top of the target; without
+     this it would swallow the pointer and the hit area would stop at the glyph. */
   pointer-events: none;
 }
 

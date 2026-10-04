@@ -1,0 +1,52 @@
+# Third-party notices
+
+This project vendors geometry from the projects below. Nothing here is fetched at
+runtime: the paths are copied into `src/icons/phosphor.ts` and inlined into the HTML,
+so there is no dependency to upgrade, no request to make, and no way for a version
+bump to restyle the navigation between deploys.
+
+---
+
+## Phosphor Icons
+
+Nine icons are used: `house`, `clock`, `fire`, `trend-up`, `magnifying-glass`, `info`,
+`sun`, `moon`, `desktop`.
+
+- Project: <https://phosphoricons.com>
+- Upstream package: [`@phosphor-icons/core`](https://www.npmjs.com/package/@phosphor-icons/core) 2.1.1
+- Source files: `assets/regular/<name>.svg`, weight `regular`
+- Licence: **MIT**
+
+The vendored copy is the upstream path data with whitespace added for line length.
+`tests/unit/glyphs.test.ts` asserts the provenance and the licence are recorded here,
+because vendored geometry is the kind of thing that gets tidied by someone who
+assumes it was drawn in-house.
+
+Phosphor also offers a webfont package, which this project does not use: it would add
+a blocking request and a flash of invisible icons in the header, and this site
+otherwise loads no webfont at all.
+
+MIT licence text as published with the package:
+
+```
+MIT License
+
+Copyright (c) 2021 Phosphor Icons
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be included in all copies
+or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```

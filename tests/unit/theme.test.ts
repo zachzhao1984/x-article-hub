@@ -178,7 +178,17 @@ describe('colour themes', () => {
     for (const value of ['light', 'dark', 'system']) {
       expect(switcher).toMatch(new RegExp(`value: '${value}'`));
     }
-    expect((switcher.match(/value: '/g) ?? []).length).toBe(3);
+    // Counted as object entries, not as occurrences of the substring. OPTIONS is
+    // annotated as `Array<{ value: 'light' | 'dark' | 'system'; … }>`, and that
+    // annotation is itself a `value: '` in the source — a count of three became four
+    // and the failure pointed at the type rather than at the control.
+    const entries = switcher.match(/\{ value: '[^']+', label: '[^']+', icon: '[^']+' \}/g) ?? [];
+    expect(entries.length).toBe(3);
+    for (const value of ['light', 'dark', 'system']) {
+      expect(entries.some((entry) => entry.includes(`value: '${value}'`)), `no option for ${value}`).toBe(
+        true,
+      );
+    }
     expect(header).toContain('ThemeSwitch');
   });
 

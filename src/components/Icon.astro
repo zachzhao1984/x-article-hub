@@ -1,0 +1,45 @@
+---
+/**
+ * One Phosphor glyph, inlined.
+ *
+ * Inline rather than referenced from a sprite file for three reasons, all of which
+ * are properties of `<use href="/sprite.svg#id">` across documents: the icon cannot
+ * inherit `currentColor` from the page's cascade, it needs a request before it can
+ * paint, and it renders blank in a save-page-as-HTML export. Nine icons inline cost
+ * about 2.2kB and buy none of those problems.
+ *
+ * The whole component is 3 attributes of contract, and the tests hold each of them:
+ * `viewBox` from the shared grid so the glyph is not authored per icon;
+ * `fill="currentColor"` so colour comes from the text around it and follows the theme
+ * with no second rule; and `aria-hidden` because every icon here is decorative — the
+ * label beside it already carries the meaning, so announcing both would read the
+ * navigation item twice.
+ *
+ * `focusable="false"` is for Edge and IE, which put a full stop tab stop on an inline
+ * SVG that is not interactive. It has no effect in current browsers and is one
+ * attribute to not have to think about again.
+ */
+import { ICON_PATHS, ICON_VIEW_BOX, type IconName } from '../icons/phosphor';
+
+export interface Props {
+  name: IconName;
+  /**
+   * Edge length in px. Set here rather than in CSS so the box the browser reserves
+   * before the stylesheet loads is the real one — an SVG with no width and height
+   * defaults to 300×150 and the row jumps.
+   */
+  size?: number;
+  class?: string;
+}
+
+const { name, size = 16, class: className } = Astro.props;
+---
+
+<svg
+  class={className}
+  viewBox={ICON_VIEW_BOX}
+  width={size}
+  height={size}
+  fill="currentColor"
+  aria-hidden="true"
+  focusable="false"><path d={ICON_PATHS[name]} /></svg>

@@ -20,13 +20,27 @@ export interface Props {
   current?: 'light' | 'dark' | 'system';
 }
 
+import Icon from './Icon.astro';
+import type { IconName } from '../icons/phosphor';
+
 const { current = 'system' } = Astro.props;
 
-const OPTIONS = [
-  { value: 'light', label: 'Light', icon: 'M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21M5.6 5.6l1.1 1.1M17.3 17.3l1.1 1.1M18.4 5.6l-1.1 1.1M6.7 17.3l-1.1 1.1M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z' },
-  { value: 'dark', label: 'Dark', icon: 'M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z' },
-  { value: 'system', label: 'Match system', icon: 'M3.5 5.5h17v9h-17zM8.5 18.5h7M12 14.5v4' },
-] as const;
+/**
+ * The three choices, each with a Phosphor glyph from the same set the navigation uses.
+ *
+ * They used to be hand-written paths on a 24 grid, stroked, sitting about 400px from
+ * the navigation's glyphs — two icon systems with two grids and two fill models in one
+ * 58px-tall bar. `sun` and `moon` name the appearance directly; `desktop` is the
+ * machine that holds the preference, which is what "follow the system" means.
+ *
+ * 15px rather than the nav's 18px because these sit in a segmented control where the
+ * box is fixed and a larger glyph crowds its neighbours.
+ */
+const OPTIONS: Array<{ value: 'light' | 'dark' | 'system'; label: string; icon: IconName }> = [
+  { value: 'light', label: 'Light', icon: 'sun' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
+  { value: 'system', label: 'Match system', icon: 'desktop' },
+];
 ---
 
 <fieldset class="theme-switch">
@@ -42,9 +56,7 @@ const OPTIONS = [
             checked={current === option.value}
             aria-label={option.label}
           />
-          <svg class="theme-switch__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d={option.icon} />
-          </svg>
+          <Icon name={option.icon} size={15} class="theme-switch__icon" />
         </label>
       ))
     }

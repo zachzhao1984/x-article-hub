@@ -554,6 +554,86 @@ template in `src/routes/views.ts` for `/admin` — and an admin page showing a d
 icon than the article pages is exactly the kind of thing nobody notices until it is
 wrong in a screenshot. `/site.webmanifest` is server-rendered rather than a static file,
 so `name` and `theme_color` track `SITE_NAME` the way `/robots.txt` tracks `SITE_ORIGIN`.
+
+### Navigation glyphs
+
+Everything the interface draws as an icon is [Phosphor](https://phosphoricons.com)
+(MIT, see `NOTICE.md`), vendored as path data in `src/icons/phosphor.ts` and inlined by
+`src/components/Icon.astro`. Nine paths: six in the navigation, three in the theme
+control.
+
+**Vendored rather than a dependency**, for three reasons that each cost something
+measurable:
+
+- **No request.** Phosphor ships a webfont package too. It would add a blocking fetch
+  and a flash of invisible icons in the header, which is the first thing on every page.
+  Nine paths inline are about 2.6kB of HTML against a font file orders of magnitude
+  larger.
+- **No webfont.** This site loads no webfont at all — the type stack is entirely
+  local-name lookups, because the archive is mostly Chinese and the CJK faces are the
+  primary rendering. An icon font would be the single exception, for nine icons.
+- **No drift.** These are the upstream 2.1.1 paths, byte for byte. A dependency upgrade
+  could restyle the navigation between deploys; a vendored path cannot.
+
+**Which icon, chosen against what each board orders by** — which is why two of them are
+not interchangeable:
+
+| Destination | Orders by | Glyph |
+| --- | --- | --- |
+| `/` | — | `house` |
+| `/latest` | `published_at DESC` — a question of *when* | `clock` |
+| `/trending` | weighted blend — what is hot now | `fire` |
+| `/rising` | `velocity_score` alone — a line going up | `trend-up` |
+| `/search` | — | `magnifying-glass` |
+| `/about` | — | `info` |
+
+`/trending` and `/rising` diverge by design (§ the three boards), and one shared icon
+would erase that from the navigation — the one place a reader looks to find out which
+one they are on. A test asserts the two are never given the same glyph.
+
+`trend-up` rather than `chart-line-up` is a deliberate trade: a chart icon has more
+visual mass and balances the row better, but the site has no chart page, and an icon
+that implies a destination which does not exist is a worse fault than one that reads a
+shade light. At 18px the diagonal is perfectly legible — diagonals lose apparent weight
+at small sizes whatever the icon, so a heavier arrow would lose it just as much.
+
+**Weight is regular, size is per call site** — 18px in the navigation beside 14px
+labels, 15px in the segmented control where the box is fixed. Regular and bold are
+barely distinguishable at those sizes, and regular sits more quietly beside the text.
+Sizes were compared at 16/18/20px against the real header: 16px reads a shade small
+next to 14px text, 20px starts to dominate the label.
+
+**One fill model.** Every Phosphor icon in the set is a single closed path on the
+`0 0 256 256` grid, filled with `currentColor`. `thin` and `light` are the two weights
+drawn with strokes instead, and mixing one in would render nothing under a fill-only
+renderer. Because the colour comes from `currentColor`, the glyphs follow the theme and
+the active state with no second rule — measured on the deployed page: `rgb(89,101,107)`
+in light and `rgb(165,176,179)` in dark, both exactly the theme's `--muted`.
+
+**The theme control moved too.** Its three icons were hand-written paths on a 24 grid,
+stroked, sitting about 400px from the navigation's glyphs — two icon systems with two
+grids and two fill models in one 58px-tall bar. They are `sun`, `moon` and `desktop`
+now, on the same grid. `desktop` is the machine that holds the preference, which is
+what "follow the system" means.
+
+Two things `tests/unit/glyphs.test.ts` guards that would otherwise fail *quietly*:
+
+- **A stylesheet cannot blank a filled glyph.** The theme rule used to be
+  `fill: none; stroke: currentColor` for its stroked icons. A CSS declaration beats an
+  SVG presentation attribute, so leaving that behind when swapping in filled paths
+  renders all three options as blank squares inside a still-clickable radio group — and
+  no markup-level test sees it, because the markup is correct and only the cascade
+  decides. Verified by reintroducing the rule.
+- **`flex: none` on the nav glyphs.** The nav is `overflow-x: auto` so it can scroll on
+  a narrow screen, and a flex item defaults to shrinking — without this the six icons
+  deform before any label moves.
+
+`IconName` is a union of the vendored keys, so a name that was never vendored is a
+compile error rather than an empty box beside a readable label. The tests then cover
+what types cannot: that every nav destination has an icon, that nothing is vendored and
+unused, that no literal Unicode glyph is left standing in for one, and that provenance
+and licence are recorded in `NOTICE.md` — vendored geometry is the kind of thing that
+gets "tidied" by someone who assumes it was drawn in-house.
 | Links | 15 |
 | Warnings | 0 |
 

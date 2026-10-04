@@ -4,6 +4,8 @@
 import { listCategoriesWithCounts } from '../db/public';
 import { env } from 'cloudflare:workers';
 import ThemeSwitch from './ThemeSwitch.astro';
+import Icon from './Icon.astro';
+import type { IconName } from '../icons/phosphor';
 
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
 
@@ -24,13 +26,27 @@ const theme = (() => {
 })();
 
 const path = Astro.url.pathname;
-const nav: Array<{ href: string; label: string; icon: string }> = [
-  { href: '/', label: 'Home', icon: '◆' },
-  { href: '/latest', label: 'Latest', icon: '↓' },
-  { href: '/trending', label: 'Trending', icon: '🔥' },
-  { href: '/rising', label: 'Rising', icon: '📈' },
-  { href: '/search', label: 'Search', icon: '⌕' },
-  { href: '/about', label: 'About', icon: 'i' },
+
+/**
+ * The four boards and the two utility pages, each with a Phosphor glyph.
+ *
+ * The icons are chosen against what each board actually orders by, which is why two
+ * of them are not interchangeable: `/latest` is `published_at DESC` — a question of
+ * when, so a clock — while `/trending` is the weighted blend and `/rising` is
+ * `velocity_score` alone. A flame for "hot" and a rising line for "moving up" keep
+ * the blend and the velocity signal visually distinct, which is the same distinction
+ * the whole ranking section exists to preserve.
+ *
+ * Typed as `IconName` rather than `string` so a typo or an icon that was never
+ * vendored fails the build instead of rendering an empty box next to a label.
+ */
+const nav: Array<{ href: string; label: string; icon: IconName }> = [
+  { href: '/', label: 'Home', icon: 'house' },
+  { href: '/latest', label: 'Latest', icon: 'clock' },
+  { href: '/trending', label: 'Trending', icon: 'fire' },
+  { href: '/rising', label: 'Rising', icon: 'trend-up' },
+  { href: '/search', label: 'Search', icon: 'magnifying-glass' },
+  { href: '/about', label: 'About', icon: 'info' },
 ];
 
 const categories = await listCategoriesWithCounts(env.DB as unknown as D1Database);
@@ -70,7 +86,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
       {
         nav.map((item) => (
           <a href={item.href} class:list={['nav-item', { active: isActive(item.href) }]}>
-            <span class="nav-icon" aria-hidden="true">{item.icon}</span>
+            <Icon name={item.icon} size={18} class="nav-icon" />
             {item.label}
           </a>
         ))
