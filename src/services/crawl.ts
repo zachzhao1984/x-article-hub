@@ -22,6 +22,7 @@ import { recordEvent } from '../db/events';
 import { getArticleById, setArticleStatus } from '../db/articles';
 import { classifyContent, extractAvatarUrl, extractMetadata } from '../jobs/x-selectors';
 import type { CrawlMetadata } from '../jobs/x-selectors';
+import { segmentCjk } from '../lib/cjk';
 import { runQuickAction, runSnapshot, SCREENSHOT_FORMAT } from './browser';
 
 /** SPEC §27 — bump when the Phase 3 Parser changes; raw is kept so it can re-run. */
@@ -330,7 +331,15 @@ async function applyCrawlMetadata(
             raw_r2_key = ?6,
             published_at = COALESCE(?7, published_at),
             status = ?8,
-            updated_at = ?9
+            updated_at = ?9,
+            -- SPEC §12 — the CJK-segmented twins of the three columns above. A crawl is
+            -- what first learns the title and the author, so without these the index
+            -- would hold nothing searchable until a parse ran. The author twins are bound
+            -- from the same parameters as the source columns rather than recomputed, so
+            -- the two cannot drift.
+            fts_title = COALESCE(NULLIF(?10, ''), fts_title),
+            fts_author_name = COALESCE(?3, fts_author_name),
+            fts_author_username = COALESCE(?4, fts_author_username)
       WHERE id = ?1`,
   )
     .bind(
@@ -343,6 +352,9 @@ async function applyCrawlMetadata(
       args.metadata.publishedAt ? Date.parse(args.metadata.publishedAt) || null : null,
       args.status,
       args.capturedAt,
+      // The segmented title, matching ?2 through the same NULLIF rule so an empty
+      // title leaves both columns alone.
+      segmentCjk(args.metadata.title ?? ''),
     )
     .run();
 }

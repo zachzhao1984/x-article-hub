@@ -21,7 +21,7 @@ type PublicEnv = { Bindings: Env };
  *
  * `listArticles` selects `a.*` because the admin UI needs every column, so the
  * public shape is projected explicitly here. Without this the list endpoint
- * ships `content_text` (the whole body, mirrored for FTS per SPEC §12) on every
+ * ships `fts_content` (the whole body, segmented for FTS per SPEC §12) on every
  * request, and exposes internal workflow state.
  */
 function toPublicArticle(row: Record<string, unknown>) {

@@ -14,6 +14,7 @@ import { R2_PATHS, countWords, documentToPlainText } from '../types/article-docu
 import type { ArticleDocument } from '../types/article-document';
 import { newId } from '../lib/ids';
 import { sha256Hex } from '../lib/hash';
+import { segmentCjk } from '../lib/cjk';
 import { recordEvent } from '../db/events';
 import { rankingWeights } from '../config/ranking';
 import { combineScores, rawPopularity, rawVelocity, normalizeScores, clampQuality } from '../ranking/score';
@@ -277,14 +278,16 @@ export async function seedDemoArticles(env: Env, opts: { reset?: boolean } = {})
            status, category_id, ai_summary, ai_category, ai_confidence,
            quality_score, popularity_score, velocity_score, editor_score, final_score,
            parser_version, content_r2_key, featured, display_mode,
-           word_count, block_count, content_text, tags_text, created_at, updated_at
+           word_count, block_count, fts_content, fts_tags, created_at, updated_at,
+           fts_title, fts_excerpt, fts_author_name, fts_author_username
          ) VALUES (
            ?1, ?2, ?2, ?3, ?4, ?5, ?6,
            ?7, ?8, ?9, ?10, ?11,
            'published', (SELECT id FROM categories WHERE slug = ?12), ?13, ?12, ?14,
            ?15, ?16, ?17, ?18, ?19,
            1, ?20, ?21, 'full',
-           ?22, ?23, ?24, ?25, ?26, ?26
+           ?22, ?23, ?24, ?25, ?26, ?26,
+           ?27, ?28, ?29, ?30
          )`,
       ).bind(
         articleId,
@@ -310,9 +313,17 @@ export async function seedDemoArticles(env: Env, opts: { reset?: boolean } = {})
         a.featured ? 1 : 0,
         words,
         document.blocks.length,
-        plainText,
-        a.tags.join(' '),
+        // SPEC §12 — the index-only columns carry the CJK-segmented form, and the
+        // displayed columns gain their segmented twins, exactly as the crawl and the
+        // Parser write them. The demo set is what the acceptance checks search over,
+        // so leaving these raw would make the checks pass for the wrong reason again.
+        segmentCjk(plainText),
+        segmentCjk(a.tags.join(' ')),
         now,
+        segmentCjk(a.title),
+        segmentCjk(a.excerpt),
+        segmentCjk(a.displayName),
+        segmentCjk(a.username),
       ),
     );
 

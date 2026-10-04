@@ -18,6 +18,7 @@ import { R2_PATHS } from '../types/article-document';
 import type { ArticleDocument } from '../types/article-document';
 import { countWords, documentToPlainText } from '../types/article-document';
 import { parseMarkdownToDocument } from '../parser/markdown';
+import { segmentCjk } from '../lib/cjk';
 import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { newId } from '../lib/ids';
@@ -174,12 +175,15 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
             parser_version = ?3,
             block_count = ?4,
             word_count = ?5,
-            content_text = ?6,
-            tags_text = ?7,
+            fts_content = ?6,
+            fts_tags = ?7,
             title = COALESCE(NULLIF(?8, ''), title),
             author_name = COALESCE(?9, author_name),
             author_username = COALESCE(?10, author_username),
             author_avatar = COALESCE(?11, author_avatar),
+            fts_title = COALESCE(NULLIF(?13, ''), fts_title),
+            fts_author_name = COALESCE(?9, fts_author_name),
+            fts_author_username = COALESCE(?10, fts_author_username),
             updated_at = ?12
       WHERE id = ?1`,
   )
@@ -189,8 +193,11 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
       PARSER_VERSION,
       document.blocks.length,
       words,
-      plainText,
-      await tagsTextFor(env.DB, articleId),
+      // SPEC §12 — the CJK-segmented form is what gets indexed, because
+      // `unicode61` treats a run of Chinese as one token and `投资` would never match.
+      // `fts_content` and `fts_tags` are index-only columns: nothing SELECTs them.
+      segmentCjk(plainText),
+      segmentCjk(await tagsTextFor(env.DB, articleId)),
       document.title,
       document.author.name,
       document.author.username,
@@ -204,6 +211,10 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
       // wins, exactly as it does against the crawl.
       currentAvatar?.startsWith('/media/') ? null : (document.author.avatar ?? null),
       Date.now(),
+      // The same segmenting for the title, kept in step with the three columns above
+      // by binding the same values again — one extra parameter rather than a second
+      // code path that could drift from the first.
+      segmentCjk(document.title),
     )
     .run();
 

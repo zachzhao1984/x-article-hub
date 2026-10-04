@@ -230,6 +230,84 @@ is that, without the fragility.
 | Quotes | 1 |
 | Images | 9, in document order (the 10th capture image is the author chip, §7.2) |
 
+### Search (SPEC §12)
+
+Search worked for English and not for Chinese, and it did not look broken.
+
+`articles_fts` is tokenised with SQLite's `unicode61`, which classifies a CJK ideograph
+as an **alphanumeric** character. A run of Chinese with no whitespace between it is
+therefore indexed as one token — the archived 美股 article contains the token
+`一篇讲清楚美股入门的基本逻辑` — so a reader searching `投资` got nothing back even though the
+word is in the body. `美股` worked, but only by luck: a `## 美股` heading happens to sit
+alone in its own token.
+
+| Query | Before | After |
+| --- | --- | --- |
+| `投资` | 0 | 2 |
+| `编程` / `AI编程` | 0 | 1 |
+| `暴涨`, `纳斯达克` | 0 | 1 |
+| `美股入门` | 1 (a heading token) | 1 (anywhere in the body) |
+| `Claude`, `claude code`, `ray_codeproxy` | 1 / 1 / 3 | unchanged |
+
+The archive is mostly Chinese, so this was search failing for the language most of its
+content is written in. It survived a phase because every check around it happened to pass
+for the wrong reason: the acceptance check searched for `cache`, a Latin word, and every
+test for `buildFtsQuery` was Latin too.
+
+**The fix is segmentation, not a different tokenizer.** `src/lib/cjk.ts` puts a plain
+space either side of every CJK character before indexing, so `unicode61` splits it into one
+token per ideograph and Latin words are untouched. Kana and Hangul are included because
+they break identically — a CJK-only fix would leave Japanese and Korean just as broken.
+Verified against SQLite directly rather than assumed: a per-ideograph token list plus a
+phrase query matches consecutive characters, and `"世 界 你 好"` does **not** match a body
+reading `你好世界`.
+
+Which is why the query builder had to change too. Two separate phrases, `"投" "资"`, are
+an implicit AND in FTS5 and would be satisfied by an article mentioning 投 and 资 in
+unrelated sentences — a search that invents a hit is worse than one that misses. A CJK word
+becomes **one** phrase instead, `"投 资"`, meaning consecutive tokens in order. A reader
+who types `你好世界` with no spaces gets that exact four-character run, which is what they
+meant.
+
+Two columns, treated differently on purpose:
+
+- **`fts_content` and `fts_tags` were never `SELECT`ed anywhere.** They are SPEC §12's
+  plain-text index field, read only by the trigger, so migration 0007 *renames*
+  `content_text`/`tags_text` in place rather than copying a 9kB body per article. The
+  rename also means nobody later mistakes the column for something to display.
+- **`title`, `excerpt`, `author_name` and `author_username` are displayed**, so they keep
+  their exact value and gain an `fts_` twin. The trigger reads
+  `COALESCE(new.fts_title, new.title)`: a writer that forgets the twin degrades to today's
+  behaviour rather than to an empty index.
+  `tests/unit/cjk-search.test.ts` fails if any `UPDATE articles` sets one without its twin.
+
+`scripts/backfill-search-index.mjs` fills the existing rows. It imports `segmentCjk` rather
+than copying it — a copy in a script that runs against production is a copy that eventually
+disagrees with the module the Worker imports, and the symptom is an index nobody can search
+with nothing reporting why. It is idempotent and resumable, which matters because D1
+refuses explicit SQL transactions: statements are applied without `BEGIN`/`COMMIT`, so a
+partial run is finished by running it again, and it prints how many rows remain.
+
+**One thing that looks like an improvement and is not.** `snippet(articles_fts, 3, …)`
+addresses the content column by position. Changing it to the name — `snippet(articles_fts,
+'fts_content', …)` — reads as more robust, and in this SQLite build the name does not
+resolve: it silently falls back to column 0, the `UNINDEXED` article_id. Every result then
+previewed as `art_7i7n5…` instead of the matching sentence, with no error and no failed
+check. Both halves are pinned together now — the positional index *and* the column order in
+migration 0007 — and the acceptance suite asserts that a search snippet is prose and not an
+article id.
+
+The `snippet()` output comes from the indexed text, so it carries the inserted spaces;
+`deSegment` removes them on the way out. It steps over `<mark>` because the matched phrase is
+wrapped in one, so `美 <mark>投 资</mark> 股` becomes `美<mark>投资</mark>股`. The honest
+limitation is that segmented text cannot say whether a space was inserted or written, so a
+genuine space beside an ideograph goes too — `美股 ETF` previews as `美股ETF`. A missing
+space in a preview is the price; the alternative was an invisible separator character between
+every ideograph of every stored body, unreadable in a `SELECT` and hostile to a future
+`LIKE` fallback.
+
+`Nvidia` still finds nothing, which is correct rather than a gap: those articles say 英伟达.
+
 ### Media: the archive owns the bytes (SPEC §10)
 
 Before this, every figure on the reading page was an `<img>` pointing at

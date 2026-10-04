@@ -11,6 +11,7 @@
 
 import type { ArticleRow } from './rows';
 import type { ArticleStatus, DisplayMode } from '../jobs/types';
+import { deSegment, hasCjk, segmentCjk } from '../lib/cjk';
 
 export type PublicSort = 'latest' | 'trending' | 'rising' | 'featured';
 
@@ -149,7 +150,14 @@ export function getArticleTags(db: D1Database, articleId: string): Promise<Array
     .then((r) => r.results);
 }
 
-/** SPEC §12 — FTS5 search. Snippet() gives a highlighted fragment for the results page. */
+/**
+ * SPEC §12 — FTS5 search. Snippet() gives a highlighted fragment for the results page.
+ *
+ * The snippet is de-segmented on the way out. It is generated from the indexed text,
+ * which has a space either side of every CJK character so that `unicode61` splits it
+ * into one token per ideograph, and those spaces would otherwise be rendered. Only the
+ * preview is affected — the stored index is never shown.
+ */
 export async function searchPublishedArticles(
   db: D1Database,
   rawQuery: string,
@@ -175,6 +183,13 @@ export async function searchPublishedArticles(
   const { results } = await db
     .prepare(
       `SELECT ${LIST_COLUMNS},
+              -- Column 3, positionally. Addressing it by name —
+              -- snippet(articles_fts, 'fts_content', …) — looks more robust and is not:
+              -- this SQLite build fails to resolve the name and silently falls back to
+              -- column 0, which is the UNINDEXED article_id. Every result then previewed
+              -- as "art_7i7n5…" instead of the matching sentence, with no error anywhere.
+              -- Verified directly against SQLite; the column order is pinned by
+              -- tests/unit/cjk-search.test.ts so a reorder cannot pass quietly.
               snippet(articles_fts, 3, '<mark>', '</mark>', '…', 24) AS snippet
          FROM articles_fts f
          JOIN articles a ON a.id = f.article_id
@@ -186,13 +201,29 @@ export async function searchPublishedArticles(
     .bind(match, capped, offsetCapped)
     .all<ArticleListItem & { snippet: string }>();
 
-  return { items: results, total: countRow?.n ?? 0 };
+  return { items: results.map((r) => ({ ...r, snippet: deSegment(r.snippet) })), total: countRow?.n ?? 0 };
 }
 
 /**
- * FTS5 treats several characters as syntax (`-`, `"`, `*`, `:`), so raw user input
- * is quoted into a phrase query. A malformed query would otherwise surface as a
- * SQL error instead of "no results".
+ * Turn what a reader typed into an FTS5 MATCH expression.
+ *
+ * FTS5 treats several characters as syntax (`-`, `"`, `*`, `:`), so raw input is
+ * quoted. A malformed query would otherwise surface as a SQL error instead of "no
+ * results".
+ *
+ * Whitespace-separated words are joined as adjacent quoted phrases, which FTS5 reads
+ * as "all of these, in any order" — which is what someone typing `claude code` means.
+ *
+ * A word containing CJK is different. The index stores one token per ideograph (see
+ * `src/lib/cjk.ts`), so `投资` has to become the single phrase `"投 资"` — consecutive
+ * tokens, in that order — rather than two separate phrases. `"投" "资"` would also be
+ * satisfied by an article that mentions 投 and 资 in unrelated sentences, and a
+ * search that invents a hit is worse than one that misses. Verified against SQLite
+ * directly: `"世 界 你 好"` matches nothing when the body reads `你好世界`.
+ *
+ * Because a no-space CJK run is one token to a reader, `你好世界` is treated as one
+ * four-token phrase and so matches only that exact run — which is the expected
+ * behaviour for a query with no spaces in it.
  */
 export function buildFtsQuery(rawQuery: string): string | null {
   const tokens = rawQuery
@@ -202,7 +233,15 @@ export function buildFtsQuery(rawQuery: string): string | null {
     .slice(0, 12);
 
   if (tokens.length === 0) return null;
-  return tokens.map((t) => `"${t}"`).join(' ');
+
+  return tokens
+    .map((t) => {
+      if (!hasCjk(t)) return `"${t}"`;
+      // `segmentCjk` wraps each ideograph in spaces; as one quoted phrase those
+      // spaces are the consecutive-token separators FTS5 expects.
+      return `"${segmentCjk(t).replace(/ +/g, ' ')}"`;
+    })
+    .join(' ');
 }
 
 // --- SPEC §17.3 — homepage sections ---------------------------------------

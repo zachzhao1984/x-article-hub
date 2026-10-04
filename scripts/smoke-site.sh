@@ -103,6 +103,16 @@ echo "Search (SPEC §12)"
 SEARCH="$("${CURL[@]}" -fsS "${BASE}/search?q=cache")"
 contains "search returns results with snippets" "$SEARCH" "result-snippet"
 check "search with no query renders the prompt" "$(status "${BASE}/search")" "200"
+# The snippet is the matching sentence, so an article id appearing in the result list is
+# the signature of snippet() resolving to the wrong column — which is exactly what
+# addressing it by name did, silently: every preview read `art_7i7n5…` and every check
+# here still passed. Stripped of hrefs first so a link target cannot produce a match.
+check "a search snippet is prose, not an article id" \
+  "$(printf '%s' "$SEARCH" | sed 's|href="[^"]*"||g' | grep -cE 'art_[0-9a-z]{8}')" "0"
+# A CJK query has to run without error even when nothing matches. The archive is mostly
+# Chinese and `unicode61` used to make such a query unfindable rather than unrunnable;
+# what is checked here is that the query path itself does not error, which a 500 would.
+check "a CJK query runs without erroring" "$(status --get --data-urlencode 'q=投资' "${BASE}/search")" "200"
 
 echo
 echo "Cache policy (SPEC §23)"
