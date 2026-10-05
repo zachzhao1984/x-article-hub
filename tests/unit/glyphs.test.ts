@@ -45,12 +45,25 @@ function ruleFor(selector: string): string | undefined {
   return match?.[1];
 }
 
-/** Every `href` → `icon` pair the header's nav array declares. */
+/**
+ * Every `href` → `icon` pair the header's nav array declares.
+ *
+ * The label alternation is defensive and came from a real failure. The nav entry was
+ * first added as "Editor's Pick", whose apostrophe forces double quotes, and this scanner
+ * only matched single quotes — so it silently skipped the entry and reported its glyph as
+ * `vendored but unused` rather than failing. The label is now `Featured` and every entry
+ * is single-quoted again, but a scanner that quietly stops matching is worse than one that
+ * fails, so the alternation stays.
+ */
 function navIcons(): Array<{ href: string; label: string; icon: string }> {
-  return [...header.matchAll(/\{ href: '([^']+)', label: '([^']+)', icon: '([^']+)' \}/g)].map((m) => ({
+  return [
+    ...header.matchAll(
+      /\{ href: '([^']+)', label: (?:'([^']*)'|"([^"]*)"), icon: '([^']+)' \}/g,
+    ),
+  ].map((m) => ({
     href: m[1] ?? '',
-    label: m[2] ?? '',
-    icon: m[3] ?? '',
+    label: m[2] ?? m[3] ?? '',
+    icon: m[4] ?? '',
   }));
 }
 
@@ -76,10 +89,20 @@ describe('the glyph set', () => {
   });
 
   it('gives every nav destination an icon, and every icon a destination', () => {
-    // Four boards and two utilities. A sixth board added later without an icon is the
-    // failure this catches; so is an entry whose icon was renamed out of the set.
+    // Home, three score boards, the editor's picks, and two utilities. A board added
+    // later without an icon is the failure this catches; so is an entry whose icon was
+    // renamed out of the set — which is a build error now, since the array is typed
+    // `IconName`, and a silent blank box before that.
     const items = navIcons();
-    expect(items.map((i) => i.href)).toEqual(['/', '/latest', '/trending', '/rising', '/search', '/about']);
+    expect(items.map((i) => i.href)).toEqual([
+      '/',
+      '/featured',
+      '/latest',
+      '/trending',
+      '/rising',
+      '/search',
+      '/about',
+    ]);
     for (const item of items) {
       expect(item.icon, `${item.href} has no icon`).toBeTruthy();
       expect(item.label, `${item.href} has no label to fall back on`).toBeTruthy();

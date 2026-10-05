@@ -42,7 +42,7 @@ Queues ── article-ingest ──▶ crawl consumer
                                     versions/vN/article.json → R2
                                     content_text → D1 → FTS5
 
-Astro  ── /  /latest  /trending  /rising  /category/:slug  /tag/:slug
+Astro  ── /  /featured  /latest  /trending  /rising  /category/:slug  /tag/:slug
           /author/:username  /article/:slug  /search  /about
           /sitemap.xml  /robots.txt  /feed.xml
 ```
@@ -672,7 +672,7 @@ measurable:
   larger.
 - **No webfont.** This site loads no webfont at all — the type stack is entirely
   local-name lookups, because the archive is mostly Chinese and the CJK faces are the
-  primary rendering. An icon font would be the single exception, for nine icons.
+  primary rendering. An icon font would be the single exception, for ten icons.
 - **No drift.** These are the upstream 2.1.1 paths, byte for byte. A dependency upgrade
   could restyle the navigation between deploys; a vendored path cannot.
 
@@ -682,13 +682,14 @@ not interchangeable:
 | Destination | Orders by | Glyph |
 | --- | --- | --- |
 | `/` | — | `house` |
+| `/featured` | the editor's flag — not a score | `star` |
 | `/latest` | `published_at DESC` — a question of *when* | `clock` |
 | `/trending` | weighted blend — what is hot now | `fire` |
 | `/rising` | `velocity_score` alone — a line going up | `trend-up` |
 | `/search` | — | `magnifying-glass` |
 | `/about` | — | `info` |
 
-`/trending` and `/rising` diverge by design (§ the three boards), and one shared icon
+`/trending` and `/rising` diverge by design (§ the four boards), and one shared icon
 would erase that from the navigation — the one place a reader looks to find out which
 one they are on. A test asserts the two are never given the same glyph.
 
@@ -764,21 +765,34 @@ Four bugs the fixture tests caught, all invisible on synthetic input:
 
 ---
 
-## The three boards are genuinely different
+## The four boards are genuinely different
 
 SPEC §15 requires four boards that do not collapse into one ordering:
 
 | Board | Ordering | Top 3 (demo set) |
 |---|---|---|
+| `/featured` | `featured = 1`, then `published_at DESC` | Agents, Market |
 | `/latest` | `published_at DESC` | Database → Inference → Market |
 | `/trending` | `final_score DESC` (weighted blend) | Agents → Inference → Market |
 | `/rising` | `velocity_score DESC` **only** | Agents → Inference → Database |
-| Editor's Pick | `featured = true` (human) | Agents, Market |
 
 `/rising` ranks "Reading Slowly" above "Measurement Noise" while `/trending`
 reverses them — that divergence is the point of keeping velocity separate from the
 blend (§14.2). Weights come from `RANKING_WEIGHTS_JSON`, never from a literal in
 code (§14.4).
+
+Editor's Pick is not a fifth ranking. `SORT_SQL.featured` is `published_at DESC`
+and mentions no score, so on the ordering alone `/featured` would be a copy of
+`/latest`; what makes it a board is a `WHERE` clause — `if (sort === 'featured')
+where.push('a.featured = 1')` in `src/db/public.ts`. That is worth stating
+because it is the one piece of this table a refactor of the sort map alone could
+lose without any test noticing.
+
+It is the only board an editor curates rather than a machine ranking, so it is
+named differently at each layer: the URL and the nav label are `/featured` and
+**Featured**, while the page heading and the homepage's lead row are **Editor's
+Pick**, which is also the wording on the badge a featured card carries. One
+concept, two lengths — the short one where horizontal space is scarce.
 
 ---
 
@@ -1020,8 +1034,12 @@ The same sweep found two things this change does not fix, listed so they are not
 
 And the scores are still absent, which is the larger gap: `applyRankingScores` has zero
 callers and no cron is registered, so `final_score` and `velocity_score` are NULL and
-`/latest`, `/trending` and `/rising` currently return **identical orderings**. The "three
+`/latest`, `/trending` and `/rising` currently return **identical orderings**. The "four
 boards are genuinely different" table further up holds for the demo set only.
+
+`/featured` is the exception and it does diverge, because its filter is `featured = 1` and
+not a score: three of the five live articles are flagged, so it returns three rows while
+the other three boards return five.
 
 The five published articles were categorised through the new form once it shipped —
 three AI, one Technology, one Business, judged from each article's own content rather

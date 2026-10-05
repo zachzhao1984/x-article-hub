@@ -1,0 +1,22 @@
+---
+// SPEC §15 — Editor's Pick: the articles an editor flagged, newest first.
+//
+// Not a fourth ranking. `listPublishedArticles` pushes `a.featured = 1` into the WHERE
+// clause for this sort, so this board cannot drift into a fourth copy of /latest the way
+// its ORDER BY expression alone would: that expression is `published_at DESC` because
+// among the picks, newest-first is the only ordering an editor would accept, and the
+// filtering that makes this a board at all happens in the filter, not the sort.
+//
+// Reads as empty until something is flagged. That is the honest state of it — the admin's
+// article page has a Feature button — and it is the same condition the homepage's pick
+// row is under.
+import BoardPage from '../components/BoardPage.astro';
+---
+
+<BoardPage
+  sort="featured"
+  heading="Editor's Pick"
+  lede="What an editor flagged, newest first."
+  path="/featured"
+  description="The X Articles an editor has flagged as worth coming back to."
+/>

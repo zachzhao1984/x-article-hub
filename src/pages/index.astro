@@ -29,8 +29,17 @@ const [counts, trending, rising, featured, tags] = await Promise.all([
   listTagsWithCounts(db, 24),
 ]);
 
-// SPEC §17.3 ordering: Today's Selection, then the machine boards, then the picks.
-const today = trending.slice(0, 3);
+// SPEC §17.3 ordering: the editor's picks, then the machine boards.
+//
+// The lead row is `sort: 'featured'`, which is the human override and not a ranking —
+// the same query `/featured` runs, so the row and the board it links to cannot disagree
+// about what a pick is. It replaced a `trending.slice(0, 3)` row titled "Today's
+// Selection", which was the trending board's own top three shown twice on one page in
+// different guises.
+//
+// The row and the old "⭐ Editor's Picks" section were the same `featured` array, so the
+// lower section went when the title moved up rather than the page printing the same
+// three articles twice.
 const empty = counts.total === 0;
 ---
 
@@ -42,7 +51,7 @@ const empty = counts.total === 0;
   <SiteHeader>
     <section class="hero">
       <h1>X Article</h1>
-      <p class="hero-sub">Today's Selection</p>
+      <p class="hero-sub">Editor's Pick</p>
       <p class="hero-meta">
         {counts.total} article{counts.total === 1 ? '' : 's'} · curated by hand, archived and ranked by machine
       </p>
@@ -60,11 +69,14 @@ const empty = counts.total === 0;
         </div>
       ) : (
         <>
-          {today.length > 0 && (
-            <section class="board board-today">
-              <h2 class="board-title">Today's Selection</h2>
+          {featured.length > 0 && (
+            <section class="board">
+              <div class="board-head">
+                <h2 class="board-title">Editor's Pick</h2>
+                <a class="board-more" href="/featured">All picks →</a>
+              </div>
               <div class="grid-cards">
-                {today.map((a) => (
+                {featured.map((a) => (
                   <ArticleCard article={a} />
                 ))}
               </div>
@@ -104,17 +116,6 @@ const empty = counts.total === 0;
               </section>
             )}
           </div>
-
-          {featured.length > 0 && (
-            <section class="board board-picks">
-              <h2 class="board-title">⭐ Editor's Picks</h2>
-              <div class="grid-cards">
-                {featured.map((a) => (
-                  <ArticleCard article={a} />
-                ))}
-              </div>
-            </section>
-          )}
 
           {tags.length > 0 && (
             <section class="board">

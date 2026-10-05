@@ -286,7 +286,11 @@ a:hover { color: var(--accent); }
 .nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
 .nav-item {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 11px;
+  /* 10px, not 11px. Measured: seven items at 11px need 651px and the row has 642px at
+   * every width from 1200px up, so the last item was clipped by 9px on a desktop — the
+   * kind of overflow that reads as a rendering quirk rather than a layout fault and so
+   * survives. 2px a side is 28px back, which is what it takes to fit. */
+  padding: 6px 10px;
   border-radius: 7px;
   color: var(--muted);
   font-size: 14px;
@@ -300,9 +304,9 @@ a:hover { color: var(--accent); }
  *
  * `flex: none` is the load-bearing part. The nav row is `overflow-x: auto` so it can
  * scroll on a narrow screen, and a flex item's default is to shrink — without this the
- * glyphs would be the first thing to squash, and all six would deform before any label
- * did. Dimming slightly puts the icon behind its label instead of beside it at equal
- * weight.
+ * glyphs would be the first thing to squash, and every one of them would deform before
+ * any label did. Dimming slightly puts the icon behind its label instead of beside it at
+ * equal weight.
  */
 .nav-icon {
   flex: none;
@@ -634,15 +638,49 @@ pre {
 .footer-links { display: flex; gap: 16px; }
 .footer-links a { color: var(--muted); }
 
+/*
+ * The header row runs out of room before the nav does, and what it gives up is decided
+ * in that order: the site name, then the search box, then the nav glyphs.
+ *
+ * Every threshold below is measured, not chosen. With seven items at 10px padding the nav
+ * needs 637px with glyphs and 418px without, and the row has 642px at 1200px, 613px at
+ * 1151px, 610px at 1024px and 626px at 820px — the gaps jump around because the search box
+ * disappearing at 820px hands its width straight back.
+ *
+ * The order matters. Primary navigation goes before everything else: losing a nav item to
+ * a horizontal scroll with no affordance is losing the site, whereas the site name is
+ * carried by the mark and the document title, and the search box is a shortcut to a page
+ * the nav links to directly. Below about 700px the row does scroll, which is what it did
+ * with six items too — the phone case was never a fitting case.
+ */
+@media (max-width: 1180px) {
+  .logo-text { display: none; }
+  .header-inner { gap: 18px; }
+}
+
+@media (max-width: 1100px) {
+  .search-mini { display: none; }
+}
+
+@media (max-width: 900px) {
+  .nav-icon { display: none; }
+}
+
+/* Last squeeze before the row starts scrolling: 13px labels and 9px sides, which is what
+ * brings 700px and 640px inside the line. Below about 560px seven items plus the mark and
+ * the theme switch genuinely do not fit, and the nav scrolls — on a phone that is the
+ * normal behaviour for a row this long, and it is what the six-item row did too. */
+@media (max-width: 700px) {
+  .nav-item { padding: 6px 9px; font-size: 13px; }
+}
+
 @media (max-width: 820px) {
   .board-split { grid-template-columns: 1fr; gap: 32px; }
-  .search-mini { display: none; }
   .header-inner { gap: 12px; }
 }
 
 @media (max-width: 560px) {
   .nav-item { padding: 6px 8px; font-size: 13px; }
-  .nav-icon { display: none; }
 }
 
 /* --- byline (SPEC §17.2) --- */

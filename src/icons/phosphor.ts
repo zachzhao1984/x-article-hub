@@ -6,12 +6,12 @@
  *
  * - **No request.** The library's own webfont would add a blocking fetch and a flash
  *   of invisible icons in the header, which is the first thing on every page. Nine
- *   paths inline weigh about 2.2kB of HTML against a font file orders of magnitude
+ *   paths inline weigh about 2.5kB of HTML against a font file orders of magnitude
  *   larger.
  * - **No webfont.** This site loads no webfont at all, and says so in the type
  *   tokens: the whole stack is local-name lookups, because the archive is mostly
  *   Chinese and the CJK faces are the primary rendering. An icon font would be the
- *   one exception, for nine icons.
+ *   one exception, for ten icons.
  * - **No drift.** These are the upstream 2.1.1 geometry, unchanged. A dependency
  *   upgrade could restyle the navigation between deploys; a vendored path cannot.
  *
@@ -53,6 +53,13 @@ export const ICON_PATHS = {
   /** Rising — velocity_score on its own, so a line going up. Deliberately not a chart: the site has no chart page, and an icon that implies one is a worse fault than one that reads a shade light. */
   'trend-up':
     `M240,56v64a8,8,0,0,1-16,0V75.31l-82.34,82.35a8,8,0,0,1-11.32,0L96,123.31,29.66,189.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0L136,140.69,212.69,64H168a8,8,0,0,1,0-16h64A8,8,0,0,1,240,56Z`,
+  /** Editor's Pick — the human override, so a star rather than another score glyph.
+   *  Matches the badge `ArticleCard.astro` puts on a featured card, so the board and
+   *  the badge read as one idea. `sparkle` was the other candidate and was rejected:
+   *  nothing about this site is generated, and the glyph means novelty everywhere
+   *  else it appears. */
+  'star':
+    `M239.18,97.26A16.38,16.38,0,0,0,224.92,86l-59-4.76L143.14,26.15a16.36,16.36,0,0,0-30.27,0L90.11,81.23,31.08,86a16.46,16.46,0,0,0-9.37,28.86l45,38.83L53,211.75a16.38,16.38,0,0,0,24.5,17.82L128,198.49l50.53,31.08A16.4,16.4,0,0,0,203,211.75l-13.76-58.07,45-38.83A16.43,16.43,0,0,0,239.18,97.26Zm-15.34,5.47-48.7,42a8,8,0,0,0-2.56,7.91l14.88,62.8a.37.37,0,0,1-.17.48c-.18.14-.23.11-.38,0l-54.72-33.65a8,8,0,0,0-8.38,0L69.09,215.94c-.15.09-.19.12-.38,0a.37.37,0,0,1-.17-.48l14.88-62.8a8,8,0,0,0-2.56-7.91l-48.7-42c-.12-.1-.23-.19-.13-.5s.18-.27.33-.29l63.92-5.16A8,8,0,0,0,103,91.86l24.62-59.61c.08-.17.11-.25.35-.25s.27.08.35.25L153,91.86a8,8,0,0,0,6.75,4.92l63.92,5.16c.15,0,.24,0,.33.29S224,102.63,223.84,102.73Z`,
   /** Search. */
   'magnifying-glass':
     `M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z`,
