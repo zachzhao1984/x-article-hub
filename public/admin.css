@@ -3,10 +3,19 @@
  * rather than a separate tool pasted next to it. It used to carry GitHub's dark
  * palette, which meant the two surfaces had nothing in common but a logo.
  *
- * Follows the system scheme only — the admin has no switcher, and a person editing
- * content is not browsing. `prefers-color-scheme` alone is the right scope here: an
- * explicit override would need the same inline script the public site uses, and
- * there is no control on this surface to express the choice.
+ * The theme blocks are structured exactly as the public stylesheet's, for the same
+ * reason the tokens are shared. This file used to follow `prefers-color-scheme`
+ * alone, on the reasoning that a person editing content is not browsing and an
+ * explicit override would have no control to express it. That reasoning described
+ * this surface accurately then and stopped being true the moment the control was
+ * added, so the media query is scoped to `:root:not([data-theme='light'])` and a
+ * `[data-theme='dark']` block sits beside it — without those, a reader who chose
+ * light on a dark-mode machine would keep getting the dark palette here while the
+ * public site honoured the choice, which is worse than not offering one.
+ *
+ * The no-JS case needs no separate rule: `data-theme` is only ever written by the
+ * inline script, so when scripting is off the attribute is absent and `:not()`
+ * matches, leaving the media query in charge exactly as before.
  */
 :root {
   color-scheme: light;
@@ -25,8 +34,14 @@
   --radius: 8px;
 }
 
+/* Repeated verbatim under `[data-theme='dark']` below, for the same reason the public
+   stylesheet repeats it: the media query covers "no preference expressed" and the
+   attribute block covers "dark chosen", and a reader on a light machine who picks
+   dark has to be served by the second. tests/unit/theme.test.ts holds the two token
+   sets equal, so a token added to one and not the other fails rather than silently
+   falling back to its light value. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     color-scheme: dark;
     --bg: #13191c;
     --panel: #1a2226;
@@ -40,6 +55,40 @@
     --warn: #d3b26a;
     --error: #d86a52;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #13191c;
+  --panel: #1a2226;
+  --panel-2: #202a2f;
+  --border: #ffffff26;
+  --text: #e7eceb;
+  --muted: #a5b0b3;
+  --accent: #12ccd8;
+  --accent-ink: #06222a;
+  --ok: #5fc79a;
+  --warn: #d3b26a;
+  --error: #d86a52;
+}
+
+/* Functionally redundant — `:root` above already is the light theme, and the media
+   query's `:not()` stops applying the moment `light` is written. Declared anyway so
+   this file's block structure is the public stylesheet's block structure, and so the
+   token-set test has something to compare an explicit light choice against. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #faf9f6;
+  --panel: #fff;
+  --panel-2: #f3f3ef;
+  --border: #dfe4e1;
+  --text: #202a30;
+  --muted: #59656b;
+  --accent: #176b75;
+  --accent-ink: #fff;
+  --ok: #2f7d5c;
+  --warn: #b8873a;
+  --error: #b3402a;
 }
 
 * { box-sizing: border-box; }
@@ -73,18 +122,19 @@ code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; f
  * header uses, and only one of them is shown: the mark is near-black by
  * construction, so on the dark ground it is not low contrast, it is absent.
  *
- * The swap here is a plain `prefers-color-scheme` query with no `data-theme`
- * escape, and that is deliberate rather than an omission — this surface has no
- * switcher, so there is no choice to honour, which is the same reasoning the
- * palette above is scoped by.
+ * Scoped to `:root:not([data-theme='light'])` like the palette above, so an explicit
+ * light choice keeps the dark-ground mark on a dark machine. One rule covers all
+ * three states — no attribute means the media query governs, `dark` matches `:not()`,
+ * and `light` matches neither — so there is no separate `[data-theme='dark']` copy to
+ * keep in step with this one.
  */
 .brand { font-weight: 600; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 8px; }
 .brand-mark { display: block; height: 22px; width: auto; }
 .brand-mark-inverse { display: none; }
 
 @media (prefers-color-scheme: dark) {
-  .brand-mark { display: none; }
-  .brand-mark-inverse { display: block; }
+  :root:not([data-theme='light']) .brand-mark { display: none; }
+  :root:not([data-theme='light']) .brand-mark-inverse { display: block; }
 }
 .brand-tag {
   font-size: 11px;
@@ -106,7 +156,101 @@ code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; f
 .nav-link:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
 .nav-link.is-active { background: var(--panel-2); color: var(--text); }
 
-.topbar-meta { color: var(--muted); font-size: 12px; }
+/*
+ * The three-state theme control, replacing the `Phase 1` label this corner used to
+ * carry. Same control as the public header — light, dark, follow the system — for the
+ * same reason: two controls would be two behaviours, and a person who picked dark
+ * while reading should not find the admin back in light.
+ *
+ * Built as radios with the highlighting done by CSS (`:has(input:checked)`), so the
+ * control renders and responds before — and without — any script, and stays keyboard
+ * navigable. Only the token names differ from site.css: this file has `--muted` where
+ * the public one has `--faint`, and `--accent-ink` where it has `--accent-contrast`.
+ */
+.theme-switch { display: contents; }
+
+.theme-switch__options {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+
+.theme-switch__option {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.theme-switch__option:hover { color: var(--text); }
+
+.theme-switch__option:has(input:checked) {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.theme-switch__option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Visually hidden but still focusable and still read by assistive tech. A
+   `display: none` input would drop the radio group out of the tab order. */
+.theme-switch__option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/*
+ * The glyph is a filled Phosphor path, so this rule carries no `fill` and no `stroke`.
+ *
+ * Both were here for the hand-drawn 24-grid icons that used to sit in this control,
+ * and leaving them behind would fail silently: a CSS declaration beats the SVG
+ * `fill="currentColor"` presentation attribute, so `fill: none` with no stroke renders
+ * all three options as blank squares inside a still-clickable radio group.
+ *
+ * Size is not set here either — the markup carries width/height, so the box the
+ * browser reserves before this stylesheet loads is already the real one.
+ */
+.theme-switch__icon {
+  /* The input covers the whole label, so the icon sits on top of the target; without
+     this it would swallow the pointer and the hit area would stop at the glyph. */
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-switch__option { transition: none; }
+}
+
+/* A <legend> is what names the radio group. `display: none` would strip the fieldset's
+   accessible name and the control would announce as an unlabelled group, so the hiding
+   has to be visual only. Same class as the public stylesheet, same reason. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
 .main { max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
 

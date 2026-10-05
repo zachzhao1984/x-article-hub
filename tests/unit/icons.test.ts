@@ -306,18 +306,27 @@ describe('the mark in the page', () => {
 
   it('keeps the no-JS case on the system scheme, and an explicit light choice on light', () => {
     // `data-theme` is written by the inline script, so without scripting it never exists
-    // and the media query is the only signal. `:not([data-theme='light'])` on the public
-    // side keeps a reader who chose light on a dark-mode machine from being overridden.
-    // /admin has no switcher, so it has no choice to override.
+    // and the media query is the only signal. `:not([data-theme='light'])` keeps a reader
+    // who chose light on a dark-mode machine from being overridden.
+    //
+    // /admin used to be the exception, with an assertion that it contained no
+    // `[data-theme` at all — correct while the admin had no switcher, and the reason is
+    // now the opposite of true. It has the same control, so it needs the same escape, and
+    // the mark matters twice over here: it is a near-black silhouette, so on the dark
+    // ground it is not low contrast, it is absent.
     expect(css).toMatch(
       /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme='light'\]\) \.logo-mark/,
     );
     expect(css).toContain(":root[data-theme='dark'] .logo-mark-inverse");
-    expect(admin).toMatch(/@media \(prefers-color-scheme: dark\)\s*\{\s*\.brand-mark\s*\{\s*display:\s*none/);
-    // Checked as a selector rather than as a word: the reason /admin has no `data-theme`
-    // escape is written in the comment right above it, so a plain substring search fails
-    // on the explanation of the thing it is checking.
-    expect(admin).not.toMatch(/\[data-theme/);
+    expect(admin).toMatch(
+      /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme='light'\]\) \.brand-mark\s*\{\s*display:\s*none/,
+    );
+    // One rule serves all three states on the admin: no attribute means the media query
+    // governs, `dark` matches `:not()`, `light` matches neither. Asserted as a selector
+    // rather than as a word, because the reason is written in the comment above it and a
+    // plain substring search fails on the explanation of the thing it is checking.
+    expect(admin).toContain(":root:not([data-theme='light']) .brand-mark-inverse");
+    expect(admin).not.toMatch(/@media \(prefers-color-scheme: dark\)\s*\{\s*\.brand-mark/);
   });
 
   it('leaves no dead token behind for the mark', () => {

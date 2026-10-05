@@ -478,22 +478,45 @@ Three implementation choices carry the behaviour:
 With scripting off, `data-theme` is never written and `prefers-color-scheme`
 governs, so the page still respects the OS rather than pinning everyone to light.
 
-`/admin` uses the same token names, so the two surfaces read as one product. It
-had been carrying GitHub's dark palette, which meant the only thing the public
-site and the admin shared was a logo. It follows the system scheme only — an
-explicit override would need the inline script above, and there is no control on
-that surface to express the choice.
+`/admin` uses the same token names and now the same control, so the two surfaces
+read as one product and behave as one. It had been carrying GitHub's dark palette,
+which meant the only thing the public site and the admin shared was a logo, and it
+followed the system scheme alone — no switcher, so no choice to honour. The switcher
+replaced a `Phase 1` label in the topbar's right-hand corner, which was a
+build-milestone marker that meant nothing to an operator and was still being served
+after the phase it referred to had been replaced.
 
-One deliberate exception to theming: the logo tile stays a dark square with a light
-X in both themes. A favicon cannot adapt to a colour scheme, so the in-page mark
-inverting meant the same brand read two different ways depending on where you
-looked.
+Two surfaces render their own HTML — the public one through `Base.astro`, the admin
+through string templates in `routes/views.ts` — so both need the same two scripts.
+Copying them was the obvious move and the wrong one: the drift this section's last
+bullet describes is exactly what a second copy looks like. They live in
+`src/lib/theme.ts` as exported strings, injected by both surfaces, along with the
+option list so the two controls cannot disagree about what the third option is
+called. The scripts stay plain ES5 in a string rather than becoming a real
+`<script type="module">`, because module scripts are deferred by definition and the
+theme would land after the first paint.
+
+The admin renders no `checked` attribute: the public pages get it from the cookie
+through `Astro.cookies`, and threading it through seven view functions and their
+seven call sites for a first-paint nicety was not worth it. A small admin-only
+script puts the control where the page already is instead, reading `data-theme`
+rather than the cookie — the attribute is what the page is painted from, so it is
+the only source that cannot disagree with the surface. `admin.css` therefore needed
+the same `:root:not([data-theme='light'])` scoping and `[data-theme='dark']` block
+the public stylesheet has, without which a reader who chose light on a dark-mode
+machine would get the dark palette in the admin and the light one everywhere else.
+
+The brand mark adapts per theme on both surfaces — it is a near-black silhouette by
+construction, so on the dark ground it is not low contrast, it is absent — and the
+favicon ships a matching inverse so the tab adapts with the page.
 
 `tests/unit/theme.test.ts` guards the properties that are easy to break silently:
-both themes declare the same token set, the light values agree whether they come
-from `:root` or `[data-theme='light']`, no colour is hard-coded outside the token
-blocks, the apply script precedes `</head>`, the stored value is validated rather
-than trusted, and the logo tile is theme-invariant.
+both themes declare the same token set on both stylesheets, the light values agree
+whether they come from `:root` or `[data-theme='light']`, no colour is hard-coded
+outside the token blocks, the apply script is injected before `</head>` and is not a
+module, the stored value is validated rather than trusted, the scripts are shared
+rather than copied, and the brand mark follows the choice rather than only the
+system scheme.
 
 ### Icons and the logo
 

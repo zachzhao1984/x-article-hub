@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { ICON_PATHS, ICON_VIEW_BOX } from '../../src/icons/phosphor';
+import { THEME_OPTIONS } from '../../src/lib/theme';
 
 /**
  * The UI glyph set — Phosphor, inlined.
@@ -55,9 +56,15 @@ function navIcons(): Array<{ href: string; label: string; icon: string }> {
 
 describe('the glyph set', () => {
   it('holds every icon the interface names, and nothing orphaned', () => {
+    // The theme switch's glyphs come from `THEME_OPTIONS` at runtime, not from a
+    // literal in `ThemeSwitch.astro` — they moved into lib/theme.ts so the admin's copy
+    // of the control is generated from the same list. Reading them out of the component's
+    // source reported sun, moon and desktop as vendored-but-unused, which is the
+    // regression this assertion exists to catch, pointed the other way: the icons are
+    // used, the scan had simply stopped looking where they live.
     const used = new Set([
       ...navIcons().map((item) => item.icon),
-      ...[...themeSwitch.matchAll(/icon: '([^']+)'/g)].map((m) => m[1] ?? ''),
+      ...THEME_OPTIONS.map((option) => option.icon),
     ]);
     for (const name of used) {
       expect(name in ICON_PATHS, `"${name}" is used but not vendored`).toBe(true);

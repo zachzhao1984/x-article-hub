@@ -17,30 +17,28 @@
  */
 export interface Props {
   /** The choice persisted by the last visit, so the control starts in the right state. */
-  current?: 'light' | 'dark' | 'system';
+  current?: ThemeChoice;
 }
 
 import Icon from './Icon.astro';
-import type { IconName } from '../icons/phosphor';
+import { THEME_OPTIONS } from '../lib/theme';
+import type { ThemeChoice } from '../lib/theme';
 
 const { current = 'system' } = Astro.props;
 
 /**
- * The three choices, each with a Phosphor glyph from the same set the navigation uses.
+ * The three choices come from `lib/theme.ts`, not from here.
  *
  * They used to be hand-written paths on a 24 grid, stroked, sitting about 400px from
  * the navigation's glyphs — two icon systems with two grids and two fill models in one
- * 58px-tall bar. `sun` and `moon` name the appearance directly; `desktop` is the
- * machine that holds the preference, which is what "follow the system" means.
+ * 58px-tall bar. They then lived here alone, which was fine until the admin grew the
+ * same control; now the list is the shared one so the two surfaces cannot disagree about
+ * what the third option is called or which glyph means it.
  *
- * 15px rather than the nav's 18px because these sit in a segmented control where the
- * box is fixed and a larger glyph crowds its neighbours.
+ * 15px rather than the nav's 18px because these sit in a segmented control where the box
+ * is fixed and a larger glyph crowds its neighbours.
  */
-const OPTIONS: Array<{ value: 'light' | 'dark' | 'system'; label: string; icon: IconName }> = [
-  { value: 'light', label: 'Light', icon: 'sun' },
-  { value: 'dark', label: 'Dark', icon: 'moon' },
-  { value: 'system', label: 'Match system', icon: 'desktop' },
-];
+const OPTIONS = THEME_OPTIONS;
 ---
 
 <fieldset class="theme-switch">

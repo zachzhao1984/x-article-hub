@@ -14,6 +14,7 @@ export interface Props {
 
 import { env } from 'cloudflare:workers';
 import { MANIFEST_HREF, SITE_ICONS, THEME_COLOR } from '../config/icons';
+import { THEME_BODY_SCRIPT, THEME_HEAD_SCRIPT } from '../lib/theme';
 
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
 const ORIGIN = ((env.SITE_ORIGIN as string) || 'https://x-article-hub.workers.dev').replace(/\/+$/, '');
@@ -69,132 +70,26 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
       know the reader's choice until something tells it, and by the time a deferred
       script runs that something is too late.
 
-      It writes the literal value `system` for the follow-the-system choice rather
-      than removing the attribute, so the stylesheet's `:root:not([data-theme='light'])`
-      and `[data-theme='dark']` rules both keep applying.
-
-      Every step is wrapped: a storage-denied browser (Safari in private mode) must
-      fall back to the system preference, not to a blank page.
+      The body of the script lives in `lib/theme.ts` rather than here, because the
+      admin surface renders its own HTML and needs the same two scripts; see that
+      module for why one copy beats two. `is:inline` is what keeps this synchronous
+      — an Astro-processed script would be bundled, deferred, and too late.
     */}
-    <script is:inline>
-      (function () {
-        var STORAGE_KEY = 'xah-theme';
-        var root = document.documentElement;
-        var VALID = ['light', 'dark', 'system'];
-        var BAR = { dark: '#13191c', light: '#faf9f6' };
-        var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-        /**
-         * Paints a choice. Exposed as `window.__xahTheme` so the change handler
-         * below reuses it instead of reimplementing the attribute write, the
-         * theme-color tag and the media listener — the two call sites drifting is
-         * how clicking stopped repainting the page in the first place.
-         *
-         * The attribute always holds the literal choice, including `system`, so
-         * the stylesheet's `:root:not([data-theme='light'])` and
-         * `[data-theme='dark']` rules keep deciding the repaint. Only the
-         * theme-color tag needs the OS resolved down to a concrete colour.
-         */
-        function apply(choice) {
-          if (VALID.indexOf(choice) === -1) return;
-          root.setAttribute('data-theme', choice);
-
-          var resolved = choice === 'system' ? (darkQuery.matches ? 'dark' : 'light') : choice;
-
-          // The media-scoped <meta name="theme-color"> tags cannot express a stored
-          // choice, so an unscoped one is added. Mobile Safari reads that one.
-          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
-          if (!meta) {
-            meta = document.createElement('meta');
-            meta.name = 'theme-color';
-            document.head.appendChild(meta);
-          }
-          meta.setAttribute('content', BAR[resolved]);
-
-          // Follow the OS, but only while the reader has not chosen otherwise.
-          // Attaching this unconditionally would let the OS override an explicit
-          // pick the moment the machine switched appearance.
-          if (choice === 'system') {
-            if (typeof darkQuery.addEventListener === 'function') {
-              darkQuery.addEventListener('change', onSystemChange);
-            } else if (typeof darkQuery.addListener === 'function') {
-              darkQuery.addListener(onSystemChange);
-            }
-          }
-        }
-
-        function onSystemChange(event) {
-          if (root.getAttribute('data-theme') !== 'system') return;
-          root.setAttribute('data-theme', event.matches ? 'dark' : 'light');
-          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
-          if (meta) meta.setAttribute('content', event.matches ? BAR.dark : BAR.light);
-        }
-
-        window.__xahTheme = apply;
-
-        try {
-          var stored = localStorage.getItem(STORAGE_KEY);
-
-          // The cookie is read as well as localStorage, and wins when both are
-          // present. It is what the server used to render the switcher's checked
-          // state, so preferring it keeps the control and the painted theme in
-          // agreement. A reader with an old cookie and no localStorage entry — or
-          // the reverse, after clearing one but not the other — would otherwise see
-          // the control show one state and the page paint in another.
-          var match = document.cookie.match(/(?:^|;\s*)xah_theme=(light|dark|system)/);
-          if (match) stored = match[1];
-
-          apply(VALID.indexOf(stored) === -1 ? 'system' : stored);
-        } catch (error) {
-          // Storage unavailable. `system` is still correct, because the stylesheet
-          // resolves it through prefers-color-scheme on its own.
-          apply('system');
-        }
-      })();
-    </script>
+    <script is:inline set:html={THEME_HEAD_SCRIPT} />
 
     <slot name="head" />
   </head>
   <body>
     <slot />
     {/*
-      Applies a change from the switcher, then remembers it.
-
-      Applying is not optional and was the bug this replaced: the handler used to
-      only write localStorage and the cookie, on the assumption that the radio's
-      `:checked` state plus CSS would repaint the page. It does not — that rule
-      only highlights the control. The theme is driven by `data-theme` on <html>,
-      which nothing was writing, so clicking "dark" moved the highlight and left
-      the page light until a reload.
-
-      `window.__xahTheme` is the shared apply function installed by the head script
-      above, so the two call sites cannot drift. The inline-script guard is because
-      a reader can reach this code with the head script having thrown.
+      Applies a change from the switcher, then remembers it. Shared with the admin
+      surface — see `lib/theme.ts`. Applying is not optional and was the bug this
+      replaced: the handler used to only write localStorage and the cookie, on the
+      assumption that the radio's `:checked` state plus CSS would repaint the page.
+      It does not — that rule only highlights the control. The theme is driven by
+      `data-theme` on <html>, which nothing was writing, so clicking "dark" moved
+      the highlight and left the page light until a reload.
     */}
-    <script is:inline>
-      document.addEventListener('change', function (event) {
-        var input = event.target;
-        if (!input || input.name !== 'theme') return;
-        // Validated against the same three states the control offers, so a
-        // synthetic `change` event carrying anything else cannot be applied or
-        // persisted.
-        if (['light', 'dark', 'system'].indexOf(input.value) === -1) return;
-
-        if (typeof window.__xahTheme === 'function') window.__xahTheme(input.value);
-
-        try {
-          localStorage.setItem('xah-theme', input.value);
-        } catch (error) {
-          // Private browsing. The cookie below still carries the choice across
-          // navigations, and the theme applies for this page view regardless.
-        }
-        // A cookie as well as localStorage, because localStorage is invisible to the
-        // server. Without it the switcher would render in the `system` position on
-        // every page load even though the theme itself was right, which reads as the
-        // control not having taken the click.
-        document.cookie =
-          'xah_theme=' + input.value + '; path=/; max-age=31536000; samesite=lax';
-      });
-    </script>
+    <script is:inline set:html={THEME_BODY_SCRIPT} />
   </body>
 </html>

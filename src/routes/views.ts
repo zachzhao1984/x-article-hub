@@ -3,6 +3,8 @@
 import { escapeHtml } from '../lib/http';
 import { FALLBACK_SITE_NAME } from '../config/site';
 import { MANIFEST_HREF, SITE_ICONS, THEME_COLOR, iconLinkHtml } from '../config/icons';
+import { THEME_BODY_SCRIPT, THEME_HEAD_SCRIPT, THEME_OPTIONS } from '../lib/theme';
+import { ICON_PATHS, ICON_VIEW_BOX } from '../icons/phosphor';
 import type { ArticleRow } from '../db/rows';
 import type { ArticleStatus } from '../jobs/types';
 
@@ -10,7 +12,45 @@ export interface LayoutOptions {
   title: string;
   active: 'dashboard' | 'import' | 'articles' | 'jobs';
   siteName: string;
-  version?: string;
+}
+
+/**
+ * SPEC §33 — the three-state theme control, in the topbar's right-hand corner.
+ *
+ * It replaces a label that read `Phase 1`, which was a build-milestone marker with no
+ * meaning for anyone but the author, in the one corner of every admin page an operator
+ * looks at. The control is the public header's, same three states, same glyphs, same
+ * shared scripts — a person who picked dark while reading should not find the admin back
+ * in light, and two controls would be two behaviours to keep in step.
+ *
+ * Generated from `THEME_OPTIONS` rather than hand-written, and the markup mirrors
+ * `ThemeSwitch.astro`: a fieldset whose legend names the radio group for assistive tech,
+ * labels wrapping visually-hidden inputs so the control is keyboard navigable and works
+ * before any script, and CSS doing the highlighting through `:has(input:checked)`.
+ *
+ * No input is rendered `checked`. The public pages server-render it from the cookie
+ * through `Astro.cookies`; the admin has no such plumbing — the choice would have to be
+ * threaded through seven view functions and their seven call sites for a first-paint nicety
+ * nobody will ever notice. The body script below syncs the control to the already-painted
+ * `data-theme` instead, which costs a few milliseconds of unselected state after parse and
+ * touches nothing else. The painted theme itself is correct from the first frame, because
+ * the head script reads the same cookie.
+ */
+function themeSwitchHtml(): string {
+  const options = THEME_OPTIONS.map(
+    (option) =>
+      `<label class="theme-switch__option" title="${escapeHtml(option.label)}">` +
+      `<input type="radio" name="theme" value="${option.value}" aria-label="${escapeHtml(option.label)}">` +
+      `<svg class="theme-switch__icon" viewBox="${ICON_VIEW_BOX}" width="15" height="15" ` +
+      `fill="currentColor" aria-hidden="true" focusable="false"><path d="${ICON_PATHS[option.icon]}"></path></svg>` +
+      `</label>`,
+  ).join('');
+
+  return (
+    `<fieldset class="theme-switch"><legend class="visually-hidden">Colour theme</legend>` +
+    `<div class="theme-switch__options" role="radiogroup" aria-label="Colour theme">${options}</div>` +
+    `</fieldset>`
+  );
 }
 
 const NAV: Array<{ key: LayoutOptions['active']; href: string; label: string }> = [
@@ -19,6 +59,42 @@ const NAV: Array<{ key: LayoutOptions['active']; href: string; label: string }> 
   { key: 'articles', href: '/admin/articles', label: 'Articles' },
   { key: 'jobs', href: '/admin/jobs', label: 'Jobs' },
 ];
+
+/**
+ * Puts the control's checked state where the painted theme already is.
+ *
+ * Admin-only, and the reason it exists is spelled out at `themeSwitchHtml`: the public
+ * pages render `checked` from the cookie server-side and the admin does not, so nothing
+ * else would put the highlight on the right option until the reader clicked something.
+ *
+ * Reads `data-theme` rather than the cookie on purpose. The attribute is what the page is
+ * actually painted from, so syncing to it means the control cannot disagree with the
+ * surface even if the two disagree — the alternative, reading the cookie again here, can
+ * reproduce exactly the split it is meant to prevent.
+ *
+ * The guard covers the case where the head script threw before writing anything: with no
+ * attribute there is nothing authoritative to sync to, and leaving all three unselected is
+ * more honest than picking one.
+ */
+const THEME_CONTROL_SYNC_SCRIPT = `(function () {
+  var choice = document.documentElement.getAttribute('data-theme');
+  if (choice !== 'light' && choice !== 'dark' && choice !== 'system') return;
+  var inputs = document.querySelectorAll('.theme-switch__option input[name="theme"]');
+  for (var i = 0; i < inputs.length; i++) {
+    if (inputs[i].value === choice) {
+      // Property and attribute, not just the property. Setting \`checked\` alone drives the
+      // rendering — the \`:has(input:checked)\` rule matches on the property, so the
+      // highlight is right either way — but the property does not reflect back to the
+      // content attribute, which leaves the serialised DOM of this page carrying no
+      // checked state at all while the public pages, whose Astro-rendered inputs do, look
+      // different from it. One call makes the two surfaces produce the same markup and
+      // makes the state readable by anything that inspects the DOM.
+      inputs[i].checked = true;
+      inputs[i].setAttribute('checked', 'checked');
+      return;
+    }
+  }
+})();`;
 
 export function layout(options: LayoutOptions, body: string): string {
   const nav = NAV.map(
@@ -37,16 +113,19 @@ ${SITE_ICONS.map(iconLinkHtml).join('\n')}
 <link rel="manifest" href="${MANIFEST_HREF}">
 <meta name="theme-color" content="${THEME_COLOR}">
 <link rel="stylesheet" href="/admin.css">
+<script>${THEME_HEAD_SCRIPT}</script>
 </head>
 <body>
 <header class="topbar">
   <div class="brand"><img class="brand-mark" src="/logo-mark.png" width="72" height="72" alt="" decoding="async"><img class="brand-mark brand-mark-inverse" src="/logo-mark-inverse.png" width="72" height="72" alt="" decoding="async">${escapeHtml(options.siteName)} <span class="brand-tag">admin</span></div>
   <nav class="nav">${nav}</nav>
-  <div class="topbar-meta">Phase 1${options.version ? ` · ${escapeHtml(options.version)}` : ''}</div>
+  ${themeSwitchHtml()}
 </header>
 <main class="main">
 ${body}
 </main>
+<script>${THEME_BODY_SCRIPT}</script>
+<script>${THEME_CONTROL_SYNC_SCRIPT}</script>
 </body>
 </html>`;
 }
