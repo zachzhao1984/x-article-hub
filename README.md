@@ -699,6 +699,32 @@ that implies a destination which does not exist is a worse fault than one that r
 shade light. At 18px the diagonal is perfectly legible — diagonals lose apparent weight
 at small sizes whatever the icon, so a heavier arrow would lose it just as much.
 
+**The current page is the theme switch's own selected treatment** — an `--accent` fill
+with `--accent-contrast` lettering — so the accent means one thing across the site: you
+are here. It replaces `background: var(--panel-2)`, which on the header measured a
+contrast ratio of **1.06** in the light theme and **1.21** in the dark one. That is not
+subtle; a reader could not tell which board they were on. The accent fill measures 5.9:1
+against the header in light and 9.0:1 in dark, with 6.2:1 and 10.7:1 between its own fill
+and its own lettering.
+
+Two details that are decisions rather than taste. The active state repeats itself on
+`:hover`, because the hover rule sets a background and would otherwise knock the fill off
+the current page the moment a pointer crossed it — the same class of fault as the theme
+switch that once persisted a choice and repainted nothing. And there is **no**
+`font-weight` change, though `.cat-chip.active` uses one: weight widens the label, the
+nav has no slack (seven items at 10px padding need exactly the 642px the row has from
+1200px up), and a bolder current item would change the row's width on every navigation.
+
+Hover stays neutral so the accent keeps meaning one thing — it is carried by the
+lettering, `--muted` 5.7:1 against the header versus `--text` at 13.9:1, with
+`--panel-2` as a faint raised surface behind it.
+
+The category chips below the nav answer the same question with a `--text` fill, and the
+two never appear together: the nav has no `/category/*` entry and `isActive` matches on a
+path prefix, so a category page activates no nav item and a board page activates no chip.
+A test asserts both halves, because adding a category entry to the nav would put a
+near-black pill 60px below an accent one.
+
 **Weight is regular, size is per call site** — 18px in the navigation beside 14px
 labels, 15px in the segmented control where the box is fixed. Regular and bold are
 barely distinguishable at those sizes, and regular sits more quietly beside the text.

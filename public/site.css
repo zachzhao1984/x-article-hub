@@ -296,8 +296,38 @@ a:hover { color: var(--accent); }
   font-size: 14px;
   white-space: nowrap;
 }
-.nav-item:hover { background: var(--panel); color: var(--text); }
-.nav-item.active { background: var(--panel-2); color: var(--text); }
+/*
+ * Three levels, not two: idle, hover, current.
+ *
+ * `current` is the theme switch's own selected state — an `--accent` fill with
+ * `--accent-contrast` lettering — so the accent now means exactly one thing across the
+ * whole site: you are on this. It was worth copying rather than inventing, because the rule
+ * it replaces was not subtle-but-arguable, it was invisible: `--panel-2` on the header is
+ * a contrast ratio of 1.06 in the light theme and 1.21 in the dark one, so a reader could
+ * not tell which board they were on. The accent fill measures 5.9:1 against the header in
+ * light and 9.0:1 in dark, with 6.2:1 and 10.7:1 between its own fill and its lettering.
+ *
+ * `.cat-chip.active` in the category row answers the same question with a `--text` fill and
+ * does carry a `font-weight` change. Neither is copied here, and the reason is not that they
+ * are wrong. The text fill is louder, and louder is not the goal. The weight is left out for
+ * a measured reason: it widens the label, and the nav has no slack, so the row would change
+ * width on every navigation.
+ *
+ * The two treatments never appear together, which is what makes having both safe. The nav
+ * has no `/category/*` entry and `isActive` matches on a path prefix, so a category page
+ * activates no nav item and a board page activates no chip. Worth knowing before adding a
+ * category entry to the nav: it would put a `--text` pill and an `--accent` pill 60px apart
+ * in one header, and that *would* read as two systems.
+ *
+ * Hover stays neutral on purpose. A tinted hover would compete with the accent for the
+ * meaning "selected", so hover is carried by the lettering instead — `--muted` is 5.7:1
+ * against the header and `--text` is 13.9:1 — with `--panel-2` riding along as a faint
+ * raised surface. That fill is nearly invisible on its own, which is the same 1.06 as the
+ * old active state; the difference is that here it is decoration behind a cue that works.
+ */
+.nav-item:hover { background: var(--panel-2); color: var(--text); }
+.nav-item.active,
+.nav-item.active:hover { background: var(--accent); color: var(--accent-contrast); }
 /*
  * The nav glyph is a filled Phosphor path inlined by `Icon.astro`, at the size the call
  * site asks for rather than one fixed here.
