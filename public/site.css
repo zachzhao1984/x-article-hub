@@ -198,11 +198,11 @@ body {
  * only match `.article-body p` and keeps the container's inherited 1.75.
  */
 .hero-sub, .board-title, .board-more,
-.card-meta, .card-foot, .badge, .cat-chip, .cat-count, .cat-desc,
-.cat-name, .tag, .nav-item, .search-mini input,
+.card-meta, .card-foot, .badge, .cat-chip, .cat-count,
+.tag, .nav-item, .search-mini input,
 .search-form input, .search-form button, .result-snippet, .article-crumbs,
 .original-link, .byline, .hero-meta, .footer-inner, .fig-missing, .empty-state,
-pre, .cat-card, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
+pre, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
 .hero h1, .stat-row, .author-name .handle, .fig-missing span {
   line-height: 1.5;
 }
@@ -448,21 +448,16 @@ a:hover { color: var(--accent); }
 .score { font-variant-numeric: tabular-nums; }
 .muted { color: var(--faint); }
 
-/* --- category / tag grids --- */
+/* --- tag grid --- */
 
-.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.cat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-}
-.cat-card:hover { border-color: var(--accent-dim); }
-.cat-name { font-weight: 700; font-size: 15px; }
-.cat-desc { color: var(--muted); font-size: 13px; flex: 1; }
+/*
+ * The category grid that shared this heading is gone, and so are its four rules.
+ * They are deleted rather than left declared: a selector nothing renders reads as live
+ * and gets restyled later, and `.cat-card`/`.cat-name`/`.cat-desc` were also members of
+ * the 1.5 line-height group above, so they would have lingered there as references to
+ * nothing. `.cat-count` survives — the header's category chips and this page's tag cloud
+ * both still use it.
+ */
 
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
 .tag {

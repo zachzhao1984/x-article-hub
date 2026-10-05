@@ -6,19 +6,26 @@ import SiteHeader from '../components/SiteHeader.astro';
 import ArticleCard from '../components/ArticleCard.astro';
 import {
   homepageCounts,
-  listCategoriesWithCounts,
   listPublishedArticles,
   listTagsWithCounts,
 } from '../db/public';
 
 const db = env.DB as unknown as D1Database;
 
-const [counts, trending, rising, featured, categories, tags] = await Promise.all([
+// Every entry here is rendered below. The category grid that used to close the page
+// also made `listCategoriesWithCounts` part of this list, and when it went so did the
+// query: a D1 read on every homepage load for a result nothing displayed, which is the
+// kind of cost that survives long after the section that justified it is deleted.
+// `tests/unit/homepage.test.ts` holds the general form of that rule.
+//
+// Categories stay reachable — the header lists them as chips, and each card, search hit
+// and article links into `/category/:slug` — so this removes one entrance to a page
+// that is still on the sitemap, not a section of the site.
+const [counts, trending, rising, featured, tags] = await Promise.all([
   homepageCounts(db),
   listPublishedArticles(db, { sort: 'trending', limit: 5 }),
   listPublishedArticles(db, { sort: 'rising', limit: 5 }),
   listPublishedArticles(db, { sort: 'featured', limit: 3 }),
-  listCategoriesWithCounts(db),
   listTagsWithCounts(db, 24),
 ]);
 
@@ -108,19 +115,6 @@ const empty = counts.total === 0;
               </div>
             </section>
           )}
-
-          <section class="board">
-            <h2 class="board-title">Browse by category</h2>
-            <div class="cat-grid">
-              {categories.map((c) => (
-                <a class="cat-card" href={`/category/${c.slug}`}>
-                  <span class="cat-name">{c.name}</span>
-                  <span class="cat-desc">{c.description}</span>
-                  <span class="cat-count">{c.count} articles</span>
-                </a>
-              ))}
-            </div>
-          </section>
 
           {tags.length > 0 && (
             <section class="board">
