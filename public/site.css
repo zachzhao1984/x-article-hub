@@ -875,66 +875,67 @@ pre {
  */
 
 /*
- * SPEC §43 — the header's account slot, and the shape of what goes in it.
+ * SPEC §43 — the header's account slot.
  *
- * Bounded on purpose. `.nav` is `flex: 1`, so the navigation absorbs any pressure from
- * whatever sits beside it — which is the right priority, but it also means the slot's own
- * width decides how much the nav has to give up. The nav was measured to fit at every
- * width from 640px up (see the `@media` blocks below: the site name drops at 1180px, the
- * search box at 1100px, the glyphs at 900px, the label size at 700px, each one measured
- * rather than guessed). An unbounded display name would have quietly eaten that headroom
- * and started the nav scrolling at 640px, which reads as a layout bug rather than as a
- * new feature.
+ * What is in it: the fixed string "Sign in", or a fixed-size avatar. Nothing in the slot
+ * is of variable length any more, which is why it carries no width bound of its own.
  *
- * So: `flex: none` so the slot never grows, `max-width` so one long name cannot take more
- * than its share, and ellipsis rather than wrapping or clipping.
+ * That used to need one. While the display name was rendered here, the slot had to be
+ * capped (`max-width`) and had to narrow again at the same 700px the nav labels narrow at,
+ * because a long name would otherwise take its width straight out of the nav — `.nav` is
+ * `flex: 1`, so it absorbs the pressure and starts scrolling, silently, with no
+ * affordance. Measured at the time: at 640px a 36-character name left the nav 22px short.
+ *
+ * Removing the name removed the pressure, so the cap and the narrowing rule went with it
+ * rather than being left as defence against nothing. The invariant they were protecting is
+ * now structural — there is no variable-width content in the slot to protect it.
  */
 
 .auth-slot {
   display: inline-flex;
   align-items: center;
   flex: none;
-  min-width: 0;
-  max-width: 150px;
 }
 
 .auth-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 6px 10px;
   border-radius: 7px;
   color: var(--muted);
   font-size: 14px;
   white-space: nowrap;
-  min-width: 0;
 }
 
 .auth-link:hover { color: var(--text); background: var(--panel-2); }
 
 .auth-avatar {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   flex: none;
   object-fit: cover;
 }
 
-.auth-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-
 /*
- * The slot narrows at the same width the nav labels do (700px), because at that width the
- * row cannot afford two things shrinking independently — the nav would give up its
- * padding and the slot would keep its full 150px, and the nav is the part that must not
- * lose content.
- *
- * Measured, not guessed: at 640px with all five boards and a 36-character display name,
- * a 150px slot left the nav 22px short of its content, which clips the last item with no
- * affordance. 110px puts it back inside. Signed-out the row fits at every width from
- * 640px up regardless, since "Sign in" is 65px.
+ * A letter standing in for a missing avatar, on the accent so it reads as the same kind
+ * of thing as a picture rather than as an empty box. `line-height: 1` and the flex
+ * centring stop the glyph from sitting low in the circle — without them the character
+ * inherits the 1.5 fallback from above and reads as off-centre.
  */
-@media (max-width: 700px) {
-  .auth-slot { max-width: 110px; }
+.auth-avatar-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .theme-switch {

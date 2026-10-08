@@ -598,25 +598,73 @@ describe('SPEC §43 — the pieces this depends on', () => {
     expect(middleware).toMatch(/path\.startsWith\('\/account'\)/);
   });
 
-  it('writes a display name with textContent, never innerHTML', () => {
+  it('shows the avatar and never the display name in the header slot', () => {
+    // The slot's whole visible content is an avatar. Not the name, not the email, and not
+    // a hover tooltip that would put the name back on screen — `title` is excluded
+    // deliberately, because it reintroduces exactly what the avatar replaced.
+    const script = code(header);
+    expect(script).not.toMatch(/\.title\s*=/);
+
+    // **Structural, not textual.** An earlier version of this matched
+    // `name.className = 'auth-name'`, and putting the name back under a different variable
+    // name sailed straight through it — the same trap that let a `mergeInto` reintroduction
+    // of the account-merge branch pass its own test. The property is that the link receives
+    // exactly two possible children and both are avatars, so the count is what is asserted.
+    const appends = script.match(/link\.appendChild\(/g) ?? [];
+    expect(appends, 'the link takes exactly two children: an avatar or a letter').toHaveLength(2);
+    expect(script).toMatch(/avatar\.className = 'auth-avatar'/);
+    expect(script).toMatch(/letter\.className = 'auth-avatar auth-avatar-letter'/);
+
+    // The avatar is decorative; the link's name is the aria-label. An image with a real
+    // alt would read out a sentence before the link's own label, which is the wrong order.
+    expect(script).toMatch(/avatar\.alt = ''/);
+    expect(script).toMatch(/link\.setAttribute\('aria-label'/);
+  });
+
+  it('never writes the display name as HTML, wherever it now goes', () => {
+    // Still load-bearing after the name stopped being visible: it reaches the DOM as the
+    // aria-label and, without an avatar, as the letter fallback. Both are untrusted strings
+    // from a Google account holder.
     const script = header.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1] ?? '';
     expect(script).toContain('textContent');
+    expect(script).toContain('setAttribute');
     expect(script).not.toContain('innerHTML');
   });
 
-  it('bounds the account slot so it cannot squeeze the nav out of the header', () => {
-    expect(css).toMatch(/\.auth-slot \{[^}]*flex: none/);
-    expect(css).toMatch(/\.auth-slot \{[^}]*max-width/);
-    expect(css).toMatch(/\.auth-name \{[^}]*text-overflow: ellipsis/);
+  it('has a stand-in for a reader with no avatar', () => {
+    // `avatar_url` is nullable and Google can return no picture. With the name gone, an
+    // empty slot would leave a signed-in reader with nothing at all — the failure is
+    // invisible precisely because nothing is broken.
+    const script = header.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1] ?? '';
+    expect(script).toMatch(/else \{[\s\S]*auth-avatar-letter/);
+    expect(script).toMatch(/\(name \|\| '\?'\)\.charAt\(0\)/);
 
-    // The slot narrows at the same width the nav labels do. If it narrowed later — or
-    // never — the two would shrink independently and the nav, which is the part that must
-    // not lose content, would be the one paying for it.
-    const labelShrink = /@media \(max-width: (\d+)px\) \{[^}]*\.nav-item \{[^}]*font-size: 13px/.exec(
-      css,
-    )?.[1];
-    const slotShrink = /@media \(max-width: (\d+)px\) \{\s*\.auth-slot \{ max-width/.exec(css)?.[1];
-    expect(labelShrink, 'cannot find where the nav labels shrink').toBeDefined();
-    expect(slotShrink, "the slot must narrow at the nav's threshold").toBe(labelShrink);
+    // The letter element carries *both* classes, so the circle comes from `.auth-avatar`
+    // and this rule only adds the fill and the centring. Asserted as a pair because the
+    // shape living in one place is the reason the two cannot drift apart.
+    expect(script).toMatch(/letter\.className = 'auth-avatar auth-avatar-letter'/);
+    expect(css).toMatch(/\.auth-avatar \{[^}]*border-radius: 50%/);
+    // `line-height: 1` plus flex centring: without them the glyph inherits the 1.5
+    // fallback from above and sits visibly low in the circle.
+    expect(css).toMatch(/\.auth-avatar-letter \{[^}]*line-height: 1/);
+  });
+
+  it('keeps the slot a fixed width by containing nothing variable', () => {
+    // The invariant the old `max-width` was defending is now structural rather than
+    // declared. While the display name was rendered here, `.nav` — `flex: 1` — absorbed
+    // the pressure and began scrolling silently; a 36-character name left it 22px short at
+    // 640px. With the name gone there is no variable-width content in the slot, so the cap
+    // and the narrowing rule are gone too rather than left as defence against nothing.
+    //
+    // Asserted as the *absence* of both, so putting the name back without also restoring
+    // the bounds fails here instead of failing silently at 640px.
+    const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(clean).toMatch(/\.auth-slot \{[^}]*flex: none/);
+    expect(clean, 'a width cap is only needed for variable-length content').not.toMatch(
+      /\.auth-slot \{[^}]*max-width/,
+    );
+    expect(clean).not.toMatch(/\.auth-name/);
+    // And the avatar is a fixed size, so it cannot grow either.
+    expect(clean).toMatch(/\.auth-avatar \{[^}]*width: \d+px;[^}]*height: \d+px/);
   });
 });

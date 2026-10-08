@@ -120,16 +120,24 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
       cache hit rate, because every session becomes its own cache entry.
 
       So the markup below is identical for every reader: a plain link to /account. This
-      script upgrades it to the reader's name when there is one. The degradation is that
-      with JavaScript off the slot always reads "Sign in" — which is a link that still
-      works, not a broken control, and /account is server-rendered, so signing in and out
-      never depends on this script.
+      script upgrades it to the reader's avatar when there is one.
 
-      `textContent`, never `innerHTML`: the value written is a display name that an X or
-      Google account holder chose, and this site has no reason to trust it.
+      **The avatar is the whole representation.** The display name is deliberately not
+      shown here, which means the link has no visible text and therefore needs an explicit
+      `aria-label` — without one, a screen reader announces a bare "link" and the control
+      is unusable non-visually. That label is why the name still reaches the DOM at all,
+      and why the `textContent` guard in the script is load-bearing rather than
+      ceremonial.
+
+      No `title` attribute, deliberately: it would put the name back on screen on hover,
+      which is the thing being removed.
+
+      The degradation is unchanged and still harmless: with JavaScript off the slot reads
+      "Sign in" — a link that still works, not a broken control — and /account is
+      server-rendered, so signing in and out never depends on this script.
     */}
     <span class="auth-slot" data-auth-slot>
-      <a class="nav-item auth-link" href="/account"><span class="auth-name">Sign in</span></a>
+      <a class="nav-item auth-link" href="/account">Sign in</a>
     </span>
   </div>
 
@@ -143,24 +151,37 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
         })
         .then(function (body) {
           if (!body || !body.user) return;
+          var name = (body.user.displayName || '').trim();
+
           var link = document.createElement('a');
           link.className = 'nav-item auth-link';
           link.href = '/account';
+          // Never displayed, and still required: the visible content is an image with an
+          // empty alt, so this is the link's only accessible name.
+          link.setAttribute('aria-label', name ? 'Account: ' + name : 'Account');
+
           if (body.user.avatarUrl) {
             var avatar = document.createElement('img');
             avatar.className = 'auth-avatar';
             avatar.src = body.user.avatarUrl;
             avatar.alt = '';
-            avatar.width = 18;
-            avatar.height = 18;
+            avatar.width = 20;
+            avatar.height = 20;
             avatar.loading = 'lazy';
             avatar.decoding = 'async';
             link.appendChild(avatar);
+          } else {
+            // Google can return no picture, and `avatar_url` is nullable by schema. With
+            // the name gone, an avatar-only slot with nothing in it would leave a
+            // signed-in reader with no indication at all that they are signed in — the
+            // silent failure this codebase keeps having to guard against. So the first
+            // character stands in.
+            var letter = document.createElement('span');
+            letter.className = 'auth-avatar auth-avatar-letter';
+            letter.textContent = (name || '?').charAt(0).toUpperCase();
+            link.appendChild(letter);
           }
-          var name = document.createElement('span');
-          name.className = 'auth-name';
-          name.textContent = body.user.displayName;
-          link.appendChild(name);
+
           slot.replaceChildren(link);
           slot.setAttribute('data-auth-state', 'signed-in');
         })
