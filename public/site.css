@@ -287,11 +287,13 @@ a:hover { color: var(--accent); }
 .nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
 .nav-item {
   display: inline-flex; align-items: center; gap: 6px;
-  /* 10px, not 11px. Measured: seven items at 11px need 651px and the row has 642px at
-   * every width from 1200px up, so the last item was clipped by 9px on a desktop — the
-   * kind of overflow that reads as a rendering quirk rather than a layout fault and so
-   * survives. 2px a side is 28px back, which is what it takes to fit. */
-  padding: 6px 10px;
+  /* 9px, not 10px. Measured with the sixth item: six labels at 14px/10px need 558px and
+   * the row has 553px at every width from 1301px up, so the last item was short by 5px on
+   * a desktop — the same non-obvious overflow 11px caused the first time, and the same
+   * kind of reading (a rendering quirk rather than a layout fault). 1px a side is 12px
+   * back, which is what it takes. The 700px block below takes it to 9px for narrow rows,
+   * and this is now the same number, so the two no longer differ in padding at all. */
+  padding: 6px 9px;
   border-radius: 7px;
   color: var(--muted);
   font-size: 14px;
@@ -738,6 +740,82 @@ pre {
 .account-idents li:last-child, .account-providers li:last-child { border-bottom: none; }
 .account-providers li { border-bottom: none; padding: 6px 0; }
 
+/*
+ * SPEC §17.1 — the author index.
+ *
+ * A grid of links rather than cards with a thumbnail: the avatar is the affordance, not
+ * the content, and these entries have no title or excerpt to make a card out of. Two
+ * columns at most, because a row of names is easier to scan than a wall of them and the
+ * name lengths here vary a lot.
+ */
+.author-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.author-card { min-width: 0; }
+
+.author-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  min-width: 0;
+}
+
+.author-link:hover { border-color: var(--accent-dim); }
+
+.author-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex: none;
+  object-fit: cover;
+}
+
+/*
+ * The stand-in when there is no picture. Same treatment as the header slot's letter —
+ * accent fill, `--accent-contrast` lettering — so a missing avatar reads as the same kind
+ * of thing on both surfaces rather than as two different failures.
+ */
+.author-avatar-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.author-meta { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+
+/* Both truncate rather than wrap: one long X display name must not make its row taller
+ * than the others in the same grid row. */
+.author-display {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.author-handle {
+  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .site-footer { border-top: 1px solid var(--border); padding: 28px 0; margin-top: 40px; }
 .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--faint); }
 .footer-inner p { margin: 0; }
@@ -759,12 +837,34 @@ pre {
  * the nav links to directly. Below about 700px the row does scroll, which is what it did
  * with six items too — the phone case was never a fitting case.
  */
-@media (max-width: 1180px) {
+/*
+ * The mark releases the site name.
+ *
+ * This used to fire at 1180px. Adding the sixth nav item moved it, and the measurement is
+ * the reason: at 1280px and above the row had 553px for the nav while the nav needed 558px
+ * — 5px short, at *every* width from 1181px up, because above the threshold the site name
+ * keeps its width and the row is otherwise fixed. So a desktop at 1280px scrolled by 5px
+ * with no affordance, while 1180px and below were fine. Raising the threshold to the next
+ * convenient round number hands the name's ~150px to the nav across that whole range.
+ *
+ * Fail-then-fade, restated: primary navigation is never what gives way. The site name is
+ * the first thing to go because the mark and the document title already carry it.
+ */
+@media (max-width: 1300px) {
   .logo-text { display: none; }
   .header-inner { gap: 18px; }
 }
 
-@media (max-width: 1100px) {
+/*
+ * The search box goes next, for the same kind of reason: it is a shortcut to a page the
+ * nav lists.
+ *
+ * 1100px was the old threshold and it is now too late — between 1101px and 1300px the nav
+ * needed 578px and had between 578px and 553px, which is inside the line only just, and
+ * the extra item made the margin go negative at the low end. Moving it up gives the nav
+ * the box's ~190px through the whole awkward range.
+ */
+@media (max-width: 1200px) {
   .search-mini { display: none; }
 }
 
@@ -772,12 +872,30 @@ pre {
   .nav-icon { display: none; }
 }
 
-/* Last squeeze before the row starts scrolling: 13px labels and 9px sides, which is what
- * brings 700px and 640px inside the line. Below about 560px seven items plus the mark and
- * the theme switch genuinely do not fit, and the nav scrolls — on a phone that is the
- * normal behaviour for a row this long, and it is what the six-item row did too. */
+/*
+ * Narrow rows: 13px labels. Same 9px sides as the base rule above, so this override is only
+ * about the type size now.
+ *
+ * 9px is what brings 700px inside the line and was already the value here. It is also what
+ * a 640px row needs: measured with the sixth item, six labels at 14px/10px needed 381px
+ * against 378px available — 3px over, and a silent 3px scroll is exactly the overflow that
+ * reads as a rendering quirk rather than as a layout fault.
+ *
+ * Below about 560px six items plus the mark and the theme switch genuinely do not fit, and
+ * the nav scrolls — on a phone that is the normal behaviour for a row this long.
+ */
 @media (max-width: 700px) {
-  .nav-item { padding: 6px 9px; font-size: 13px; }
+  /* 8.5px sides and 13px labels.
+   *
+   * The padding is not a round number because the row is not. Measured with the sixth item,
+   * a 640px viewport leaves 378px for a nav needing 381px at 9px sides — 3px over — and the
+   * next round step down (8px) is more than that row needs. Half a pixel a side across six
+   * items is 6px back, which closes the 3px with room to spare at every width in the band.
+   *
+   * This is the same lever the base rule uses, just tighter: a too-wide row is only ever
+   * fixed by giving the nav's items less padding, never by narrowing the nav itself, because
+   * a clipped nav item is invisible while a tighter one is merely tighter. */
+  .nav-item { padding: 6px 8.5px; font-size: 13px; }
 }
 
 @media (max-width: 820px) {
@@ -786,6 +904,9 @@ pre {
 }
 
 @media (max-width: 560px) {
+  /* Below the width where the row can fit the nav at all, 8px sides buy one more label
+   * before the scroll starts — and the nav scrolls here regardless, which is the phone
+   * behaviour this row has always had. */
   .nav-item { padding: 6px 8px; font-size: 13px; }
 }
 

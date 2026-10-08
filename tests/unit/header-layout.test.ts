@@ -40,10 +40,19 @@ function hidesAt(selector: string): number {
 describe('the header nav', () => {
   it('fits at every width it claims to', () => {
     // The number that started this: 11px sides put seven items at 651px against the 642px
-    // the row has from 1200px up, so the last item was clipped on every desktop. Asserted
-    // as an exact value because "roughly 10px" is how it drifted to 11 in the first place.
-    expect(css).toMatch(/\.nav-item \{[^}]*padding: 6px 10px;/);
+    // the row had from 1200px up, so the last item was clipped on every desktop. Then 10px
+    // sides put six items at 558px against 553px — the same fault, 5px instead of 9px, one
+    // item later. Asserted as an exact value both times, because "roughly 9px" is how it
+    // drifted to 11 in the first place.
+    //
+    // The 700px block is the third value, and it is a half-pixel because the row is not a
+    // round one: 640px leaves 378px for a nav needing 381px at 9px sides. 8px overshoots,
+    // 8.5px closes it with room to spare. Measured afterwards: zero scroll at every width
+    // from 640 to 1920 in both signed-in and signed-out states.
+    expect(css).toMatch(/\.nav-item \{[^}]*padding: 6px 9px;/);
+    expect(css).not.toMatch(/\.nav-item \{[^}]*padding: 6px 10px;/);
     expect(css).not.toMatch(/\.nav-item \{[^}]*padding: 6px 11px;/);
+    expect(css).toMatch(/\.nav-item \{ padding: 6px 8\.5px; font-size: 13px; \}/);
   });
 
   it('gives things up in the order the row is worth more', () => {
@@ -87,11 +96,21 @@ describe('the header nav', () => {
     // happily accept a site name hidden from 1300px, which costs a laptop its wordmark for
     // nothing — the row already fits at 1200px. So these are the measured values, and a
     // change to any of them means re-running the measurement rather than nudging a number
-    // until the suite is green: 1180 is where the row stops fitting seven items with the
-    // wordmark, 1100 is where it stops fitting them with the search box, and 900 is where
-    // it stops fitting the glyphs.
-    expect(hidesAt('.logo-text')).toBe(1180);
-    expect(hidesAt('.search-mini')).toBe(1100);
+    // until the suite is green.
+    //
+    // Re-measured when the sixth nav item (`/authors`) went in, because the row is what
+    // decides them:
+    //
+    //   1300  where the row stops fitting six items with the wordmark. It was 1180 with
+    //         five; with six, 1181–1280+ had 553px for a nav needing 558px — 5px short at
+    //         every width above the old threshold, because the wordmark keeps its width and
+    //         the rest of the row is fixed.
+    //   1200  where it stops fitting them with the search box. Was 1100; with six items the
+    //         1101–1300 band was inside the line only just.
+    //    900  where it stops fitting the glyphs. Unchanged — the two above absorbed the
+    //         sixth item before this one had to.
+    expect(hidesAt('.logo-text')).toBe(1300);
+    expect(hidesAt('.search-mini')).toBe(1200);
     expect(hidesAt('.nav-icon')).toBe(900);
   });
 });

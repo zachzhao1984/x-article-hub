@@ -9,8 +9,8 @@ bump to restyle the navigation between deploys.
 
 ## Phosphor Icons
 
-Eight icons are used: `house`, `star`, `clock`, `fire`, `trend-up`, `sun`, `moon`,
-`desktop`.
+Nine icons are used: `house`, `star`, `clock`, `fire`, `trend-up`, `users`, `sun`,
+`moon`, `desktop`.
 
 - Project: <https://phosphoricons.com>
 - Upstream package: [`@phosphor-icons/core`](https://www.npmjs.com/package/@phosphor-icons/core) 2.1.1

@@ -28,18 +28,25 @@ const theme = (() => {
 const path = Astro.url.pathname;
 
 /**
- * Home, plus the four boards of SPEC §15. Not the seven entries this used to have.
+ * Home, plus the four boards of SPEC §15, plus Authors. Not the seven entries this used
+ * to have.
  *
  * `Search` and `About` were removed from the nav; neither page was removed. About is
  * still one click away in the footer, and `/search` is still what the header's search box
  * submits to. Neither needed a permanent slot in the primary row: they are destinations
- * rather than the places a reader moves between, and five items do the same job seven did.
+ * rather than the places a reader moves between, and five items did the same job seven did.
  *
- * That is not only a decluttering argument. The row runs out of room before the nav does,
- * and `.nav` is `flex: 1` with `overflow-x: auto` — so when space runs short the nav
- * *scrolls*, silently, with no affordance. Anything else placed beside it (the §43
- * account slot, before this change) pushes in the same direction, and removing these two
- * is what gave the row its headroom back.
+ * `Authors` is the reverse case, and the reason it earns a slot those two did not: it is
+ * the only way to browse the archive by *who wrote it*, which is the organising principle a
+ * reader reaches for right after finishing something they liked. `/author/*` has been
+ * reachable from every card's byline for a while, but there was no way in from the
+ * navigation — you had to already know whose name to look for.
+ *
+ * That is not only a decluttering argument either way. The row runs out of room before the
+ * nav does, and `.nav` is `flex: 1` with `overflow-x: auto` — so when space runs short the
+ * nav *scrolls*, silently, with no affordance. Anything else placed beside it (the §43
+ * account slot, before it lost its label) pushes in the same direction, so this went back
+ * through the same fit measurement the earlier changes did rather than being assumed to fit.
  *
  * The icons are chosen against what each board actually orders by, which is why two
  * of them are not interchangeable: `/latest` is `published_at DESC` — a question of
@@ -57,6 +64,7 @@ const nav: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/latest', label: 'Latest', icon: 'clock' },
   { href: '/trending', label: 'Trending', icon: 'fire' },
   { href: '/rising', label: 'Rising', icon: 'trend-up' },
+  { href: '/authors', label: 'Authors', icon: 'users' },
 ];
 
 const categories = await listCategoriesWithCounts(env.DB as unknown as D1Database);

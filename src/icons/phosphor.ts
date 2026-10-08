@@ -5,13 +5,13 @@
  * something measurable:
  *
  * - **No request.** The library's own webfont would add a blocking fetch and a flash
- *   of invisible icons in the header, which is the first thing on every page. Eight
- *   paths inline weigh about 2.2kB of HTML against a font file orders of magnitude
+ *   of invisible icons in the header, which is the first thing on every page. Nine
+ *   paths inline weigh about 2.4kB of HTML against a font file orders of magnitude
  *   larger.
  * - **No webfont.** This site loads no webfont at all, and says so in the type
  *   tokens: the whole stack is local-name lookups, because the archive is mostly
  *   Chinese and the CJK faces are the primary rendering. An icon font would be the
- *   one exception, for eight icons.
+ *   one exception, for nine icons.
  * - **No drift.** These are the upstream 2.1.1 geometry, unchanged. A dependency
  *   upgrade could restyle the navigation between deploys; a vendored path cannot.
  *
@@ -69,6 +69,9 @@ export const ICON_PATHS = {
   /** Theme: follow the system — the machine that holds the preference. */
   'desktop':
     `M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24h72v16H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16H136V200h72a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40ZM48,56H208a8,8,0,0,1,8,8v80H40V64A8,8,0,0,1,48,56ZM208,184H48a8,8,0,0,1-8-8V160H216v16A8,8,0,0,1,208,184Z`,
+  /** Authors — two figures, so the page reads as a list of people rather than a person. */
+  'users':
+    `M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z`,
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

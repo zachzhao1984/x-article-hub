@@ -89,8 +89,8 @@ describe('the glyph set', () => {
   });
 
   it('gives every nav destination an icon, and every icon a destination', () => {
-    // Home, three score boards, and the editor's picks. `/search` and `/about` left the
-    // nav — neither page left the site — so this list is five entries rather than seven.
+    // Home, three score boards, the editor's picks, and the author index. `/search` and
+    // `/about` left the nav — neither page left the site — so this is six entries.
     //
     // Pinning the exact list is the point, not incidental: a board added later without an
     // icon is the failure this catches, and so is an entry whose icon was renamed out of
@@ -99,7 +99,14 @@ describe('the glyph set', () => {
     // reachable rather than merely unlinked, since `icons.test.ts` fails on a vendored
     // glyph with no destination and `phosphor.ts` has no `magnifying-glass` or `info` left.
     const items = navIcons();
-    expect(items.map((i) => i.href)).toEqual(['/', '/featured', '/latest', '/trending', '/rising']);
+    expect(items.map((i) => i.href)).toEqual([
+      '/',
+      '/featured',
+      '/latest',
+      '/trending',
+      '/rising',
+      '/authors',
+    ]);
     for (const item of items) {
       expect(item.icon, `${item.href} has no icon`).toBeTruthy();
       expect(item.label, `${item.href} has no label to fall back on`).toBeTruthy();

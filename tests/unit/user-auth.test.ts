@@ -594,7 +594,9 @@ describe('SPEC §43 — the pieces this depends on', () => {
     expect(code(header)).not.toMatch(/resolveSession|user_session/);
     expect(header).toMatch(/data-auth-slot/);
     expect(header).toMatch(/fetch\('\/auth\/me'/);
-    expect(middleware).toMatch(/path\.startsWith\('\/auth'\)/);
+    // `/auth` is matched as a segment, not by prefix — `startsWith('/auth')` would also
+    // match `/authors`. See the note in src/middleware.ts.
+    expect(middleware).toContain("path.startsWith('/auth/')");
     expect(middleware).toMatch(/path\.startsWith\('\/account'\)/);
   });
 

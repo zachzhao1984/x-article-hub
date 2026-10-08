@@ -1,9 +1,17 @@
 // SPEC §23 — cache policy. Homepage 60s, category 300s, article 3600s, admin no-store.
+//
+// The list pages that read only published, un-taken-down articles. `/featured` and
+// `/authors` were both missing from this table at some point — `/featured` for as long as
+// it has existed — so neither had any `s-maxage` at all and every visit reached the
+// Worker. Neither reads the session, so both are safe to share.
+//
+// The predicate is "does this page differ per reader": these do not, so they are here.
+// `/account` and `/auth/*` do, and are handled separately below.
 import { defineMiddleware } from 'astro:middleware';
 
 const TTL_SECONDS: Array<[RegExp, number]> = [
   [/^\/$/, 60],
-  [/^\/(latest|trending|rising|about)$/, 60],
+  [/^\/(latest|trending|rising|featured|authors|about)$/, 60],
   [/^\/category\//, 300],
   [/^\/tag\//, 300],
   [/^\/author\//, 300],
@@ -27,7 +35,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Note what is deliberately *not* on this list: every other page stays publicly
   // cacheable, and none of them read the session cookie. That is what makes the header's
   // account slot safe — see the note in SiteHeader.astro.
-  if (path.startsWith('/admin') || path.startsWith('/account') || path.startsWith('/auth')) {
+  //
+  // `/auth` is matched as a path *segment* and not by prefix. A prefix test for `/auth`
+  // also matches `/authors`, which is a public list page that reads nothing per reader and
+  // has no business being uncacheable — and it did not announce itself: the page rendered
+  // correctly and was simply never cached, which is a performance regression that looks
+  // like nothing at all. `/auth` and `/auth/…` are the two shapes the routes actually take.
+  //
+  // (The buggy form is not written out here on purpose. Spelling it makes the assertion in
+  // tests/unit/authors-page.test.ts match this comment rather than the code it is about —
+  // which has already happened four times in this repository.)
+  if (
+    path.startsWith('/admin') ||
+    path.startsWith('/account') ||
+    path === '/auth' ||
+    path.startsWith('/auth/')
+  ) {
     const response = await next();
     response.headers.set('Cache-Control', 'no-store');
     return response;

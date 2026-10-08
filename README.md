@@ -672,7 +672,7 @@ measurable:
   larger.
 - **No webfont.** This site loads no webfont at all — the type stack is entirely
   local-name lookups, because the archive is mostly Chinese and the CJK faces are the
-  primary rendering. An icon font would be the single exception, for ten icons.
+  primary rendering. An icon font would be the single exception, for nine icons.
 - **No drift.** These are the upstream 2.1.1 paths, byte for byte. A dependency upgrade
   could restyle the navigation between deploys; a vendored path cannot.
 
@@ -686,6 +686,7 @@ not interchangeable:
 | `/latest` | `published_at DESC` — a question of *when* | `clock` |
 | `/trending` | weighted blend — what is hot now | `fire` |
 | `/rising` | `velocity_score` alone — a line going up | `trend-up` |
+| `/authors` | — | `users` |
 
 `/search` and `/about` are not in this table because they are not in the navigation any
 more — they were removed from it, not from the site. `/search` is still what the header's
