@@ -135,7 +135,20 @@ adminUi.get('/articles', async (c) => {
     limit: clampInt(c.req.query('limit'), 50, 1, 100),
   });
 
-  return c.html(articleListView({ articles, status: status ?? null, statuses: STATUSES }, siteConfig(c.env).name));
+  return c.html(
+    articleListView(
+      {
+        articles,
+        status: status ?? null,
+        statuses: STATUSES,
+        // SPEC §16.3 — the confirmation for a quick publish, carried in the query string
+        // the handler redirected with. Read as a presence flag rather than a value: there
+        // is nothing to vary on it.
+        published: c.req.query('published') === '1',
+      },
+      siteConfig(c.env).name,
+    ),
+  );
 });
 
 adminUi.get('/articles/:id', async (c) => {
@@ -309,8 +322,33 @@ adminUi.post('/articles/:id/media', async (c) => {
  * validated transition in src/services/publish.ts.
  */
 adminUi.post('/articles/:id/publish', async (c) => {
-  await publishArticle(c.env, c.req.param('id'), c.get('adminIdentity').actor);
-  return redirectToArticle(c, c.req.param('id'));
+  const id = c.req.param('id');
+  await publishArticle(c.env, id, c.get('adminIdentity').actor);
+
+  // SPEC §16.3 — the list's quick action returns to the list.
+  //
+  // `from` is a hidden field the list form sends and the detail page's form does not, so
+  // the destination depends on which button was pressed rather than on the URL. Sending
+  // both to the detail page would strand an editor who published three of twelve rows in a
+  // filtered list; sending both to the list would lose the detail page's own confirmation.
+  //
+  // The status filter rides along so the list comes back filtered the way it was — the
+  // article has just left `review`, and landing on an unfiltered list of everything would
+  // hide the row that changed. Only the status is carried, not the whole query: it is the
+  // one parameter that decides what the reader was looking at, and rebuilding the URL from
+  // an attacker-supplied string is the wrong shape.
+  const form = await c.req.parseBody();
+  if (form.from === 'list') {
+    const status = typeof form.status === 'string' && form.status ? form.status : null;
+    const params = new URLSearchParams({ published: '1' });
+    if (status) params.set('status', status);
+    return new Response(null, {
+      status: 303,
+      headers: { Location: `/admin/articles?${params.toString()}` },
+    });
+  }
+
+  return redirectToArticle(c, id);
 });
 
 adminUi.post('/articles/:id/reject', async (c) => {

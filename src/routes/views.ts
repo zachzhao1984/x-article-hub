@@ -291,6 +291,8 @@ export interface ArticleListView {
   articles: ArticleListItem[];
   status: string | null;
   statuses: string[];
+  /** Set when the request carries `?published=1`, i.e. a quick action just ran. */
+  published?: boolean;
 }
 
 export function articleListView(view: ArticleListView, siteName: string = FALLBACK_SITE_NAME): string {
@@ -301,6 +303,35 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
     )
     .join('');
 
+  /**
+   * SPEC §16.3 — a one-click publish for the rows that are waiting on it.
+   *
+   * Only `review` gets the button. That is the state an editor has actually looked at and
+   * decided on — the article has been fetched and parsed and is sitting there asking to go
+   * out. Every other state either has nothing to publish yet (`pending`/`fetching`/
+   * `fetched`/`parsing`), is already out (`published`), or was deliberately stopped
+   * (`rejected`/`archived`/`takedown`/`failed`), and offering publish on those would be
+   * offering a transition the state machine does not have.
+   *
+   * A `<form>`, not a link: publishing is a state change, and a GET that changes state is
+   * what lets a prefetch or a link preview publish something. The detail page's Publish is
+   * a form for the same reason.
+   *
+   * `from=list` travels with it so the handler can send the editor back to the row they
+   * were looking at. Without it the redirect goes to the article detail page, which is the
+   * right destination for the detail page's own buttons and the wrong one here — clicking
+   * publish on row 7 of a filtered list should leave you on row 7 of that list, not on a
+   * different page with no way back to where you were.
+   */
+  const publishCell = (status: string, id: string, filter: string | null) =>
+    status === 'review'
+      ? `<form method="post" action="/admin/articles/${escapeHtml(id)}/publish" class="row-action">
+      <input type="hidden" name="from" value="list">
+      ${filter ? `<input type="hidden" name="status" value="${escapeHtml(filter)}">` : ''}
+      <button class="button button-small" type="submit" title="Publish this article">Publish</button>
+    </form>`
+      : '';
+
   const rows = view.articles
     .map(
       (a) => `<tr>
@@ -309,17 +340,31 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
       <td>${escapeHtml(a.author_username ?? '—')}</td>
       <td class="num">${escapeHtml(new Date(a.imported_at).toISOString().replace('T', ' ').slice(0, 16))}</td>
       <td class="wrap"><a href="${escapeHtml(a.canonical_url)}" target="_blank" rel="noreferrer noopener">source</a></td>
+      <td class="num">${publishCell(a.status, a.id, view.status)}</td>
     </tr>`,
     )
     .join('');
 
+  /**
+   * SPEC §16.3 — what the quick action did.
+   *
+   * Without this the redirect lands on the list with the row's pill changed from `review`
+   * to `published` and nothing else, which is easy to miss when the list is filtered to
+   * `review`: the row is simply gone, and a row disappearing is indistinguishable from a
+   * filter being wrong or the page reloading to something unexpected.
+   */
+  const banner = view.published
+    ? '<div class="banner banner-ok">Published. It is live at <a href="/latest">the public site</a>.</div>'
+    : '';
+
   const body = `<h1>Articles</h1>
+${banner}
 <div class="chips">${filter}</div>
 ${
   view.articles.length === 0
     ? '<div class="card empty">No articles match this filter. <a href="/admin/import">Import some URLs</a> to get started.</div>'
     : `<table class="table">
-  <thead><tr><th>Status</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th></tr></thead>
+  <thead><tr><th>Status</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th></tr></thead>
   <tbody>${rows}</tbody>
 </table>`
 }

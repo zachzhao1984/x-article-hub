@@ -301,6 +301,22 @@ textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 
 }
 .button:hover { filter: brightness(1.1); }
 
+/*
+ * SPEC §16.3 — the publish button inside an article list row.
+ *
+ * Smaller than the detail page's, because it sits in a table cell beside a title rather
+ * than in a form with room around it. The padding is what changes; the colour does not, so
+ * the action still reads as the same one wherever it is pressed.
+ */
+.button-small { padding: 4px 12px; font-size: 12px; }
+
+/*
+ * A form in a table cell. No margin, because the cell's own padding is the spacing — the
+ * default block margin would push the button off the row's baseline and make every row with
+ * an action taller than every row without one.
+ */
+.row-action { display: inline; margin: 0; }
+
 .table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
 .table th, .table td {
   text-align: left;
