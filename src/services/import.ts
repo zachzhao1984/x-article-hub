@@ -16,6 +16,7 @@ import { log } from '../lib/logger';
 import type { ImportErrorCode } from '../lib/errors';
 import { AppError } from '../lib/errors';
 import type { JobMessage } from '../jobs/types';
+import type { ArticleStatus } from '../jobs/types';
 import { buildArticleSlug, normalizeArticleUrl, splitUrlInput } from '../lib/url';
 
 export interface ImportOutcome {
@@ -25,6 +26,19 @@ export interface ImportOutcome {
   canonicalUrl?: string;
   articleId?: string;
   jobId?: string;
+  /**
+   * The existing article's workflow status, on a `duplicate` only.
+   *
+   * Added because "duplicate" answers "did this import do anything?" and not "what
+   * happened to the article that is already there?" — so an operator re-importing a URL
+   * saw no way to tell a finished, published article from one still waiting in review.
+   * That gap is the reason someone read the word as a claim about the article's state.
+   *
+   * Deliberately not folded into `status`: the two vocabularies are different questions,
+   * and merging them is how a `published` article ends up labelled "reviewed". `status`
+   * keeps its wire values because `scripts/smoke.sh` asserts on them.
+   */
+  articleStatus?: ArticleStatus;
   code?: ImportErrorCode;
   message?: string;
 }
@@ -83,6 +97,10 @@ export async function importUrls(env: Env, rawInput: string, actor: string): Pro
         canonicalUrl,
         articleId: inBatch.articleId,
         jobId: inBatch.jobId,
+        // Known rather than looked up: the row is created further down this loop and the
+        // batched INSERT has not run yet, so there is nothing to read. `pending` is what
+        // that INSERT writes.
+        articleStatus: 'pending',
       });
       continue;
     }
@@ -95,6 +113,7 @@ export async function importUrls(env: Env, rawInput: string, actor: string): Pro
         input,
         canonicalUrl,
         articleId: existing.id,
+        articleStatus: existing.status,
       });
       log.info('import_duplicate', { article_id: existing.id, canonical_url: canonicalUrl });
       continue;

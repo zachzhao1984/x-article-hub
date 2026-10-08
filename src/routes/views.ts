@@ -191,10 +191,41 @@ export interface ImportView {
     duplicates: number;
     failed: number;
     articles: Array<{ id: string; status: string; canonicalUrl: string; jobId: string }>;
-    outcomes: Array<{ status: string; input: string; canonicalUrl?: string; articleId?: string; code?: string; message?: string }>;
+    outcomes: Array<{
+    status: string;
+    input: string;
+    canonicalUrl?: string;
+    articleId?: string;
+    /**
+     * The existing article's workflow status, present on `duplicate` outcomes only.
+     *
+     * Rendered as a second pill beside the outcome, because the two answer different
+     * questions and an operator needs both: "did this import do anything" and "what
+     * happened to the article that was already there".
+     */
+    articleStatus?: string;
+    code?: string;
+    message?: string;
+  }>;
   };
   error?: string;
 }
+
+/**
+ * What each import outcome is called in this UI.
+ *
+ * `duplicate` is the wire value and stays that way — `scripts/smoke.sh` asserts on it and
+ * it is part of the SPEC §22 response shape. What changes is the word on screen, because
+ * "duplicate" describes what the import did rather than what happened to the article, and
+ * an operator re-importing a URL could not tell a published article from one still
+ * waiting in review. "already imported" says the same thing accurately and answers the
+ * question they were actually asking.
+ */
+const OUTCOME_LABEL: Record<string, string> = {
+  created: 'created',
+  duplicate: 'already imported',
+  failed: 'failed',
+};
 
 export function importView(view: ImportView, siteName: string = FALLBACK_SITE_NAME): string {
   let banner = '';
@@ -204,13 +235,17 @@ export function importView(view: ImportView, siteName: string = FALLBACK_SITE_NA
     const r = view.result;
     const tone = r.failed > 0 ? 'banner-warn' : 'banner-ok';
     banner = `<div class="banner ${tone}">
-      <strong>Imported.</strong> ${r.created} created · ${r.duplicates} duplicate${r.duplicates === 1 ? '' : 's'} · ${r.failed} rejected
+      <strong>Imported.</strong> ${r.created} created · ${r.duplicates} already imported · ${r.failed} rejected
     </div>`;
 
     const rows = r.outcomes
       .map(
         (o) => `<tr>
-        <td><span class="pill pill-${o.status}">${escapeHtml(o.status)}</span></td>
+        <td><span class="pill-group"><span class="pill pill-${escapeHtml(o.status)}">${escapeHtml(OUTCOME_LABEL[o.status] ?? o.status)}</span>${
+          o.articleStatus
+            ? `<span class="pill pill-${escapeHtml(o.articleStatus)}">${escapeHtml(o.articleStatus)}</span>`
+            : ''
+        }</span></td>
         <td class="wrap">${escapeHtml(o.input)}</td>
         <td>${o.canonicalUrl ? `<a href="${escapeHtml(o.canonicalUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(o.canonicalUrl)}</a>` : '—'}</td>
         <td>${o.articleId ? `<a href="/admin/articles/${escapeHtml(o.articleId)}"><code>${escapeHtml(o.articleId)}</code></a>` : '—'}</td>

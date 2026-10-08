@@ -339,11 +339,35 @@ a .pill { color: var(--muted); }
 
 .pill-published, .pill-success, .pill-ready { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
 .pill-failed, .pill-failure, .pill-rejected, .pill-takedown { color: var(--error); border-color: color-mix(in srgb, var(--error) 40%, transparent); }
-.pill-pending, .pill-queued, .pill-running, .pill-fetching, .pill-parsing, .pill-review, .pill-retrying, .pill-created, .pill-duplicate {
+/*
+ * `fetched` and `archived` join the warn group because the import results table now
+ * renders the existing article's status on a duplicate row, and it renders whatever that
+ * row happens to hold. They were unstyled until then, which meant a duplicate of an
+ * article mid-crawl or one kept-but-unpublished rendered a pill with no colour at all —
+ * indistinguishable from a label that had failed to style, which is the reading nobody
+ * would have stopped to question. `archived` reads as warn rather than as neutral because
+ * it means an editor deliberately kept it out of the archive, not that nothing happened.
+ */
+.pill-pending, .pill-queued, .pill-running, .pill-fetching, .pill-fetched, .pill-parsing,
+.pill-review, .pill-archived, .pill-retrying, .pill-created, .pill-duplicate {
   color: var(--warn);
   border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }
 .pill-featured { color: var(--accent); border-color: var(--accent); }
+
+/*
+ * The import results table's Result cell holds up to two pills — what the import did, and
+ * what became of the article that was already there — and they belong on one line. Left as
+ * bare inline elements the column width wrapped them, so "already imported" sat on one
+ * row and "published" on the next, which read as two separate results for one URL rather
+ * than two facts about one.
+ *
+ * `white-space: nowrap` as well as `flex-wrap`, because the flex line was already
+ * unbreakable while the text inside each pill was not: "already imported" broke across two
+ * lines inside its own pill and squeezed the column rather than widening it. The other
+ * columns are wide enough to give the slack.
+ */
+.pill-group { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
 
 .banner {
   padding: 12px 16px;
