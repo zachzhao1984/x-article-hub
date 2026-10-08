@@ -54,8 +54,15 @@ export interface ArticleImage {
   altText?: string;
   width?: number;
   height?: number;
-  /** SPEC §10 — a failed image must not fail the article. */
-  status: 'ready' | 'failed' | 'external_fallback';
+  /**
+   * SPEC §10 — a failed image must not fail the article.
+   *
+   * `video` is not a failure and not a downgrade: it is a block the pipeline was never
+   * going to archive, recorded so the reader gets the original recording instead of an
+   * "Image not archived" figure claiming to still load from x.com. See the note on
+   * `VIDEO_HOST_RE` in src/parser/markdown.ts.
+   */
+  status: 'ready' | 'failed' | 'external_fallback' | 'video';
 }
 
 /** SPEC §8 — R2 layout. Raw is append-only; normalized can be rebuilt by the Parser. */

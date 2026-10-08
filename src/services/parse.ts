@@ -42,8 +42,16 @@ import { readRawArchive } from './crawl';
  *     syndicated screenshot — and SPEC §10's media_objects uses the id as its
  *     PRIMARY KEY, so the second article's media run failed on a UNIQUE
  *     violation.
+ *
+ * v6: a video is classified as `status: 'video'` rather than as an unarchived image.
+ *     The bump matters for documents already stored: theirs were written under v5, where
+ *     a video is `external_fallback`, and the media pipeline reads that state as work to
+ *     do. Without a new version the idempotence check below short-circuits and those
+ *     documents keep rendering the failed-image figure that claims a video "still loads
+ *     from x.com". The archive holds no videos today, so nothing is actually stale — the
+ *     bump is what makes that a fact rather than a coincidence.
  */
-export const PARSER_VERSION = 5;
+export const PARSER_VERSION = 6;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 

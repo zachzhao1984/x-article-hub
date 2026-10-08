@@ -190,6 +190,36 @@ const jsonLd = isTakedown
                         case 'image': {
                           const img = document.images.find((i) => i.imageId === block.imageId);
                           if (!img) return null;
+
+                          // A video is a link to the recording, not a figure.
+                          //
+                          // It used to fall through to the "Image not archived" branch
+                          // below, which is written for an image whose download failed —
+                          // and for a video that sentence is false twice over: nothing was
+                          // archived because nothing was ever fetched, and nothing is
+                          // going to break. Meanwhile the `<figure>` reserved a box, so
+                          // the reader saw an image slot claiming to still work rather
+                          // than the recording they came for.
+                          //
+                          // The URL is X's own and stays pointed at X: there is nothing
+                          // at /media to rewrite it to. `nofollow` for the same reason the
+                          // original-link chain carries it — this page should not pass
+                          // authority to a CDN.
+                          if (img.status === 'video') {
+                            return (
+                              <p class="fig-video">
+                                <a
+                                  href={img.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                >
+                                  Watch the video on x.com
+                                </a>
+                                <span>the recording is not archived here; this link goes to X</span>
+                              </p>
+                            );
+                          }
+
                           // SPEC §10 — the page serves every image from /media, which
                           // reads R2. Only an image the pipeline gave up on still
                           // points at X, and that case says so out loud instead of

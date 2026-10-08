@@ -79,7 +79,14 @@ export async function downloadArticleMedia(env: Env, articleId: string): Promise
   // ---- register the rows (SPEC §10) -----------------------------------------
   // Registering before fetching means a crash mid-download leaves a row that the
   // next run recognises, instead of silently re-fetching from scratch.
-  const bodyImages = document.images.filter((img) => img.status !== 'ready' || !img.r2Key);
+  // `video` is excluded, not because it could not be fetched but because archiving it is
+  // not what this pipeline does — it stores images, and a video reaching the content-type
+  // gate is rejected there permanently after registering a row. Skipping it means no row,
+  // no failed attempt and no warning, which is the honest record: nothing was tried. See
+  // the note on `VIDEO_HOST_RE` in src/parser/markdown.ts.
+  const bodyImages = document.images.filter(
+    (img) => img.status !== 'ready' && img.status !== 'video',
+  );
   const avatar = document.author.avatar;
   const avatarNeedsWork = Boolean(avatar);
 

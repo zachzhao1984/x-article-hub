@@ -59,6 +59,29 @@ const FENCE_RE = /^(?:```|~~~)\s*([A-Za-z0-9+#._-]*)\s*$/;
 const PROFILE_LINK_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/?$/i;
 const AVATAR_CDN_RE = /\/profile_images\//i;
 
+/**
+ * Hosts that serve X video, and the container extensions X serves.
+ *
+ * Recognised so a video is *not* treated as an image. It used to be: `addImage` took any
+ * URL, so a `![](…mp4)` became a `media_objects` row, the media pipeline rejected it on
+ * the content-type gate, and the reading page then rendered an "Image not archived" figure
+ * explaining that the figure "still loads from x.com and may stop working". For a video
+ * that is simply false — it was never archived and never rendered as an image, and nothing
+ * was going to break. It also occupied a `<figure>` with a reserved box, so the reader saw
+ * an image slot claiming to work rather than the recording they came for.
+ *
+ * `video.twimg.com` is where X serves the actual bytes, but the URL a reader sees in the
+ * page markup is usually the status permalink, so both are matched. The extension test is
+ * deliberately narrow: it only ever turns an image into a link, and calling a real image a
+ * video would lose the image.
+ */
+const VIDEO_HOST_RE = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:video\.twimg\.com|video\.twitter\.com)\//i;
+const VIDEO_EXT_RE = /\.(?:mp4|m4v|mov|webm|m3u8)(?:$|\?)/i;
+
+function isVideoUrl(url: string): boolean {
+  return VIDEO_HOST_RE.test(url) || VIDEO_EXT_RE.test(url);
+}
+
 export interface ParseOptions {
   url: string;
   /** Author already known from the crawl; the Markdown author chip is a fallback. */
@@ -203,7 +226,13 @@ function parseBlocks(
       altText: altText?.trim() || undefined,
       // SPEC §10 — `external_fallback` is the honest state until the media
       // pipeline downloads and stores the bytes in R2.
-      status: 'external_fallback',
+      //
+      // A video never gets there, and calling one `external_fallback` is what made the
+      // reading page lie: that state renders as "Image not archived — this figure still
+      // loads from x.com", which is true of an image whose download failed and false of
+      // a video the pipeline was never going to archive. `video` keeps it out of the
+      // pipeline's work list instead, so it stays a link to the recording.
+      status: isVideoUrl(src) ? 'video' : 'external_fallback',
     };
     images.push(image);
     return imageId;
