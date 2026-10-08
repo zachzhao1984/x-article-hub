@@ -35,22 +35,18 @@ declare global {
      *
      * Secrets, not `vars`: these are `wrangler secret put` values and must never be
      * committed. A missing pair is a supported state, not an error — `providerConfig`
-     * returns null for it and `/account` renders that provider as unavailable, so a
-     * deployment with only Google configured still signs in normally and says plainly
-     * that X is not set up.
+     * returns null for it and `/account` says sign-in is not configured, rather than the
+     * page erroring.
      *
-     * The callback URI both providers compare against is derived from `SITE_ORIGIN` in
-     * `callbackUri()`, and it has to be registered byte for byte at the provider:
+     * The callback URI is derived from `SITE_ORIGIN` in `callbackUri()`, and Google
+     * compares it byte for byte against what is registered:
      *
-     *   https://<SITE_ORIGIN>/auth/x/callback
      *   https://<SITE_ORIGIN>/auth/google/callback
      *
-     * Neither path may sit behind Cloudflare Access: the provider redirects here from
-     * the reader's browser, and Access would answer that navigation with its own login
-     * before the Worker ever saw the code.
+     * That path must not sit behind Cloudflare Access: Google redirects there from the
+     * reader's browser, and Access would answer that navigation with its own login before
+     * the Worker ever saw the code.
      */
-    X_CLIENT_ID?: string;
-    X_CLIENT_SECRET?: string;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
 

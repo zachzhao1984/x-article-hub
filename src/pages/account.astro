@@ -61,7 +61,7 @@ const identities = session ? await listIdentities(db, session.user.id) : [];
 // else reads.
 if (session) await touchSession(db, session.tokenHash, now);
 
-const joinedLabel = (provider: string) => (provider === 'x' ? 'X' : provider === 'google' ? 'Google' : provider);
+const joinedLabel = (provider: string) => (provider === 'google' ? 'Google' : provider);
 ---
 
 <Base title="Account" description="Your account, and how you sign in." path="/account">
@@ -95,10 +95,9 @@ const joinedLabel = (provider: string) => (provider === 'x' ? 'X' : provider ===
               ))}
             </ul>
             <p class="lede">
-              Signing in with another provider while signed in here connects it to this account. Signed in
-              separately in a clean session it would create a new one — identity is keyed on the provider's
-              own account id, never on an email address, because X does not verify the addresses on its
-              accounts and keying on one would let anyone set it.
+              Identity here is keyed on the id Google assigned when the account was created, not on your email
+              address. Google lets an account holder change that address, so keying on it would hand whoever
+              holds it next the identity — the address belongs to you, the id does not move.
             </p>
 
             <form method="post" action="/auth/logout">
@@ -122,8 +121,10 @@ const joinedLabel = (provider: string) => (provider === 'x' ? 'X' : provider ===
               ))}
             </ul>
             <p class="lede">
-              Google and X are the only two methods. There is no password to choose, forget or leak, because
-              neither provider hands this site anything that identifies you beyond what it already knows.
+              Google is the only method. There is no password to choose, forget or leak, and Google hands this
+              site nothing beyond what it already knows — an id it assigned once, a name, a picture, and an
+              address it has verified. Your account here is keyed on the id, not the address, so changing your
+              Google address later does not change who you are.
             </p>
           </section>
         ) : (
@@ -131,8 +132,8 @@ const joinedLabel = (provider: string) => (provider === 'x' ? 'X' : provider ===
             <h2>Sign in is not available</h2>
             <p class="lede">
               No sign-in provider is configured on this deployment. That is a deployment setting rather than
-              a broken page: <code>X_CLIENT_ID</code>/<code>X_CLIENT_SECRET</code> and{' '}
-              <code>GOOGLE_CLIENT_ID</code>/<code>GOOGLE_CLIENT_SECRET</code> have to be present as secrets.
+              a broken page: <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> have to be
+              present as secrets.
             </p>
           </section>
         )

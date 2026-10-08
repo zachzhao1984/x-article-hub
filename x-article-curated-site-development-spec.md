@@ -3009,7 +3009,7 @@ Semantic Search
 
 ---
 
-# 43. 用户账号（X / Google 登录）
+# 43. 用户账号（Google 登录）
 
 ## 43.1 范围
 
@@ -3017,7 +3017,9 @@ Semantic Search
 
 原因不是省事，而是反向思考的结果：如果一上来就带功能，"登录是为了什么"这个问题永远不会被认真回答，而数据模型是围着这个答案长的。账号先落地，后面每个功能接进来时只需要加表，不需要改鉴权模型。
 
-支持 **X** 和 **Google** 两家，不做密码、不做邮箱验证码。
+**只有 Google 一家。** 不做密码、不做邮箱验证码。不需要多一个 provider —— 这个站点没有多一个的理由，而每多一家就多一份凭据、一条回调路径、一组失败模式要维护。
+
+`provider` 列保留（见 43.2）：`(provider, provider_user_id)` 才是"哪个平台的哪个账号"的正确复合键，将来要加第二个 provider 时不必重新设计它。缩小的只是**允许的取值集合**，由迁移 0009 完成。
 
 ## 43.2 数据模型
 
@@ -3030,13 +3032,21 @@ Semantic Search
 | `user_sessions` | 一次登录 | 30 天，可撤销 |
 | `oauth_states` | 一次跳转 | 10 分钟，单次消费 |
 
-**身份键是 `(provider, provider_user_id)`，绝不是 email。**
+**身份键是 `(provider, provider_user_id)`，即 Google 的 `sub`，绝不是 email。**
 
-`provider_user_id`（X 的数字 ID、Google 的 `sub`）是这套 schema 里唯一由平台背书、且账号持有者无法自行选择的值。email 不是：X 从不验证自己发出的地址，并且允许用户填任意值。因此用 email 做键，等于任何能在 X 账号上把地址改成 `ada@example.com` 的人都能登录成 Google 持有该地址的那个账号。
+理由在换成单 provider 时**换过一次**，所以要说明现在的理由，而不是继承旧的那条。旧理由是"X 发出的地址从不验证"；X 去掉后系统里根本不存在未验证地址，沿用旧理由会是错的。
 
-代价是明确的：**在两个互相独立的浏览器会话里分别用 X 和 Google 登录，会得到两个账号。** 合并走受支持的那条路——先登录，再在持有该会话时连接第二个 provider（`link_toUserId`）——这条是安全的，因为账户归属的证据来自会话 cookie，而不是查询参数里的任何东西。
+现在成立的理由是：**Google 允许账号持有人修改自己账号的地址。** `sub` 是账号创建时由 Google 分配的，不会变；地址是归属账户的可编辑属性。用地址做键，意味着**下一个拿到该地址的人会继承这个身份** —— 和之前是同一个失败，只是换了一条路走，代价也一样。
 
-`role` 是 `users` 上的列，取值 `reader` / `admin`。它**只能**由运维在 D1 上执行 `GRANT_ADMIN_SQL`（见 `src/db/users.ts`）授予。provider 可以告诉我们"你是谁"，但没法告诉我们"你是不是本站的编辑"——后者是人的决定。
+### 43.2.1 为什么删掉了 `link_to_user_id`
+
+迁移 0008 里 `oauth_states` 有一列 `link_to_user_id`：登录状态下连接第二个 provider。这在两家时是受支持的账号合并方式，安全性来自"账户归属的证据来自会话 cookie，不是查询参数"。
+
+**只剩一家之后，它不再是合并，而是一个等着发生的意外。** 已登录为 A，然后用**另一个未知的** Google 账号登录，那个身份会被挂到 A 上 —— B 和 A 变成同一个人，而 B 既没有同意过、也看不到这件事发生过。A 的行只是多了一个身份，两个会话从此解析到同一个用户，任何地方都不会看起来不对。
+
+所以登录**始终按身份本身的依据解析**，那一列和读它的分支一起删掉了。
+
+`provider` 从 `IN ('x','google')` 收紧为 `IN ('google')`。SQLite 不能 ALTER 一个 CHECK，而 0008 已经应用到生产，改它会让本地库和线上库与仓库不一致 —— 所以是 0009 里重建两张表。两张表都是空的，所以重建只是 create、INSERT ... SELECT 零行、drop、rename。
 
 ## 43.3 为什么会话存在 D1 而不是 KV
 
@@ -3054,7 +3064,7 @@ cookie 里是 256 位随机数，D1 里只存它的 SHA-256 —— 拿到表也�
 
 PKCE verifier 同样只存服务端。这本来就是 PKCE 的意义所在：verifier 永远不在别处。
 
-provider 的 access token **从不落库**。它只在一个 callback 的生命周期内存活，用来读一次 profile 就丢掉。§43 之后没有任何代码会调 provider API，存下来只是一个没有用途、还带撤销问题的凭据。
+Google 的 access token **从不落库**。它只在一个 callback 的生命周期内存活，用来读一次 profile 就丢掉。§43 之后没有任何代码会调 Google API，存下来只是一个没有用途、还带撤销问题的凭据。也不申请 `offline.access`，因为那只会换来一个 refresh token。
 
 ## 43.5 缓存策略：页头不按人渲染
 
@@ -3069,11 +3079,13 @@ provider 的 access token **从不落库**。它只在一个 callback 的生命�
 - `/auth/me` 和 `/account`、`/auth/*` 都是 `no-store`；
 - 无 JS 时槽位永远显示 "Sign in"——那是一个仍然可点的链接，不是坏掉的控件；而 `/account` 是服务端渲染的，登录登出都不依赖那段脚本。
 
-槽位宽度必须有上界（`flex: none` + `max-width` + 省略号）。导航栏在 640px 以上每个宽度都是量过的，任何无界的显示名都会悄悄吃掉那份余量、把导航挤到开始滚动——那看起来像布局 bug，不像新功能。
+**显示名用 `textContent` 写入，绝不用 `innerHTML`** —— 它是 X 或 Google 账号持有人自己选的字符串，这个站点没有理由信任它（X 去掉后是 Google，理由不变）。
+
+槽位宽度必须有上界（`flex: none` + `max-width` + 省略号），并且**在导航标签收窄的同一个断点（700px）收窄** —— 那个宽度上行里没有余量让两样东西各自独立收缩，而导航是不能丢内容的那一方。实测：640px、五个板块、36 字符昵称下 150px 的槽位会让导航差 22px，裁掉最后一项且没有任何提示；110px 刚好回到界内。
 
 ## 43.6 导航高亮之外的一个易错点
 
-会话 cookie 是 `SameSite=Lax`，而且这是**承重**的。登录的最后一跳是来自 Google / X 的顶层 GET 跳转，只有 `Lax` 会在这条导航上带上 cookie。`Strict`——听起来更严格、也是 `setAdminCookie` 用的值——会扣住它，于是每次登录都落在 `/account` 且仍是登出状态，而**任何地方都没有报错可以解释原因**。
+会话 cookie 是 `SameSite=Lax`，而且这是**承重**的。登录的最后一跳是来自 Google 的顶层 GET 跳转，只有 `Lax` 会在这条导航上带上 cookie。`Strict`——听起来更严格、也是 `setAdminCookie` 用的值——会扣住它，于是每次登录都落在 `/account` 且仍是登出状态，而**任何地方都没有报错可以解释原因**。
 
 admin 那个 cookie 用 `Strict` 是对的：它从不是跨站跳转的目标。
 
@@ -3081,7 +3093,7 @@ admin 那个 cookie 用 `Strict` 是对的：它从不是跨站跳转的目标�
 
 共享 token 保留，并且**先**检查；真实账号是附加的第二条路。
 
-顺序是有意的：token 是不会被 provider 侧任何状况夺走的路径——X 故障、X app 被吊销、Google consent screen 被关——所以它在替代方案不工作时仍然是入口，也在 `43.x` 这段代码万一写错时仍然是出口。
+顺序是有意的：token 是不会被 provider 侧任何状况夺走的路径——Google consent screen 被关、应用被删——所以它在替代方案不工作时仍然是入口，也在 43.x 这段代码万一写错时仍然是出口。
 
 角色从 `users` 行读，不从 cookie 读。cookie 里带角色等于把管理员权限交给任何愿意改自己浏览器一个值的人。
 
@@ -3091,3 +3103,4 @@ admin 那个 cookie 用 `Strict` 是对的：它从不是跨站跳转的目标�
 - `deleteSessionsForUser`（全端登出）没有 UI，是被盗 cookie 的运维手段。
 - `last_seen_at` 只在 `/account` 刷新。上到每个请求会给每个页面浏览加一次写。
 - 需要周期清理 `oauth_states` / `user_sessions` 过期行（`deleteStaleAuthRows` 已就位，尚未挂到 cron）。
+- 如果要加第二个 provider：恢复 `oauth_states.link_to_user_id` 是**安全决策**，不是功能开关。单 provider 下那条路径会把两个账号合并，见 43.2.1。届时先想清楚"合并"是否要用户明确同意。

@@ -55,7 +55,6 @@ export interface OAuthStateRow {
   provider: ProviderId;
   code_verifier: string;
   redirect_to: string;
-  link_to_user_id: string | null;
   created_at: number;
   expires_at: number;
 }
@@ -104,11 +103,14 @@ export function findUserByIdentity(
 }
 
 /**
- * By email, and used for exactly one provider.
+ * By verified email address.
  *
- * Only Google's path calls this, because Google asserts `email_verified` and X does
- * not. See `resolveLogin` — the guard that rejects X is the reason this function is not
- * the generic "find the person" lookup it looks like.
+ * Reached from exactly one place — an unknown Google identity whose address is already on
+ * file — and safe there for one reason: `profile.email` is non-null only when the profile
+ * reader saw `email_verified === true`. This is not the generic "find the person" lookup it
+ * looks like, and identity is never keyed on it: `sub` is assigned once by Google and does
+ * not move, whereas the address belongs to the account holder and can be changed. See
+ * `resolveLogin` in src/services/login.ts.
  */
 export function findUserByEmail(db: D1Database, email: string): Promise<UserRow | null> {
   return db
@@ -315,22 +317,20 @@ export function insertOAuthState(
     provider: ProviderId;
     codeVerifier: string;
     redirectTo: string;
-    linkToUserId: string | null;
     now: number;
     expiresAt: number;
   },
 ): D1PreparedStatement {
   return db
     .prepare(
-      `INSERT INTO oauth_states (state, provider, code_verifier, redirect_to, link_to_user_id, created_at, expires_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+      `INSERT INTO oauth_states (state, provider, code_verifier, redirect_to, created_at, expires_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
     )
     .bind(
       state.state,
       state.provider,
       state.codeVerifier,
       state.redirectTo,
-      state.linkToUserId,
       state.now,
       state.expiresAt,
     );
@@ -352,7 +352,7 @@ export function takeOAuthState(db: D1Database, state: string, now: number): Prom
   return db
     .prepare(
       `DELETE FROM oauth_states WHERE state = ?1 AND expires_at > ?2 RETURNING
-         state, provider, code_verifier, redirect_to, link_to_user_id, created_at, expires_at`,
+         state, provider, code_verifier, redirect_to, created_at, expires_at`,
     )
     .bind(state, now)
     .first<OAuthStateRow>();

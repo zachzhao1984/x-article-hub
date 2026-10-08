@@ -98,10 +98,14 @@ function redirect(status: 302 | 303, location: string, extra?: Headers): Respons
  * Step 1 — send the reader to the provider.
  *
  * The PKCE verifier is generated here and stays server-side; only its SHA-256 challenge
- * travels. `linkToUserId` is captured *now*, from the session cookie, so that a flow
- * begun while signed in attaches the provider to that account — and so the decision is
- * made against the session that existed at the start rather than one that could turn up
- * later in the round trip.
+ * travels.
+ *
+ * Nothing about the caller's current session is read or recorded. With two providers this
+ * is where `link_to_user_id` was captured, so a flow begun while signed in could attach
+ * the second provider to that account. With one provider that branch became a way to merge
+ * two Google accounts without the second owner's agreement — see `resolveLogin` — so the
+ * column is gone, and this route no longer touches the session at all. That is one fewer
+ * D1 read on the way into every sign-in.
  */
 auth.get('/:provider/start', async (c) => {
   const spec = providerSpec(c.req.param('provider'));
@@ -113,8 +117,7 @@ auth.get('/:provider/start', async (c) => {
   try {
     config = requireProviderConfig(c.env, spec.id);
   } catch {
-    // A deployment with one provider configured and the other missing is a normal
-    // half-finished state. Say so rather than erroring.
+    // The normal state until an app is registered. Say so rather than erroring.
     return withError(c.env, next, 'not-configured');
   }
 
@@ -123,19 +126,16 @@ auth.get('/:provider/start', async (c) => {
   const verifier = randomToken(48);
   const challenge = await pkceChallenge(verifier);
 
-  const session = await resolveSession(c.env.DB, c.req.header('cookie'), now);
-
   await insertOAuthState(c.env.DB, {
     state,
     provider: config.id as ProviderId,
     codeVerifier: verifier,
     redirectTo: next,
-    linkToUserId: session?.user.id ?? null,
     now,
     expiresAt: now + OAUTH_STATE_TTL_MS,
   }).run();
 
-  log.info('oauth_start', { provider: config.id, linking: session !== null });
+  log.info('oauth_start', { provider: config.id });
 
   return redirect(302, buildAuthorizeUrl(config, { state, challenge }));
 });
@@ -200,7 +200,6 @@ auth.get('/:provider/callback', async (c) => {
     const { user, outcome } = await resolveLogin(c.env.DB, {
       provider: spec.id,
       profile,
-      linkToUserId: stored.link_to_user_id,
       now,
     });
 
