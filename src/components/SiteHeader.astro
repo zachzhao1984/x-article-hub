@@ -28,7 +28,18 @@ const theme = (() => {
 const path = Astro.url.pathname;
 
 /**
- * The four boards and the two utility pages, each with a Phosphor glyph.
+ * Home, plus the four boards of SPEC §15. Not the seven entries this used to have.
+ *
+ * `Search` and `About` were removed from the nav; neither page was removed. About is
+ * still one click away in the footer, and `/search` is still what the header's search box
+ * submits to. Neither needed a permanent slot in the primary row: they are destinations
+ * rather than the places a reader moves between, and five items do the same job seven did.
+ *
+ * That is not only a decluttering argument. The row runs out of room before the nav does,
+ * and `.nav` is `flex: 1` with `overflow-x: auto` — so when space runs short the nav
+ * *scrolls*, silently, with no affordance. Anything else placed beside it (the §43
+ * account slot, before this change) pushes in the same direction, and removing these two
+ * is what gave the row its headroom back.
  *
  * The icons are chosen against what each board actually orders by, which is why two
  * of them are not interchangeable: `/latest` is `published_at DESC` — a question of
@@ -46,8 +57,6 @@ const nav: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/latest', label: 'Latest', icon: 'clock' },
   { href: '/trending', label: 'Trending', icon: 'fire' },
   { href: '/rising', label: 'Rising', icon: 'trend-up' },
-  { href: '/search', label: 'Search', icon: 'magnifying-glass' },
-  { href: '/about', label: 'About', icon: 'info' },
 ];
 
 const categories = await listCategoriesWithCounts(env.DB as unknown as D1Database);
@@ -99,7 +108,68 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     </form>
 
     <ThemeSwitch current={theme} />
+
+    {/*
+      SPEC §43 — the account slot.
+
+      This is the one place on the site where two readers see different HTML, and it is
+      deliberately *not* rendered per reader. src/middleware.ts gives the homepage
+      `s-maxage=60` and article pages `s-maxage=3600`, so any per-reader markup would be
+      baked into a cached document and handed to everybody — one reader's name in another
+      reader's page header. `Vary: Cookie` would fix that and cost nearly all of the
+      cache hit rate, because every session becomes its own cache entry.
+
+      So the markup below is identical for every reader: a plain link to /account. This
+      script upgrades it to the reader's name when there is one. The degradation is that
+      with JavaScript off the slot always reads "Sign in" — which is a link that still
+      works, not a broken control, and /account is server-rendered, so signing in and out
+      never depends on this script.
+
+      `textContent`, never `innerHTML`: the value written is a display name that an X or
+      Google account holder chose, and this site has no reason to trust it.
+    */}
+    <span class="auth-slot" data-auth-slot>
+      <a class="nav-item auth-link" href="/account"><span class="auth-name">Sign in</span></a>
+    </span>
   </div>
+
+  <script is:inline>
+    (function () {
+      var slot = document.querySelector('[data-auth-slot]');
+      if (!slot) return;
+      fetch('/auth/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(function (res) {
+          return res.ok ? res.json() : null;
+        })
+        .then(function (body) {
+          if (!body || !body.user) return;
+          var link = document.createElement('a');
+          link.className = 'nav-item auth-link';
+          link.href = '/account';
+          if (body.user.avatarUrl) {
+            var avatar = document.createElement('img');
+            avatar.className = 'auth-avatar';
+            avatar.src = body.user.avatarUrl;
+            avatar.alt = '';
+            avatar.width = 18;
+            avatar.height = 18;
+            avatar.loading = 'lazy';
+            avatar.decoding = 'async';
+            link.appendChild(avatar);
+          }
+          var name = document.createElement('span');
+          name.className = 'auth-name';
+          name.textContent = body.user.displayName;
+          link.appendChild(name);
+          slot.replaceChildren(link);
+          slot.setAttribute('data-auth-state', 'signed-in');
+        })
+        .catch(function () {
+          // Offline, or the request failed. The signed-out link is already there and
+          // still works, so there is nothing to repair and nothing worth saying.
+        });
+    })();
+  </script>
 
   <div class="wrap category-bar" aria-label="Categories">
     {

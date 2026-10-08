@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import type { AdminIdentity } from './middleware/admin-auth';
 import { adminApi } from './routes/admin-api';
 import { adminUi } from './routes/admin-ui';
+import { auth } from './routes/auth';
 import { publicApi } from './routes/public-api';
 import { errorView } from './routes/views';
 import { toAppError } from './lib/errors';
@@ -47,5 +48,16 @@ app.onError((err, c) => {
 app.route('/api', publicApi);
 app.route('/api/admin', adminApi);
 app.route('/admin', adminUi);
+
+/**
+ * SPEC §43 — reader sign-in.
+ *
+ * Mounted here rather than as Astro pages because every route is a redirect, and because
+ * the callback has to be answered before anything else can: a stale CDN copy of
+ * `/account` is harmless, but a `/auth/*` request must never reach the pages fallback. A
+ * mis-registered callback URI returning a 404 HTML page as the provider's `redirect_uri`
+ * is rejected by both providers with a message that says nothing useful.
+ */
+app.route('/auth', auth);
 
 app.get('/healthz', (c) => c.text('ok'));

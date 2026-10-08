@@ -1,0 +1,142 @@
+---
+/**
+ * SPEC §43 — the one page in the sign-in flow.
+ *
+ * It is server-rendered rather than client-fetched, unlike the header's account slot,
+ * because this page has to work before JavaScript does anything: it is where a reader
+ * lands when a provider sends them back, and where a reader with JavaScript disabled
+ * still needs to sign out.
+ *
+ * `no-store` is set in src/middleware.ts, along with `/auth/*`. This page differs per
+ * reader, so it must never reach the edge cache — see the note on the header slot in
+ * SiteHeader.astro for why the *rest* of the site does not have the same problem.
+ */
+import { env } from 'cloudflare:workers';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import { configuredProviders, safeRedirectPath } from '../lib/oauth';
+import { listIdentities } from '../db/users';
+import { resolveSession, touchSession } from '../lib/user-session';
+
+const db = env.DB as unknown as D1Database;
+const now = Date.now();
+
+/**
+ * `state`, `code` and `redirect_to` come from the round trip, not from anything the
+ * reader typed, so this is safe to render — but they are read out of the query string
+ * and matched against a fixed set rather than echoed, so a crafted `?error=…` cannot put
+ * arbitrary text on the page.
+ */
+const FAILURES: Record<string, string> = {
+  cancelled: 'Sign-in was cancelled, so nothing changed.',
+  declined: 'The provider declined the sign-in request.',
+  'not-configured': 'That sign-in method is not configured on this deployment.',
+  'unknown-provider': 'That sign-in method does not exist.',
+  incomplete: 'The provider sent back an incomplete response. Try again.',
+  state:
+    'That sign-in link could not be verified. It is single-use and expires after ten minutes, so starting again is the fix.',
+  oauth_token_exchange_failed: 'The provider rejected the sign-in. This usually means the callback URL does not match the one registered with the provider.',
+  oauth_profile_failed: 'Signed in, but the provider would not return a profile. Try again in a moment.',
+  oauth_unknown_provider: 'That sign-in method does not exist.',
+  oauth_not_configured: 'That sign-in method is not configured on this deployment.',
+};
+
+const errorParam = Astro.url.searchParams.get('error');
+const errorMessage = errorParam ? (FAILURES[errorParam] ?? 'Sign-in did not complete.') : null;
+
+/**
+ * The next destination, carried through the flow by `?next=`. Only a site-relative path
+ * survives `safeRedirectPath`, so this cannot become an off-site redirect — but it is
+ * read through the same helper rather than trusted, because the value arrived in a
+ * query string that anyone can send.
+ */
+const next = safeRedirectPath(Astro.url.searchParams.get('next'));
+
+const session = await resolveSession(db, Astro.request.headers.get('cookie'), now);
+const providers = configuredProviders(env);
+const identities = session ? await listIdentities(db, session.user.id) : [];
+
+// The account page is the one place `last_seen_at` is refreshed: it is cheap here, and
+// refreshing it on every request would put a write on the hot path for a column nothing
+// else reads.
+if (session) await touchSession(db, session.tokenHash, now);
+
+const joinedLabel = (provider: string) => (provider === 'x' ? 'X' : provider === 'google' ? 'Google' : provider);
+---
+
+<Base title="Account" description="Your account, and how you sign in." path="/account">
+  <SiteHeader>
+    <article class="prose">
+      <h1>Account</h1>
+
+      {errorMessage && <div class="banner banner-warn" role="status">{errorMessage}</div>}
+
+      {
+        session ? (
+          <section class="account">
+            <div class="account-id">
+              {session.user.avatar_url && (
+                <img class="account-avatar" src={session.user.avatar_url} width="56" height="56" alt="" />
+              )}
+              <div>
+                <p class="account-name">{session.user.display_name}</p>
+                {session.user.email && <p class="account-email">{session.user.email}</p>}
+                {session.user.role === 'admin' && <p class="pill pill-featured">admin</p>}
+              </div>
+            </div>
+
+            <h2>Connected accounts</h2>
+            <ul class="account-idents">
+              {identities.map((identity) => (
+                <li>
+                  <strong>{joinedLabel(identity.provider)}</strong>
+                  {identity.username ? <span class="muted"> · {identity.username}</span> : null}
+                </li>
+              ))}
+            </ul>
+            <p class="lede">
+              Signing in with another provider while signed in here connects it to this account. Signed in
+              separately in a clean session it would create a new one — identity is keyed on the provider's
+              own account id, never on an email address, because X does not verify the addresses on its
+              accounts and keying on one would let anyone set it.
+            </p>
+
+            <form method="post" action="/auth/logout">
+              <button type="submit" class="btn">Sign out</button>
+            </form>
+          </section>
+        ) : providers.length > 0 ? (
+          <section class="account">
+            <h2>Sign in</h2>
+            <p class="lede">
+              An account exists so there is something for a future feature to belong to. Nothing about
+              reading, archiving or searching the site changes when you sign in.
+            </p>
+            <ul class="account-providers">
+              {providers.map((provider) => (
+                <li>
+                  <a class="btn btn-primary" href={`/auth/${provider.id}/start?next=${encodeURIComponent(next)}`}>
+                    Continue with {provider.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p class="lede">
+              Google and X are the only two methods. There is no password to choose, forget or leak, because
+              neither provider hands this site anything that identifies you beyond what it already knows.
+            </p>
+          </section>
+        ) : (
+          <section class="account">
+            <h2>Sign in is not available</h2>
+            <p class="lede">
+              No sign-in provider is configured on this deployment. That is a deployment setting rather than
+              a broken page: <code>X_CLIENT_ID</code>/<code>X_CLIENT_SECRET</code> and{' '}
+              <code>GOOGLE_CLIENT_ID</code>/<code>GOOGLE_CLIENT_SECRET</code> have to be present as secrets.
+            </p>
+          </section>
+        )
+      }
+    </article>
+  </SiteHeader>
+</Base>

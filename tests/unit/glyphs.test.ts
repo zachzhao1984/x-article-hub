@@ -89,24 +89,39 @@ describe('the glyph set', () => {
   });
 
   it('gives every nav destination an icon, and every icon a destination', () => {
-    // Home, three score boards, the editor's picks, and two utilities. A board added
-    // later without an icon is the failure this catches; so is an entry whose icon was
-    // renamed out of the set — which is a build error now, since the array is typed
-    // `IconName`, and a silent blank box before that.
+    // Home, three score boards, and the editor's picks. `/search` and `/about` left the
+    // nav — neither page left the site — so this list is five entries rather than seven.
+    //
+    // Pinning the exact list is the point, not incidental: a board added later without an
+    // icon is the failure this catches, and so is an entry whose icon was renamed out of
+    // the set, which is a build error now that the array is typed `IconName` and a silent
+    // blank box before that. The list is also what proves those two pages are still
+    // reachable rather than merely unlinked, since `icons.test.ts` fails on a vendored
+    // glyph with no destination and `phosphor.ts` has no `magnifying-glass` or `info` left.
     const items = navIcons();
-    expect(items.map((i) => i.href)).toEqual([
-      '/',
-      '/featured',
-      '/latest',
-      '/trending',
-      '/rising',
-      '/search',
-      '/about',
-    ]);
+    expect(items.map((i) => i.href)).toEqual(['/', '/featured', '/latest', '/trending', '/rising']);
     for (const item of items) {
       expect(item.icon, `${item.href} has no icon`).toBeTruthy();
       expect(item.label, `${item.href} has no label to fall back on`).toBeTruthy();
     }
+  });
+
+  it('keeps /search and /about reachable now that they are out of the nav', () => {
+    // The nav is not the only thing that links a page. Removing Search and About from it
+    // is a change to the navigation, not to the site, and the difference is invisible
+    // until something links them nowhere: a search page nobody can find, and an About
+    // page describing how the archive works that no reader will ever read.
+    //
+    // Both are pinned to where they are actually reachable — the footer and the header's
+    // search box — so a future edit that drops those links fails here rather than
+    // quietly orphaning a page.
+    const header = readFileSync(resolve('src/components/SiteHeader.astro'), 'utf8');
+    // The search box submits here. Its own visibility is a layout decision
+    // (`.search-mini` hides below 1100px), which is a separate concern from whether the
+    // destination is linked at all.
+    expect(header).toMatch(/<form class="search-mini" action="\/search"/);
+    // About is in the footer, which is on every page.
+    expect(header).toMatch(/<a href="\/about">About<\/a>/);
   });
 
   it('keeps trending and rising distinguishable, since they rank differently', () => {

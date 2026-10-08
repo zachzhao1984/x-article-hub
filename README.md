@@ -686,8 +686,10 @@ not interchangeable:
 | `/latest` | `published_at DESC` — a question of *when* | `clock` |
 | `/trending` | weighted blend — what is hot now | `fire` |
 | `/rising` | `velocity_score` alone — a line going up | `trend-up` |
-| `/search` | — | `magnifying-glass` |
-| `/about` | — | `info` |
+
+`/search` and `/about` are not in this table because they are not in the navigation any
+more — they were removed from it, not from the site. `/search` is still what the header's
+search box submits to and `/about` is still linked from the footer.
 
 `/trending` and `/rising` diverge by design (§ the four boards), and one shared icon
 would erase that from the navigation — the one place a reader looks to find out which

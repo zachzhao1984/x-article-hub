@@ -695,11 +695,27 @@ ${
 
 // --- login (dev shim) ------------------------------------------------------
 
+/**
+ * SPEC §43 — the token form is the fallback, not the only way in.
+ *
+ * A real account with `role = 'admin'` authenticates the same as the token
+ * (`resolveAccountIdentity` in src/middleware/admin-auth.ts), but a browser cannot get
+ * signed in by itself: it has to visit /account first. So the way through is linked here,
+ * carrying `next=/admin` so the reader lands back on the admin dashboard rather than on
+ * their own account page with no idea what to do next.
+ *
+ * The wording says "configured" rather than naming a provider because this view has no
+ * access to `Env`. Listing a method that turns out not to be configured would be worse
+ * than not listing it — /account shows exactly which providers are live, and the link
+ * goes there.
+ */
 export function loginView(message?: string, siteName: string = FALLBACK_SITE_NAME): string {
   const banner = message ? `<div class="banner banner-error">${escapeHtml(message)}</div>` : '';
   const body = `<h1>Admin sign in</h1>
 <p class="lede">Admin is protected by Cloudflare Access in production (SPEC §24). This form only
 exists for local development, where you set the <code>ADMIN_TOKEN</code> secret.</p>
+<p class="lede">If your account has admin rights, <a href="/account?next=%2Fadmin">sign in with X or Google</a>
+instead and you will be brought straight back here.</p>
 ${banner}
 <form class="card card-form" method="post" action="/admin/login">
   <label class="label" for="token">Admin token</label>

@@ -30,7 +30,19 @@ export type LogEvent =
   | 'admin_unauthorized'
   | 'admin_login'
   | 'http_error'
-  | 'cron_noop';
+  | 'cron_noop'
+  // SPEC §43 — reader accounts
+  | 'oauth_start'
+  | 'oauth_declined'
+  | 'oauth_callback_incomplete'
+  | 'oauth_state_rejected'
+  | 'oauth_callback_failed'
+  | 'oauth_login'
+  | 'login_created'
+  | 'login_identity_linked'
+  | 'login_identity_owned_by_other'
+  | 'login_link_target_gone'
+  | 'admin_denied_role';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -45,6 +57,23 @@ export interface LogFields {
   status?: string;
   error_code?: string;
   error_message?: string;
+  // SPEC §43 — accounts. `provider` and `role` are free strings rather than a union
+  // because a log line is the one place where recording what an attacker or a
+  // half-finished setup actually sent is worth more than the type being narrow.
+  user_id?: string;
+  provider?: string;
+  role?: string;
+  outcome?: string;
+  actor?: string;
+  linking?: boolean;
+  reason?: string;
+  has_state?: boolean;
+  has_code?: boolean;
+  found?: boolean;
+  state_provider?: string | null;
+  has_email?: boolean;
+  via?: string;
+  link_to_user_id?: string;
   browser_ms_used?: number;
   [key: string]: unknown;
 }

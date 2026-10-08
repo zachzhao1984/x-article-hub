@@ -20,7 +20,31 @@ export type ImportErrorCode =
   | 'NOT_AN_ARTICLE'
   | 'TOO_MANY_URLS';
 
-export type AppErrorCode = ImportErrorCode | CrawlErrorCode | AiErrorCode | MediaErrorCode | 'UNAUTHORIZED' | 'NOT_FOUND' | 'BAD_REQUEST';
+/**
+ * SPEC §43 — where an OAuth round-trip failed.
+ *
+ * `OAUTH_INVALID_STATE` is a security signal rather than a bug report: it means a
+ * callback arrived carrying a `state` this Worker never issued, or one already spent.
+ * That is either a stale tab, a blocked third-party cookie, or someone trying to
+ * attach an authorization code to a session that never asked for one, and the three
+ * need different responses, so it is never collapsed into a generic failure.
+ */
+export type OAuthErrorCode =
+  | 'OAUTH_NOT_CONFIGURED'
+  | 'OAUTH_UNKNOWN_PROVIDER'
+  | 'OAUTH_INVALID_STATE'
+  | 'OAUTH_TOKEN_EXCHANGE_FAILED'
+  | 'OAUTH_PROFILE_FAILED';
+
+export type AppErrorCode =
+  | ImportErrorCode
+  | CrawlErrorCode
+  | AiErrorCode
+  | MediaErrorCode
+  | OAuthErrorCode
+  | 'UNAUTHORIZED'
+  | 'NOT_FOUND'
+  | 'BAD_REQUEST';
 
 export class AppError extends Error {
   readonly code: AppErrorCode;

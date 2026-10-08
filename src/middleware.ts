@@ -15,8 +15,19 @@ const TTL_SECONDS: Array<[RegExp, number]> = [
 export const onRequest = defineMiddleware(async (context, next) => {
   const path = context.url.pathname;
 
-  // SPEC §23 — admin is never cached.
-  if (path.startsWith('/admin')) {
+  // SPEC §23 — admin is never cached. SPEC §43 — nor are the reader's account page or
+  // the sign-in endpoints.
+  //
+  // `/account` differs per reader by definition: it renders the reader's name, their
+  // address and their connected providers. Caching it would serve one person's account
+  // page to whoever asked next, which is not a performance win, it is a disclosure.
+  // `/auth/*` is here for a different reason — it is almost entirely redirects that mint
+  // a cookie, and a cached 302 would replay a past visitor's session into a later one.
+  //
+  // Note what is deliberately *not* on this list: every other page stays publicly
+  // cacheable, and none of them read the session cookie. That is what makes the header's
+  // account slot safe — see the note in SiteHeader.astro.
+  if (path.startsWith('/admin') || path.startsWith('/account') || path.startsWith('/auth')) {
     const response = await next();
     response.headers.set('Cache-Control', 'no-store');
     return response;

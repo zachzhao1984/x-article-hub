@@ -17,6 +17,7 @@
 
 import type { Context } from 'hono';
 import { log } from '../lib/logger';
+import { resolveSession } from '../lib/user-session';
 
 const ACCESS_EMAIL_HEADER = 'cf-access-authenticated-user-email';
 const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion';
@@ -27,7 +28,7 @@ const SESSION_LABEL = 'xah-admin-session-v1';
 
 export interface AdminIdentity {
   actor: string;
-  via: 'cloudflare-access' | 'admin-token' | 'session-cookie';
+  via: 'cloudflare-access' | 'admin-token' | 'session-cookie' | 'user-account';
 }
 
 export function resolveIdentity(c: Context): AdminIdentity | null {
@@ -63,12 +64,56 @@ export async function verifySessionCookie(c: Context, secret: string): Promise<b
   return timingSafeEqual(cookie, await signSession(secret));
 }
 
+/**
+ * SPEC §43 — admin by real account, as an alternative to the shared token.
+ *
+ * Additive, and checked *after* the token rather than instead of it. The token is the
+ * path that cannot be taken away by anything that happens at an OAuth provider — an X
+ * outage, a revoked X app, a Google consent screen somebody disabled — so it stays the
+ * way in when the alternative is not working, and it stays the way out if this branch is
+ * ever wrong.
+ *
+ * The role comes from the `users` row, not from the cookie. A cookie carrying the role
+ * would hand admin to anyone willing to edit one value in their own browser; here,
+ * changing the role in D1 takes effect on the very next request.
+ *
+ * A signed-in account *without* the role is not an identity, and saying so is the point:
+ * the likeliest reason somebody with a working account is hitting a 401 here is that
+ * nobody has run `GRANT_ADMIN_SQL` for their address yet, and a log line naming them
+ * turns that from a mystery into a one-line fix.
+ */
+async function resolveAccountIdentity(c: Context): Promise<AdminIdentity | null> {
+  const session = await resolveSession(c.env.DB, c.req.header('cookie'), Date.now());
+  if (!session) return null;
+
+  if (session.user.role !== 'admin') {
+    log.info('admin_denied_role', {
+      user_id: session.user.id,
+      actor: session.user.email ?? '(no email)',
+      role: session.user.role,
+      path: new URL(c.req.url).pathname,
+    });
+    return null;
+  }
+
+  return {
+    // The address where there is one, so an event log entry names a person rather than
+    // an id. An X-only account has none; its id is still on the `users` row.
+    actor: session.user.email ?? session.user.id,
+    via: 'user-account',
+  };
+}
+
 export function requireAdmin() {
   return async (c: Context, next: () => Promise<void>) => {
     let identity = resolveIdentity(c);
 
     if (!identity && c.env.ADMIN_TOKEN && (await verifySessionCookie(c, c.env.ADMIN_TOKEN))) {
       identity = { actor: 'admin-token', via: 'session-cookie' };
+    }
+
+    if (!identity) {
+      identity = await resolveAccountIdentity(c);
     }
 
     if (!identity) {
