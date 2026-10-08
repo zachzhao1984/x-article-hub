@@ -702,10 +702,28 @@ pre {
 }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* The accent is the theme switch's own accent, for the same reason the active nav item
- * uses it: it is the one colour in this design system that means "this is the action". */
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.btn-primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
+/*
+ * An accent fill, on the same token and with the same lettering as the active nav item.
+ *
+ * `--accent-contrast`, and not `--accent-ink`. Those are two names for two different
+ * things: admin.css defines `--accent-ink` and site.css defines `--accent-contrast`, and
+ * only the latter exists on this surface. Written as `--accent-ink` here, the var() had
+ * nothing to resolve to and the declaration fell back to the inherited `--text` —
+ * near-black lettering on a #176b75 fill, measured at **2.37:1**, which fails WCAG AA even
+ * for bold text. The nav's active state was 6.18:1 at the same moment, from the token that
+ * actually exists.
+ *
+ * So this was not only a mismatch between two surfaces, it was a contrast bug that looked
+ * like a styling choice. Hover keeps the same lettering and lifts the fill, because
+ * brightening a background does not change which colour has to sit on top of it.
+ */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+.btn-primary:hover { color: var(--accent-contrast); filter: brightness(1.08); }
 
 .account { max-width: 62ch; }
 .account h2 { margin-top: 28px; }
@@ -829,7 +847,14 @@ pre {
   color: var(--muted);
   text-decoration: none;
 }
-.fig-missing:hover { color: var(--ink); }
+/*
+ * `--text`, and not `--ink` — that name belongs to admin.css and this stylesheet has never
+ * defined it. The var() compiled, deployed and rendered; it simply resolved to nothing, so
+ * this rule was a no-op and the link stayed `--muted` on hover like every other link on
+ * the page. Invisible, and harmless here, which is the worst combination: it would have
+ * survived review indefinitely. See the unresolved-token assertion in typography.test.ts.
+ */
+.fig-missing:hover { color: var(--text); }
 .fig-missing span {
   font-size: 12px;
   color: var(--faint);

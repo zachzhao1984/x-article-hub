@@ -187,6 +187,45 @@ describe('typography', () => {
     expect(offenders, 'small text inheriting the prose leading').toEqual([]);
   });
 
+  it('never reads a custom property this stylesheet does not define', () => {
+    // The whole point of a token is that a name means one thing. site.css and admin.css
+    // are separate bundles that happen to share some names: admin.css defines
+    // `--accent-ink` where site.css defines `--accent-contrast`. Writing the admin name
+    // here compiles, deploys, and passes every other check in this file — the var() simply
+    // has nothing to resolve to, so the declaration is invalid at computed-value time and
+    // the property falls back to its inherited value.
+    //
+    // On `.btn-primary` that meant near-black `--text` lettering sitting on the accent
+    // fill: **2.37:1**, which fails WCAG AA even for bold text, while the active nav item
+    // next to it was 6.18:1 on the same fill. It read as a styling choice because both
+    // colours are plausible; nothing about the rule said a token was missing.
+    //
+    // So this is asserted over the whole sheet rather than on the one rule, because the
+    // failure is not specific to buttons — a mistyped token in any future rule is the same
+    // bug, and it fails silently every time.
+    const defined = new Set(
+      [...clean.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]?.toLowerCase() ?? ''),
+    );
+    expect(defined.size, 'found no custom properties at all — is this reading the right file?').toBeGreaterThan(10);
+
+    const used = new Map<string, string>();
+    for (const match of clean.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) {
+      const name = match[1]?.toLowerCase() ?? '';
+      if (!used.has(name)) used.set(name, '');
+      // Remember the selector the first use appeared under, so a failure names a place.
+      const before = clean.slice(0, match.index ?? 0);
+      const rule = before.lastIndexOf('{');
+      const selectorStart = before.lastIndexOf('}', rule);
+      used.set(name, before.slice(selectorStart + 1, rule).trim().split('\n').pop() ?? '?');
+    }
+
+    const unresolved = [...used.entries()]
+      .filter(([name]) => !defined.has(name))
+      .map(([name, selector]) => `${name} (in ${selector})`);
+
+    expect(unresolved, 'var() names this stylesheet never defines').toEqual([]);
+  });
+
   it('loads no webfont, so the stack costs nothing when the face is absent', () => {
     // Inter is a local-name lookup. A CDN font would add a blocking request and
     // render-invisible text on the article surface, which is the wrong trade for a
