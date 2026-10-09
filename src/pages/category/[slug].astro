@@ -11,7 +11,7 @@ const { slug = '' } = Astro.params;
 
 const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
 const PER_PAGE = 20;
-const sort = (Astro.url.searchParams.get('sort') as 'latest' | 'trending' | 'rising') ?? 'latest';
+const sort = (Astro.url.searchParams.get('sort') as 'latest' | 'trending') ?? 'latest';
 
 const articles = await listPublishedArticles(db, {
   categorySlug: slug,
@@ -37,7 +37,6 @@ const description = category.description ?? `X Articles about ${category.name}.`
 const sorts: Array<{ key: typeof sort; label: string; href: string }> = [
   { key: 'latest', label: 'Latest', href: `/category/${slug}` },
   { key: 'trending', label: 'Trending', href: `/category/${slug}?sort=trending` },
-  { key: 'rising', label: 'Rising', href: `/category/${slug}?sort=rising` },
 ];
 ---
 

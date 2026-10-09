@@ -5,13 +5,13 @@
  * something measurable:
  *
  * - **No request.** The library's own webfont would add a blocking fetch and a flash
- *   of invisible icons in the header, which is the first thing on every page. Nine
- *   paths inline weigh about 2.4kB of HTML against a font file orders of magnitude
+ *   of invisible icons in the header, which is the first thing on every page. Eight
+ *   paths inline weigh about 2.2kB of HTML against a font file orders of magnitude
  *   larger.
  * - **No webfont.** This site loads no webfont at all, and says so in the type
  *   tokens: the whole stack is local-name lookups, because the archive is mostly
  *   Chinese and the CJK faces are the primary rendering. An icon font would be the
- *   one exception, for nine icons.
+ *   one exception, for eight icons.
  * - **No drift.** These are the upstream 2.1.1 geometry, unchanged. A dependency
  *   upgrade could restyle the navigation between deploys; a vendored path cannot.
  *
@@ -50,10 +50,7 @@ export const ICON_PATHS = {
   /** Trending — the weighted blend of popularity, velocity and quality: what is hot now. */
   'fire':
     `M183.89,153.34a57.6,57.6,0,0,1-46.56,46.55A8.75,8.75,0,0,1,136,200a8,8,0,0,1-1.32-15.89c16.57-2.79,30.63-16.85,33.44-33.45a8,8,0,0,1,15.78,2.68ZM216,144a88,88,0,0,1-176,0c0-27.92,11-56.47,32.66-84.85a8,8,0,0,1,11.93-.89l24.12,23.41,22-60.41a8,8,0,0,1,12.63-3.41C165.21,36,216,84.55,216,144Zm-16,0c0-46.09-35.79-85.92-58.21-106.33L119.52,98.74a8,8,0,0,1-13.09,3L80.06,76.16C64.09,99.21,56,122,56,144a72,72,0,0,0,144,0Z`,
-  /** Rising — velocity_score on its own, so a line going up. Deliberately not a chart: the site has no chart page, and an icon that implies one is a worse fault than one that reads a shade light. */
-  'trend-up':
-    `M240,56v64a8,8,0,0,1-16,0V75.31l-82.34,82.35a8,8,0,0,1-11.32,0L96,123.31,29.66,189.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0L136,140.69,212.69,64H168a8,8,0,0,1,0-16h64A8,8,0,0,1,240,56Z`,
-  /** Editor's Pick — the human override, so a star rather than another score glyph.
+    /** Editor's Pick — the human override, so a star rather than another score glyph.
    *  Matches the badge `ArticleCard.astro` puts on a featured card, so the board and
    *  the badge read as one idea. `sparkle` was the other candidate and was rejected:
    *  nothing about this site is generated, and the glyph means novelty everywhere

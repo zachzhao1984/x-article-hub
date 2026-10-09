@@ -50,7 +50,7 @@ echo "  (verifying against ${SLUG})"
 echo
 
 echo "Routes (SPEC §17.1)"
-for p in / /latest /trending /rising /search /about /sitemap.xml /robots.txt /feed.xml; do
+for p in / /latest /trending /featured /authors /search /about /sitemap.xml /robots.txt /feed.xml; do
   check "GET ${p} renders" "$(status "${BASE}${p}")" "200"
 done
 check "GET /category/ai renders" "$(status "${BASE}/category/ai")" "200"
@@ -70,11 +70,15 @@ echo
 echo "Boards order differently (SPEC §15)"
 LATEST="$("${CURL[@]}" -fsS "${BASE}/latest")"
 TRENDING="$("${CURL[@]}" -fsS "${BASE}/trending")"
-RISING="$("${CURL[@]}" -fsS "${BASE}/rising")"
 check "trending order differs from latest" \
   "$(if [ "$LATEST" != "$TRENDING" ]; then echo yes; else echo no; fi)" "yes"
-check "rising order differs from trending" \
-  "$(if [ "$TRENDING" != "$RISING" ]; then echo yes; else echo no; fi)" "yes"
+
+# /rising was removed with the velocity signal it ranked by. Its absence is asserted rather
+# than assumed: a deleted page that still answers 200 means a stale route or a CDN copy, and
+# either would keep a dead board reachable from any bookmarked link.
+check "GET /rising is gone" "$(status "${BASE}/rising")" "404"
+check "/rising is not in the nav" \
+  "$(if "${CURL[@]}" -fsS "${BASE}/" | grep -q 'href="/rising"'; then echo present; else echo absent; fi)" "absent"
 
 echo
 echo "SEO (SPEC §33)"

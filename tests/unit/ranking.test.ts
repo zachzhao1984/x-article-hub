@@ -5,7 +5,6 @@ import {
   metricsFromRow,
   normalizeScores,
   rawPopularity,
-  rawVelocity,
   ZERO_METRICS,
 } from '../../src/ranking/score';
 import { DEFAULT_RANKING_WEIGHTS } from '../../src/config/ranking';
@@ -53,47 +52,16 @@ describe('normalizeScores (SPEC §14.1)', () => {
   });
 });
 
-describe('rawVelocity (SPEC §14.2)', () => {
-  const now = 1_700_000_000_000;
-
-  it('is zero without a previous sample', () => {
-    expect(rawVelocity({ ...ZERO_METRICS, likes: 10, capturedAt: now }, null, now)).toBe(0);
-  });
-
-  it('is zero when the previous sample has no timestamp', () => {
-    expect(rawVelocity({ ...ZERO_METRICS, likes: 10, capturedAt: now }, { ...ZERO_METRICS }, now)).toBe(0);
-  });
-
-  it('is positive when engagement grows', () => {
-    const prev = { ...ZERO_METRICS, likes: 100, capturedAt: now - 6 * HOUR };
-    const cur = { ...ZERO_METRICS, likes: 400, views: 10_000, capturedAt: now };
-    expect(rawVelocity(cur, prev, now)).toBeGreaterThan(0);
-  });
-
-  it('never goes negative when a metric regresses', () => {
-    const prev = { ...ZERO_METRICS, likes: 500, capturedAt: now - 6 * HOUR };
-    const cur = { ...ZERO_METRICS, likes: 100, capturedAt: now };
-    expect(rawVelocity(cur, prev, now)).toBe(0);
-  });
-
-  it('ranks faster growth above slower growth', () => {
-    const prev = { ...ZERO_METRICS, likes: 0, capturedAt: now - 6 * HOUR };
-    const slow = rawVelocity({ ...ZERO_METRICS, likes: 10, capturedAt: now }, prev, now);
-    const fast = rawVelocity({ ...ZERO_METRICS, likes: 5000, capturedAt: now }, prev, now);
-    expect(fast).toBeGreaterThan(slow);
-  });
-});
-
 describe('combineScores (SPEC §14.4)', () => {
-  const scores = { popularity: 100, velocity: 100, quality: 100, editor: 100 };
+  const scores = { popularity: 100, quality: 100, editor: 100 };
 
   it('returns the weighted blend', () => {
-    expect(combineScores(scores, { popularity: 0.25, velocity: 0.25, quality: 0.25, editor: 0.25 })).toBe(100);
+    expect(combineScores(scores, { popularity: 0.35, quality: 0.35, editor: 0.3 })).toBeCloseTo(100);
   });
 
   it('follows the configured weights rather than a hard-coded formula', () => {
     expect(
-      combineScores({ popularity: 100, velocity: 0, quality: 0, editor: 0 }, { popularity: 0.4, velocity: 0.3, quality: 0.2, editor: 0.1 }),
+      combineScores({ popularity: 100, quality: 0, editor: 0 }, { popularity: 0.4, quality: 0.3, editor: 0.3 }),
     ).toBeCloseTo(40);
   });
 

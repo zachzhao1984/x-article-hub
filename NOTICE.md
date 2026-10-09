@@ -50,3 +50,17 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTIO
 CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
+
+## Test fixtures
+
+`tests/fixtures/` holds captured output from real crawls, used as fixed inputs for the
+parser and the engagement extractor. They are third-party page content, archived the same
+way the site archives anything, and are present so a test asserts against markup X actually
+emitted rather than against a hand-written sample:
+
+- `x-article-2103788150405705870.md` — the `/markdown` output for
+  <https://x.com/HaibaraCrypto/article/2103788150405705870>, captured 2026-09-30.
+- `x-article-engagement-2101779116056088732.html` — the rendered `page.html` for
+  <https://x.com/obie/article/2101779116056088732>, captured 2026-10-08. It is the one
+  capture in the archive that carries X's `data-engagement-action` markup, which is why the
+  engagement extractor is tested against it and not a synthetic page.

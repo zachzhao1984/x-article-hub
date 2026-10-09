@@ -30,7 +30,6 @@ export type LogEvent =
   | 'admin_unauthorized'
   | 'admin_login'
   | 'http_error'
-  | 'cron_noop'
   // SPEC §43 — reader accounts
   | 'oauth_start'
   | 'oauth_declined'
@@ -42,7 +41,11 @@ export type LogEvent =
   | 'login_identity_linked'
   | 'login_identity_owned_by_other'
   | 'login_link_target_gone'
-  | 'admin_denied_role';
+  | 'admin_denied_role'
+  // SPEC §21 — scheduling
+  | 'ranking_refresh'
+  | 'ranking_refresh_start'
+  | 'ranking_refresh_failed';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -72,6 +75,13 @@ export interface LogFields {
   found?: boolean;
   state_provider?: string | null;
   has_email?: boolean;
+  metrics_fields?: number;
+  // SPEC §14.4 / §21 — the ranking refresh.
+  scored?: number;
+  with_metrics?: number;
+  without_metrics?: number;
+  weights?: { popularity: number; quality: number; editor: number };
+  note?: string;
   via?: string;
   link_to_user_id?: string;
   browser_ms_used?: number;

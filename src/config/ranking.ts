@@ -12,7 +12,6 @@
 
 export interface RankingWeights {
   popularity: number;
-  velocity: number;
   quality: number;
   editor: number;
 }
@@ -27,18 +26,23 @@ export const POPULARITY_WEIGHTS = {
   views: 0.1,
 } as const;
 
-/** SPEC §14.2 — multiple windows avoid a single spike dominating velocity. */
-export const VELOCITY_WINDOWS_MS = {
-  '1h': 60 * 60 * 1000,
-  '6h': 6 * 60 * 60 * 1000,
-  '24h': 24 * 60 * 60 * 1000,
-} as const;
-
+/**
+ * SPEC §14.4 — three signals, not four.
+ *
+ * `velocity` was a weighted component of `final_score` (0.30) and the entire basis of the
+ * `/rising` board. Both are gone. A component whose only consumer was that board would be
+ * a term in the sum that nothing reads, that no page explains, and that a new article
+ * cannot affect anyway — velocity needs two metric snapshots, so every new article
+ * contributes 0 to it for as long as it is new.
+ *
+ * The three that remain are all directly observable: engagement magnitude, an AI quality
+ * read, and a human override. `normalizeWeights` scales them to sum to 1, so these are
+ * intended proportions rather than a fixed denominator.
+ */
 export const DEFAULT_RANKING_WEIGHTS: RankingWeights = {
-  popularity: 0.4,
-  velocity: 0.3,
-  quality: 0.2,
-  editor: 0.1,
+  popularity: 0.57,
+  quality: 0.29,
+  editor: 0.14,
 };
 
 export function rankingWeights(raw: string | undefined): RankingWeights {
@@ -51,7 +55,7 @@ export function rankingWeights(raw: string | undefined): RankingWeights {
   }
 }
 
-const WEIGHT_KEYS: Array<keyof RankingWeights> = ['popularity', 'velocity', 'quality', 'editor'];
+const WEIGHT_KEYS: Array<keyof RankingWeights> = ['popularity', 'quality', 'editor'];
 
 /**
  * Drop anything that is not a positive finite number, then scale so the weights
@@ -59,7 +63,7 @@ const WEIGHT_KEYS: Array<keyof RankingWeights> = ['popularity', 'velocity', 'qua
  * for one key while renormalizing the others would silently skew every score.
  */
 function normalizeWeights(weights: RankingWeights): RankingWeights {
-  const out = { popularity: 0, velocity: 0, quality: 0, editor: 0 };
+  const out = { popularity: 0, quality: 0, editor: 0 };
   let sum = 0;
 
   for (const key of WEIGHT_KEYS) {

@@ -70,12 +70,37 @@ export const NON_ARTICLE_MARKERS = [
 
 // --- metadata extraction (§7.2) -------------------------------------------
 
+/**
+ * SPEC §14.1 — engagement counters as read off the page.
+ *
+ * Every field is `number | null`, and the distinction is load-bearing. `null` means the
+ * counter was not on the page; `0` means it was and read zero. Collapsing them would make a
+ * selector that has stopped matching indistinguishable from an article nobody liked, and
+ * the consequence of that mistake is silent: every score drifts to zero, Trending becomes a
+ * second copy of Latest, and nothing anywhere reports a failure.
+ *
+ * `bookmarks` is null on this page in practice — X does not render a count beside the
+ * bookmark button — while `quotes` is null by construction because X exposes it nowhere on
+ * an Article. Both are declared so the shape matches `article_metrics`, which has had the
+ * columns since §11.7.
+ */
+export interface EngagementMetrics {
+  likes: number | null;
+  reposts: number | null;
+  replies: number | null;
+  quotes: number | null;
+  bookmarks: number | null;
+  views: number | null;
+}
+
 export interface CrawlMetadata {
   title: string | null;
   authorName: string | null;
   authorUsername: string | null;
   description: string | null;
   publishedAt: string | null;
+  /** SPEC §14.1 — null metrics mean "not on the page", never "zero". */
+  metrics: EngagementMetrics;
 }
 
 /**
@@ -238,6 +263,89 @@ export function classifyContent(markdown: string, html?: string): ContentVerdict
 }
 
 /** Builds the full metadata set from both captures plus the canonical URL. */
+/**
+ * SPEC §14.1 — read the engagement counters off the rendered page.
+ *
+ * ## Why the page and not the API
+ *
+ * SPEC §14 assumes a metrics source. The X API v2 endpoint that returns `public_metrics`
+ * requires a paid tier, which is a recurring cost for a number this crawl already loads.
+ * The Browser Run snapshot that produced the HTML below happens on every crawl regardless,
+ * so reading the counters out of it is free at the margin.
+ *
+ * The trade is that the markup is not ours. SPEC §7.4 is why this lives here and not in the
+ * crawl job: X's DOM belongs to an external site, and when it changes, exactly one function
+ * changes with it.
+ *
+ * ## The selector
+ *
+ * `data-engagement-action` is an attribute X puts on its own engagement buttons, and it is
+ * the most stable hook available — far more so than the Tailwind class names around it,
+ * which are hashed and churn. The mapping was read off a real capture rather than guessed:
+ *
+ *   reply     -> replies
+ *   retweet   -> reposts
+ *   like      -> likes
+ *   generic   -> views        (its `aria-label` is "View count")
+ *   bookmark  -> bookmarks    (present, but no counter beside it)
+ *   share     -> (not a metric)
+ *
+ * The count itself sits in a span carrying `x-animated-count-visual`; `tabular-nums` is the
+ * wider fallback, because the animated span is the animation and is the likelier of the two
+ * to be restructured.
+ *
+ * ## Why it returns nulls rather than zeros
+ *
+ * A missing attribute, a missing count span, and an unparseable count all return null for
+ * that field. Writing 0 for "I did not find it" is how a broken selector would look exactly
+ * like a quiet article, and the callers store what they are given — see the note on
+ * `EngagementMetrics`.
+ */
+export function extractEngagement(html: string): EngagementMetrics {
+  const find = (action: string): number | null => {
+    // Bounded to the button's own block so a counter cannot be picked up from the next one.
+    const block = new RegExp(`data-engagement-action="${action}"([\\s\\S]{0,1200})`).exec(html)?.[1];
+    if (!block) return null;
+    const count =
+      /x-animated-count-visual"[^>]*>([^<]+)</.exec(block)?.[1] ??
+      /tabular-nums[^>]*>([0-9][0-9,.\s]*[KMB]?)</.exec(block)?.[1];
+    return count === undefined ? null : parseCount(count);
+  };
+
+  return {
+    likes: find('like'),
+    reposts: find('retweet'),
+    replies: find('reply'),
+    // Not on an Article's page anywhere, and not guessed at. See the interface note.
+    quotes: null,
+    bookmarks: find('bookmark'),
+    views: find('generic'),
+  };
+}
+
+/**
+ * `48K` / `8.3M` / `1,234` -> a number, or null if it is not one of those.
+ *
+ * X abbreviates above a thousand, so the exact figure is not recoverable — `4.7K` is
+ * somewhere between 4650 and 4749. That is fine for a ranking signal, which is why the
+ * score runs through `Math.log` anyway, and it is why the result is rounded rather than
+ * carried as a float: the precision is not real.
+ *
+ * A bare `K` means thousands, so `4.7K` is `4700`. Lowercase is accepted because the
+ * uppercase/lowercase shift happens in X's pluralization ("1.2K" but "1.2k" on some
+ * locales) and there is no case where the distinction means something else.
+ */
+export function parseCount(raw: string): number | null {
+  const text = raw.trim().replace(/[\s,]/g, '');
+  if (text === '') return null;
+  const match = /^([0-9]+(?:\.[0-9]+)?)([KMB])?$/i.exec(text);
+  if (!match) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return null;
+  const scale: Record<string, number> = { '': 1, K: 1_000, M: 1_000_000, B: 1_000_000_000 };
+  return Math.round(value * (scale[(match[2] ?? '').toUpperCase()] ?? 1));
+}
+
 export function extractMetadata(
   url: string,
   markdown: string,
@@ -275,5 +383,6 @@ export function extractMetadata(
     authorUsername: urlUsername ?? fromTitle.username ?? fallbackUsername,
     description: fm.description ?? fm['og:description'] ?? null,
     publishedAt: extractPublishedAt(html, markdown),
+    metrics: extractEngagement(html),
   };
 }

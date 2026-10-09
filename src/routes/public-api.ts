@@ -3,7 +3,7 @@
  *
  * Phase 1 ships only the read endpoints that already work with the Phase 1
  * schema: health, categories and published articles. The search / trending /
- * rising endpoints (SPEC §22) need the FTS table and the ranking scores, which
+ * trending endpoints (SPEC §22) need the FTS table and the ranking scores, which
  * are Phase 4 and Phase 6 respectively.
  */
 

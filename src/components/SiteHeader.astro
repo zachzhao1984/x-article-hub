@@ -28,7 +28,7 @@ const theme = (() => {
 const path = Astro.url.pathname;
 
 /**
- * Home, plus the four boards of SPEC §15, plus Authors. Not the seven entries this used
+ * Home, plus the three boards of SPEC §15, plus Authors. Not the seven entries this used
  * to have.
  *
  * `Search` and `About` were removed from the nav; neither page was removed. About is
@@ -48,12 +48,16 @@ const path = Astro.url.pathname;
  * account slot, before it lost its label) pushes in the same direction, so this went back
  * through the same fit measurement the earlier changes did rather than being assumed to fit.
  *
- * The icons are chosen against what each board actually orders by, which is why two
- * of them are not interchangeable: `/latest` is `published_at DESC` — a question of
- * when, so a clock — while `/trending` is the weighted blend and `/rising` is
- * `velocity_score` alone. A flame for "hot" and a rising line for "moving up" keep
- * the blend and the velocity signal visually distinct, which is the same distinction
- * the whole ranking section exists to preserve.
+ * The icons are chosen against what each board actually orders by. `/latest` is
+ * `published_at DESC` — a question of *when*, so a clock — and `/trending` is the weighted
+ * blend — a question of *how much*, so a flame. `/featured` is the editor's flag, which is
+ * not a score at all.
+ *
+ * `Rising` and its `trend-up` glyph are gone. It ordered by `velocity_score` alone, and
+ * that signal no longer exists: it needed two metric snapshots to compute, so every new
+ * article scored 0 in it, and with one provider of engagement data the board was a second
+ * ordering of the same column. Its entry is removed here, the page itself is deleted, and
+ * the glyph went with them rather than being left vendored with no destination.
  *
  * Typed as `IconName` rather than `string` so a typo or an icon that was never
  * vendored fails the build instead of rendering an empty box next to a label.
@@ -63,7 +67,6 @@ const nav: Array<{ href: string; label: string; icon: IconName }> = [
   { href: '/featured', label: 'Featured', icon: 'star' },
   { href: '/latest', label: 'Latest', icon: 'clock' },
   { href: '/trending', label: 'Trending', icon: 'fire' },
-  { href: '/rising', label: 'Rising', icon: 'trend-up' },
   { href: '/authors', label: 'Authors', icon: 'users' },
 ];
 

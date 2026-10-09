@@ -13,7 +13,6 @@ export interface Props {
     word_count: number;
     featured?: 0 | 1;
     final_score?: number | null;
-    velocity_score?: number | null;
   };
   rank?: number;
 }
@@ -50,13 +49,6 @@ const href = article.slug ? `/article/${article.slug}` : '#';
           <a class="author" href={`/author/${article.author_username}`}>
             {article.author_name ? `@${article.author_username}` : `@${article.author_username}`}
           </a>
-        )
-      }
-      {
-        typeof article.velocity_score === 'number' && article.velocity_score > 0 && (
-          <span class="score" title="Velocity score (SPEC §14.2)">
-            ↑ {article.velocity_score.toFixed(0)}
-          </span>
         )
       }
     </div>

@@ -13,7 +13,7 @@ import type { ArticleRow } from './rows';
 import type { ArticleStatus, DisplayMode } from '../jobs/types';
 import { deSegment, hasCjk, segmentCjk } from '../lib/cjk';
 
-export type PublicSort = 'latest' | 'trending' | 'rising' | 'featured';
+export type PublicSort = 'latest' | 'trending' | 'featured';
 
 export interface ArticleListItem {
   id: string;
@@ -43,14 +43,12 @@ const LIST_COLUMNS = `
   a.display_mode, a.featured, a.word_count,
   a.final_score, a.velocity_score, a.popularity_score, a.quality_score`;
 
-/** SPEC §15 — the four board orderings. */
+/** SPEC §15 — the three board orderings. */
 const SORT_SQL: Record<PublicSort, string> = {
   // SPEC §15 — Latest is `published_at DESC`, newest first.
   latest: 'COALESCE(a.published_at, a.imported_at) DESC, a.id DESC',
   // SPEC §15 — Trending is the blended score.
   trending: 'COALESCE(a.final_score, 0) DESC, COALESCE(a.published_at, a.imported_at) DESC',
-  // SPEC §15 — Rising is velocity alone, deliberately not the blend.
-  rising: 'COALESCE(a.velocity_score, 0) DESC, COALESCE(a.published_at, a.imported_at) DESC',
   // SPEC §15 — Editor's Pick is the human override, not a score.
   featured: 'COALESCE(a.published_at, a.imported_at) DESC, a.id DESC',
 };
@@ -364,7 +362,6 @@ export async function listSitemapArticles(db: D1Database): Promise<SitemapEntry[
 export async function homepageCounts(db: D1Database): Promise<{
   total: number;
   trending: number;
-  rising: number;
   featured: number;
 }> {
   const row = await db
@@ -372,18 +369,16 @@ export async function homepageCounts(db: D1Database): Promise<{
       `SELECT
          COUNT(*) AS total,
          SUM(CASE WHEN a.featured = 1 THEN 1 ELSE 0 END) AS featured,
-         SUM(CASE WHEN COALESCE(a.final_score, 0) > 0 THEN 1 ELSE 0 END) AS trending,
-         SUM(CASE WHEN COALESCE(a.velocity_score, 0) > 0 THEN 1 ELSE 0 END) AS rising
+         SUM(CASE WHEN COALESCE(a.final_score, 0) > 0 THEN 1 ELSE 0 END) AS trending
        FROM articles a
        WHERE a.status = 'published' AND a.display_mode != 'takedown'`,
     )
-    .first<{ total: number; featured: number | null; trending: number | null; rising: number | null }>();
+    .first<{ total: number; featured: number | null; trending: number | null }>();
 
   return {
     total: row?.total ?? 0,
     featured: row?.featured ?? 0,
     trending: row?.trending ?? 0,
-    rising: row?.rising ?? 0,
   };
 }
 

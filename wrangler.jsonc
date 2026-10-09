@@ -85,10 +85,21 @@
     "binding": "ASSETS"
   },
 
+  // SPEC §21 — the ranking refresh.
+  //
+  // Every 30 minutes. The cadence is set by how fast `final_score` can actually go stale:
+  // it changes when a crawl lands, and crawls are manual and measured in articles per day
+  // rather than per hour, so a tighter schedule would mostly recompute an unchanged set.
+  // Thirty minutes is also well inside the window where a reader would notice a newly
+  // popular article still ranked by yesterday's engagement.
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
+
   "vars": {
     "SITE_NAME": "X Article Hub",
     "SITE_ORIGIN": "https://x-article-hub.zachzhao.workers.dev",
-    "RANKING_WEIGHTS_JSON": "{\"popularity\":0.4,\"velocity\":0.3,\"quality\":0.2,\"editor\":0.1}",
+    "RANKING_WEIGHTS_JSON": "{\"popularity\":0.57,\"quality\":0.29,\"editor\":0.14}",
     "MAX_IMPORT_URLS": "200",
     "CRAWL_SCREENSHOT": "false"
   }

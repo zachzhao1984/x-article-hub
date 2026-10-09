@@ -11,7 +11,7 @@ import { defineMiddleware } from 'astro:middleware';
 
 const TTL_SECONDS: Array<[RegExp, number]> = [
   [/^\/$/, 60],
-  [/^\/(latest|trending|rising|featured|authors|about)$/, 60],
+  [/^\/(latest|trending|featured|authors|about)$/, 60],
   [/^\/category\//, 300],
   [/^\/tag\//, 300],
   [/^\/author\//, 300],

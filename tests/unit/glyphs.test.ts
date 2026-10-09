@@ -104,7 +104,6 @@ describe('the glyph set', () => {
       '/featured',
       '/latest',
       '/trending',
-      '/rising',
       '/authors',
     ]);
     for (const item of items) {
@@ -131,13 +130,21 @@ describe('the glyph set', () => {
     expect(header).toMatch(/<a href="\/about">About<\/a>/);
   });
 
-  it('keeps trending and rising distinguishable, since they rank differently', () => {
-    // `/trending` is the weighted blend and `/rising` is `velocity_score` alone, and
-    // the whole point of keeping them apart is that they diverge. One shared icon would
-    // erase the distinction from the navigation, which is the one place a reader looks
-    // to find out which one they are on.
-    const byHref = new Map(navIcons().map((i) => [i.href, i.icon]));
-    expect(byHref.get('/trending')).not.toBe(byHref.get('/rising'));
+  it('gives each board a distinct glyph, since they order by different things', () => {
+    // `/latest` is `published_at DESC` — a question of when. `/trending` is the weighted
+    // blend — a question of how much. `/featured` is a human flag and not a score at all.
+    // One shared icon would erase that from the navigation, which is the one place a reader
+    // looks to find out which board they are on.
+    const icons = navIcons().map((i) => i.icon);
+    expect(new Set(icons).size, 'two boards share a glyph').toBe(icons.length);
+  });
+
+  it('no longer vendors the Rising glyph', () => {
+    // `trend-up` had one destination and it was `/rising`; both are gone. A vendored glyph
+    // with nowhere to go is what `icons.test.ts` fails on, so leaving it would have meant
+    // weakening a rule that exists for a reason.
+    expect(Object.keys(ICON_PATHS)).not.toContain('trend-up');
+    expect(navIcons().map((i) => i.href)).not.toContain('/rising');
   });
 
   it('carries only filled single paths on the shared grid', () => {

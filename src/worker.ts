@@ -20,6 +20,7 @@ import { cf } from '@astrojs/cloudflare/hono';
 
 import { app as apiApp } from './app';
 import { handleBatch } from './jobs/dispatch';
+import { refreshRanking } from './services/ranking-refresh';
 import { log } from './lib/logger';
 import type { JobMessage } from './jobs/types';
 
@@ -56,12 +57,29 @@ export default {
   },
 
   /**
-   * SPEC §21 — Cron Triggers are for metrics / ranking / maintenance / re-index.
-   * None of those exist until Phase 6, so nothing is registered in wrangler.jsonc
-   * yet and this handler intentionally does no work.
+   * SPEC §21 — the ranking refresh.
+   *
+   * `waitUntil` rather than a bare await: the runtime is allowed to end an invocation once
+   * the handler's promise settles, and the refresh is a read plus a batched write that must
+   * not be cut off halfway. Returning before it finishes is what makes the platform keep
+   * the invocation alive for it.
+   *
+   * A failure is logged and swallowed rather than thrown. Nobody is watching a timer, and
+   * an unhandled rejection would surface as a bare cron failure without saying which half
+   * ran — the log line carries the counts that matter.
    */
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
-    log.info('cron_noop', { cron: controller.cron, environment: env.ENVIRONMENT ?? 'production' });
-    ctx.waitUntil(Promise.resolve());
+    log.info('ranking_refresh_start', {
+      cron: controller.cron,
+      environment: env.ENVIRONMENT ?? 'production',
+    });
+    ctx.waitUntil(
+      refreshRanking(env).catch((err: unknown) => {
+        log.error('ranking_refresh_failed', {
+          error_code: 'RANKING_REFRESH_FAILED',
+          error_message: err instanceof Error ? err.message : String(err),
+        });
+      }),
+    );
   },
 };

@@ -17,7 +17,7 @@ import { sha256Hex } from '../lib/hash';
 import { segmentCjk } from '../lib/cjk';
 import { recordEvent } from '../db/events';
 import { rankingWeights } from '../config/ranking';
-import { combineScores, rawPopularity, rawVelocity, normalizeScores, clampQuality } from '../ranking/score';
+import { combineScores, rawPopularity, normalizeScores, clampQuality } from '../ranking/score';
 import type { Metrics } from '../ranking/score';
 
 interface SeedArticle {
@@ -234,9 +234,7 @@ export async function seedDemoArticles(env: Env, opts: { reset?: boolean } = {})
   const previous: Metrics[] = ARTICLES.map((a) => ({ ...a.previous, capturedAt: now - 6 * HOUR }));
 
   const rawPop = metrics.map(rawPopularity);
-  const rawVel = metrics.map((m, i) => rawVelocity(m, previous[i] ?? null, now));
   const pop = normalizeScores(rawPop);
-  const vel = normalizeScores(rawVel);
   const quality = ARTICLES.map((a) => a.quality.overall);
 
   const created: string[] = [];
@@ -265,7 +263,7 @@ export async function seedDemoArticles(env: Env, opts: { reset?: boolean } = {})
     const sourceHash = await sha256Hex(document.source.url + publishedAt);
 
     const final = combineScores(
-      { popularity: pop[i]!, velocity: vel[i]!, quality: clampQuality(a.quality.overall), editor: a.featured ? 100 : 0 },
+      { popularity: pop[i]!, quality: clampQuality(a.quality.overall), editor: a.featured ? 100 : 0 },
       weights,
     );
 
@@ -306,7 +304,11 @@ export async function seedDemoArticles(env: Env, opts: { reset?: boolean } = {})
         a.quality.overall / 100,
         a.quality.overall,
         pop[i],
-        vel[i],
+        // SPEC §14.4 — velocity is no longer a component of the score, so nothing writes
+        // this column. Bound explicitly rather than dropped from the INSERT so the column
+        // list and the placeholder count do not depend on the ranking model having a
+        // velocity term.
+        null,
         a.featured ? 100 : 0,
         final,
         contentKey,

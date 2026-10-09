@@ -20,7 +20,6 @@ export const GET: APIRoute = async () => {
     `  <url><loc>${ORIGIN}/</loc><lastmod>${now}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>`,
     `  <url><loc>${ORIGIN}/latest</loc><lastmod>${now}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>`,
     `  <url><loc>${ORIGIN}/trending</loc><lastmod>${now}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>`,
-    `  <url><loc>${ORIGIN}/rising</loc><lastmod>${now}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>`,
     // Editor's Pick sits below the three score boards: it is the smallest and the most
     // volatile, since it holds nothing until an editor flags something.
     `  <url><loc>${ORIGIN}/featured</loc><lastmod>${now}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`,

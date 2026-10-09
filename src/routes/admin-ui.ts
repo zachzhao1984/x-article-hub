@@ -9,6 +9,7 @@ import { Hono, type Context } from 'hono';
 import type { AdminIdentity } from '../middleware/admin-auth';
 import { requireAdmin, setAdminCookie, clearAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { siteConfig } from '../config/site';
+import { refreshRanking } from '../services/ranking-refresh';
 import { dashboardStats } from '../db/stats';
 import { getArticleById, listArticles } from '../db/articles';
 import { listCrawlJobsForArticle, listFailedJobs, updateJobStatus } from '../db/jobs';
@@ -103,6 +104,25 @@ adminUi.use('*', requireAdmin());
 adminUi.get('/', async (c) => {
   const stats = await dashboardStats(c.env.DB);
   return c.html(dashboardView(stats, siteConfig(c.env).name));
+});
+
+/**
+ * SPEC §21 — run the ranking refresh on demand.
+ *
+ * The cron does this every 30 minutes, so the button is for the moment right after an
+ * import, when waiting half an hour to see `/trending` move would be the only alternative.
+ * It runs the same function the cron does, so there is exactly one implementation of what a
+ * score means.
+ */
+adminUi.post('/ranking/refresh', async (c) => {
+  const result = await refreshRanking(c.env);
+  const stats = await dashboardStats(c.env.DB);
+  return c.html(
+    dashboardView(
+      { ...stats, refreshed: { scored: result.scored, withoutMetrics: result.withoutMetrics } },
+      siteConfig(c.env).name,
+    ),
+  );
 });
 
 /** SPEC §16.2 — the import form. */

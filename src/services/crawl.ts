@@ -21,7 +21,7 @@ import { newId } from '../lib/ids';
 import { recordEvent } from '../db/events';
 import { getArticleById, setArticleStatus } from '../db/articles';
 import { classifyContent, extractAvatarUrl, extractMetadata } from '../jobs/x-selectors';
-import type { CrawlMetadata } from '../jobs/x-selectors';
+import type { CrawlMetadata, EngagementMetrics } from '../jobs/x-selectors';
 import { segmentCjk } from '../lib/cjk';
 import { runQuickAction, runSnapshot, SCREENSHOT_FORMAT } from './browser';
 
@@ -230,11 +230,21 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
       status: nextStatusAfterCrawl(startStatus),
       capturedAt,
     });
+    // SPEC §14.1 — metrics are written here too, and this is the path that needs it most.
+    //
+    // `unchanged` means the *body* is identical, which says nothing about engagement: an
+    // article being read right now has the same prose it had yesterday and a very different
+    // like count. Skipping the snapshot here would freeze the score of exactly the articles
+    // that are still moving, leaving the ones that are not as the only thing the ranking
+    // ever learned about.
+    const metricsFields = await recordMetrics(env, articleId, metadata.metrics, capturedAt);
+
     log.info('crawl_success', {
       article_id: articleId,
       browser_ms_used: browserMsUsed ?? undefined,
       outcome: 'unchanged',
       version: latest.version,
+      metrics_fields: metricsFields,
     });
     return { ok: true, result: 'unchanged', browserMsUsed, title: metadata.title, bodyChars, htmlError };
   }
@@ -259,6 +269,17 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
     capturedAt,
   });
 
+  // SPEC §14.1 — a metrics snapshot per crawl.
+  //
+  // Per crawl, not per import: `article_metrics` is a time series (§11.7) and a re-crawl is
+  // the moment the counters can have moved. Writing only on the first crawl would leave
+  // every score frozen at whatever the article looked like the day it arrived.
+  //
+  // Nulls are stored as nulls. A counter X did not render is not a zero, and this table's
+  // whole value for ranking is destroyed if a selector that stopped matching gets recorded
+  // as "nobody engaged" — see the note on `EngagementMetrics` in x-selectors.ts.
+  const metricsFields = await recordMetrics(env, articleId, metadata.metrics, capturedAt);
+
   await recordEvent(
     env.DB,
     articleId,
@@ -279,9 +300,63 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
     browser_ms_used: browserMsUsed ?? undefined,
     body_chars: bodyChars,
     status: CRAWL_TERMINAL_STATUS,
+    // SPEC §14.1 — how many of the six counters this capture yielded. A number that drops to
+    // 0 across articles is the signal that X changed its markup, and this log line is the
+    // only place it would show: a missing counter is stored as null and ranks last either
+    // way, so nothing else would look wrong.
+    metrics_fields: metricsFields,
   });
 
   return { ok: true, result: 'archived', browserMsUsed, title: metadata.title, bodyChars, htmlError };
+}
+
+/**
+ * SPEC §14.1 — one engagement snapshot, persisted.
+ *
+ * Returns how many of the six counters were present, which the caller logs. That count is
+ * the only signal that the page's markup has changed: a metric that is missing is stored as
+ * NULL rather than 0, NULL ranks last in `final_score` either way, and so a selector that
+ * has stopped matching produces a perfectly plausible-looking site with Trending quietly
+ * collapsed back onto `published_at`.
+ *
+ * `id` is a fresh `met_` id per row because this table is append-only history — the same
+ * article gets a new row on every crawl, and the score reads the newest.
+ */
+async function recordMetrics(
+  env: Env,
+  articleId: string,
+  metrics: EngagementMetrics,
+  capturedAt: number,
+): Promise<number> {
+  const values = [
+    metrics.likes,
+    metrics.reposts,
+    metrics.replies,
+    metrics.quotes,
+    metrics.bookmarks,
+    metrics.views,
+  ];
+
+  await env.DB.prepare(
+    `INSERT INTO article_metrics (id, article_id, captured_at, likes, reposts, replies, quotes, bookmarks, views)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+  )
+    .bind(
+      newId('met'),
+      articleId,
+      // The crawl's own timestamp, passed in rather than read here so the metrics row and
+      // the version it came from cannot disagree about when the page looked like this.
+      capturedAt,
+      metrics.likes,
+      metrics.reposts,
+      metrics.replies,
+      metrics.quotes,
+      metrics.bookmarks,
+      metrics.views,
+    )
+    .run();
+
+  return values.filter((v) => v !== null).length;
 }
 
 /**

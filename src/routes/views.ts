@@ -136,6 +136,11 @@ export interface DashboardView {
   total: number;
   articles: Record<string, number>;
   today: { imported: number; published: number; failed: number };
+  /**
+   * SPEC §21 — set after a manual ranking refresh, so the run reports what it did rather
+   * than leaving the operator to infer it from the board reordering.
+   */
+  refreshed?: { scored: number; withoutMetrics: number };
 }
 
 const STATUS_ORDER: ArticleStatus[] = [
@@ -170,11 +175,41 @@ export function dashboardView(view: DashboardView, siteName: string = FALLBACK_S
     .map((card) => `<div class="card"><div class="card-value">${card.value}</div><div class="card-label">${escapeHtml(card.label)}</div></div>`)
     .join('');
 
+  /**
+   * SPEC §21 — the ranking refresh, on demand.
+   *
+   * The cron runs it every 30 minutes, so this is not the normal path. It exists because
+   * the refresh is otherwise unobservable: `/trending` reorders, and a reader has no way to
+   * tell a working ranking from a stale one. Pressing this after importing makes the change
+   * immediate and states what it did.
+   *
+   * The `withoutMetrics` count is the part that matters. `final_score` puts an article with
+   * no engagement data at the bottom either way, so a crawl whose selectors stopped matching
+   * produces no error — just a board that slowly equals `/latest`. This is where that number
+   * becomes visible.
+   */
+  const refreshBanner = view.refreshed
+    ? `<div class="banner banner-ok">
+        Ranking recomputed for <strong>${view.refreshed.scored}</strong> published article${view.refreshed.scored === 1 ? '' : 's'}.${
+          view.refreshed.withoutMetrics > 0
+            ? ` <strong>${view.refreshed.withoutMetrics}</strong> had no engagement data and scored 0 on popularity.`
+            : ''
+        }
+      </div>`
+    : '';
+
   return layout(
     { title: 'Dashboard', active: 'dashboard', siteName }, 
     `<h1>Dashboard</h1>
 <p class="lede">Curation pipeline status. Import URLs to create articles; crawling starts in Phase 2.</p>
+${refreshBanner}
 <div class="cards">${cards}</div>
+<h2>Ranking</h2>
+<p class="lede">Scores are recomputed on a schedule (SPEC §21) and can be run now.</p>
+<form method="post" action="/admin/ranking/refresh" class="action-inline">
+  <button class="button" type="submit">Recompute ranking scores</button>
+  <span class="hint">Reads the newest engagement snapshot per article and rewrites every score.</span>
+</form>
 <h2>Articles by status</h2>
 <table class="table">
   <thead><tr><th>Status</th><th class="num">Count</th><th class="num">Share</th></tr></thead>

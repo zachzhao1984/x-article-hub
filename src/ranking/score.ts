@@ -1,19 +1,23 @@
 /**
  * SPEC §14 — ranking.
  *
- * Three independent signals, deliberately not collapsed into one:
+ * Two scored signals plus a human override, deliberately not collapsed into one:
  *
  *   popularity  log-compressed engagement magnitude
- *   velocity    engagement rate over time
  *   quality     AI assessment (SPEC §14.3 — never decides publication)
+ *   editor      a human override, which is not a score the pipeline computes
  *
  * combined by configurable weights into `final_score` (SPEC §14.4).
+ *
+ * `velocity` used to be a third signal here and is removed. It was the basis of the
+ * `/rising` board, which no longer exists, and it left `final_score` with it — see the note
+ * in src/config/ranking.ts.
  *
  * SPEC §14.1 requires log compression because a 10k-like article must not
  * permanently erase every article published after it.
  */
 
-import { POPULARITY_WEIGHTS, VELOCITY_WINDOWS_MS, type RankingWeights } from '../config/ranking';
+import { POPULARITY_WEIGHTS, type RankingWeights } from '../config/ranking';
 
 export interface Metrics {
   likes: number;
@@ -76,44 +80,13 @@ export function normalizeScores(values: number[]): number[] {
   return values.map((v) => ((v - min) / (max - min)) * 100);
 }
 
-/**
- * SPEC §14.2 — velocity over multiple windows.
- *
- * Windows are averaged rather than maxed: SPEC §14.2 warns against letting one
- * short spike dominate. An article with a single burst reads as "fast" for a
- * moment and then settles, which is the intended behaviour for /rising.
- */
-export function rawVelocity(current: Metrics, previous: Metrics | null, now: number): number {
-  if (!previous || !previous.capturedAt || !current.capturedAt) return 0;
-
-  const deltas = {
-    likes: Math.max(0, current.likes - previous.likes),
-    reposts: Math.max(0, current.reposts - previous.reposts),
-    views: Math.max(0, current.views - previous.views),
-  };
-
-  const rates: number[] = [];
-  for (const window of Object.values(VELOCITY_WINDOWS_MS)) {
-    // A delta older than the window is spread over the window, not over 0 seconds.
-    const observedMs = Math.max(current.capturedAt - previous.capturedAt, window);
-    const hours = observedMs / 3_600_000;
-    rates.push(
-      (deltas.likes / hours) * 0.4 + (deltas.reposts / hours) * 0.35 + (deltas.views / hours) * 0.25,
-    );
-  }
-
-  void now;
-  return rates.reduce((sum, r) => sum + r, 0) / rates.length;
-}
-
 /** SPEC §14.4 — weights come from config, never from a literal in this file. */
 export function combineScores(
-  scores: { popularity: number; velocity: number; quality: number; editor: number },
+  scores: { popularity: number; quality: number; editor: number },
   weights: RankingWeights,
 ): number {
   return (
     weights.popularity * scores.popularity +
-    weights.velocity * scores.velocity +
     weights.quality * scores.quality +
     weights.editor * scores.editor
   );
