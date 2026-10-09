@@ -21,9 +21,10 @@ const db = env.DB as unknown as D1Database;
 // Categories stay reachable — the header lists them as chips, and each card, search hit
 // and article links into `/category/:slug` — so this removes one entrance to a page
 // that is still on the sitemap, not a section of the site.
-const [counts, trending, featured, tags] = await Promise.all([
+const [counts, trending, latest, featured, tags] = await Promise.all([
   homepageCounts(db),
   listPublishedArticles(db, { sort: 'trending', limit: 5 }),
+  listPublishedArticles(db, { sort: 'latest', limit: 5 }),
   listPublishedArticles(db, { sort: 'featured', limit: 3 }),
   listTagsWithCounts(db, 24),
 ]);
@@ -82,24 +83,58 @@ const empty = counts.total === 0;
             </section>
           )}
 
-          <div class="board-split">
-            {trending.length > 0 && (
-              <section class="board">
-                <div class="board-head">
-                  <h2 class="board-title">🔥 Trending</h2>
-                  <a class="board-more" href="/trending">All trending →</a>
-                </div>
-                <ol class="ranked-list">
-                  {trending.map((a, i) => (
-                    <li>
-                      <ArticleCard article={a} rank={i + 1} />
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            )}
+            {/*
+              SPEC §17.3 — Trending and Latest, side by side.
 
-          </div>
+              The right-hand column held Rising until that board was removed along with the
+              velocity signal it ranked by. Leaving the grid in place would have kept a
+              two-column layout with one column filled, which reads as a section that failed
+              to load rather than as a page with one board on it.
+
+              Latest is the replacement, and it is the right filler rather than a
+              placeholder: it is the board whose contents cannot be inferred from the others.
+              Every card in Trending is in Latest by definition, but the two orderings
+              disagree, so the pair shows a reader both what is moving and what is new — and
+              someone who has already read the picks has somewhere to go that is not a
+              repeat.
+
+              The two are distinguished deliberately: Trending is an ordered list with rank
+              numbers because it is a ranking, and Latest is the same list without them
+              because it is not. `ArticleCard`'s `rank` prop is optional for exactly this.
+            */}
+            <div class="board-split">
+              {trending.length > 0 && (
+                <section class="board">
+                  <div class="board-head">
+                    <h2 class="board-title">🔥 Trending</h2>
+                    <a class="board-more" href="/trending">All trending →</a>
+                  </div>
+                  <ol class="ranked-list">
+                    {trending.map((a, i) => (
+                      <li>
+                        <ArticleCard article={a} rank={i + 1} />
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+
+              {latest.length > 0 && (
+                <section class="board">
+                  <div class="board-head">
+                    <h2 class="board-title">🕐 Latest</h2>
+                    <a class="board-more" href="/latest">All latest →</a>
+                  </div>
+                  <ol class="ranked-list">
+                    {latest.map((a) => (
+                      <li>
+                        <ArticleCard article={a} />
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+            </div>
 
           {tags.length > 0 && (
             <section class="board">

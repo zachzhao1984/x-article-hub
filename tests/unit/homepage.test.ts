@@ -135,6 +135,45 @@ describe('the homepage', () => {
     expect(code(board)).toContain('path="/featured"');
   });
 
+  it('fills the space Rising left with Latest, not with emptiness', () => {
+    // The Rising board occupied the right-hand column of `.board-split` and was removed with
+    // the velocity signal it ranked by. A `1fr 1fr` grid with one child is a two-column
+    // layout with a hole in it, which reads as a section that failed to load.
+    //
+    // Latest is the replacement because it is the board whose contents cannot be inferred
+    // from the others: every card in Trending is in Latest by definition, but the two
+    // orderings disagree, so the pair shows what is moving alongside what is new.
+    // The query is in the frontmatter and the rendering is in the template, so the two are
+    // asserted against the parts of the file they live in rather than both against the body.
+    expect(code(homepage)).toContain("listPublishedArticles(db, { sort: 'latest', limit: 5 })");
+
+    const board = code(template());
+    expect(board).toContain('latest.map(');
+    expect(board).toContain('href="/latest"');
+
+    // Both boards sit inside the split, so the grid has its two children back.
+    const open = board.indexOf('<div class="board-split">');
+    expect(open, 'cannot locate board-split').toBeGreaterThanOrEqual(0);
+    const split = board.slice(open);
+    expect(split).toContain('trending.map(');
+    expect(split).toContain('latest.map(');
+  });
+
+  it('distinguishes a ranking from a chronology in the markup', () => {
+    // Trending is an `<ol>` with rank numbers because it orders by score; Latest is the same
+    // list without them because it orders by time. Passing `rank` to both would claim Latest
+    // is a ranking, and dropping it from both would lose Trending's.
+    const board = code(template());
+    expect(board).toContain('<ArticleCard article={a} rank={i + 1} />');
+    expect(board).toMatch(/latest\.map\(\(a\) => \(\s*<li>\s*<ArticleCard article={a} \/>/);
+  });
+
+  it('does not mention Rising anywhere on the page', () => {
+    // The section is gone, and a heading or link left behind would point at a 404.
+    expect(code(homepage)).not.toContain('/rising');
+    expect(code(homepage)).not.toContain('Rising');
+  });
+
   it('leaves no CSS behind for the section it dropped', () => {
     // Four rules and three members of the 1.5 line-height group, all of which became
     // dead in the same edit. A selector nothing renders reads as live and gets restyled
