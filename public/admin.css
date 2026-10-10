@@ -327,6 +327,19 @@ textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 
 .table th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .table td.wrap { word-break: break-word; }
+
+/*
+ * SPEC §16 — a floor under the small fixed-content columns.
+ *
+ * The table is `width: 100%` with auto layout, so once the two action columns took their
+ * share the Source cell was handed 57px and rendered "source" as "sourc / e" — a two-line
+ * link in a column whose entire content is one seven-letter word. Auto layout distributes
+ * by content, and a `nowrap` cell's content is what tells it the minimum.
+ *
+ * Scoped to the link rather than the column, so the column still shrinks before it starts
+ * truncating and the width stays a consequence of the content.
+ */
+.table td a[target="_blank"] { white-space: nowrap; }
 .table tbody tr:hover { background: var(--panel); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
@@ -445,6 +458,17 @@ form + form { margin-top: 10px; }
   font-size: 13px;
   width: 100%;
 }
+/*
+ * SPEC §16 — the delete surface.
+ *
+ * The section is marked off from the editorial cards around it because everything else on
+ * the article page is reversible and this is not. A red left rule is the smallest thing that
+ * makes the boundary visible without turning the page into an alarm; the button colour
+ * already carries the same meaning, and reusing `--error` keeps it to one signal.
+ */
+.card-danger { border-left: 3px solid var(--error); }
+.card-danger h2 { color: var(--error); }
+
 .button-danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
 .button-danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .button[disabled] { opacity: 0.45; cursor: not-allowed; }

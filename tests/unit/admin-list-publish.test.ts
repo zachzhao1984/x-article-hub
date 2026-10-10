@@ -116,16 +116,20 @@ describe('the article list quick action', () => {
     expect(adminUi).toMatch(/published: c\.req\.query\('published'\) === '1'/);
   });
 
-  it('keeps the list table aligned with the extra cell', () => {
-    // The button lives in its own column. A header row with the wrong number of `<th>`
-    // shifts every column and is the kind of thing that only shows up at a narrow width.
+  it('keeps the list table aligned with the action columns', () => {
+    // The action buttons each live in their own column. A header row with the wrong number
+    // of `<th>` shifts every column and is the kind of thing that only shows up at a narrow
+    // width.
+    //
+    // Seven since the delete button was added — status, title, author, imported, source,
+    // publish, delete. Asserted as an exact count on both sides so adding a cell to one and
+    // not the other fails here.
     const thead = /<thead><tr>([\s\S]*?)<\/tr><\/thead>/.exec(listView())?.[1] ?? '';
     expect(thead, 'cannot locate the list header').not.toBe('');
-    expect((thead.match(/<th/g) ?? []).length).toBe(6);
-    // Every row emits the same six cells.
+    expect((thead.match(/<th/g) ?? []).length).toBe(7);
     const row = /`<tr>([\s\S]*?)<\/tr>`/.exec(listView())?.[1] ?? '';
     expect(row, 'cannot locate the list row').not.toBe('');
-    expect((row.match(/<td/g) ?? []).length).toBe(6);
+    expect((row.match(/<td/g) ?? []).length).toBe(7);
   });
 
   it('sizes the row button so rows with an action are not taller', () => {

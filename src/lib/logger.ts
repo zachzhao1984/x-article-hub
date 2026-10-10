@@ -45,7 +45,10 @@ export type LogEvent =
   // SPEC §21 — scheduling
   | 'ranking_refresh'
   | 'ranking_refresh_start'
-  | 'ranking_refresh_failed';
+  | 'ranking_refresh_failed'
+  // SPEC §16 — destructive
+  | 'article_deleted'
+  | 'article_delete_refused';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -76,6 +79,17 @@ export interface LogFields {
   state_provider?: string | null;
   has_email?: boolean;
   metrics_fields?: number;
+  // SPEC §16 — hard delete. Counted before the cascade, so they describe what was removed.
+  had_row?: boolean;
+  r2_objects?: number;
+  r2_bytes?: number;
+  slug?: string | null;
+  versions?: number;
+  media?: number;
+  jobs?: number;
+  events?: number;
+  tags?: number;
+  metrics?: number;
   // SPEC §14.4 / §21 — the ranking refresh.
   scored?: number;
   with_metrics?: number;

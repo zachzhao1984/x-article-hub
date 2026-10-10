@@ -9,7 +9,9 @@ import { Hono, type Context } from 'hono';
 import type { AdminIdentity } from '../middleware/admin-auth';
 import { requireAdmin, setAdminCookie, clearAdminCookie, timingSafeEqual } from '../middleware/admin-auth';
 import { siteConfig } from '../config/site';
+import { log } from '../lib/logger';
 import { refreshRanking } from '../services/ranking-refresh';
+import { deleteArticleEverywhere } from '../services/delete-article';
 import { dashboardStats } from '../db/stats';
 import { getArticleById, listArticles } from '../db/articles';
 import { listCrawlJobsForArticle, listFailedJobs, updateJobStatus } from '../db/jobs';
@@ -165,6 +167,17 @@ adminUi.get('/articles', async (c) => {
         // the handler redirected with. Read as a presence flag rather than a value: there
         // is nothing to vary on it.
         published: c.req.query('published') === '1',
+        // SPEC §16 — what a delete just removed, carried in the query string the handler
+        // redirected with. The counts are read as numbers and re-emitted; a missing or
+        // unparseable value falls back to 0 rather than rendering "NaN objects".
+        deleted:
+          c.req.query('deleted') === '1'
+            ? {
+                slug: c.req.query('slug') ?? null,
+                objects: clampInt(c.req.query('objects'), 0, 0, Number.MAX_SAFE_INTEGER),
+                bytes: clampInt(c.req.query('bytes'), 0, 0, Number.MAX_SAFE_INTEGER),
+              }
+            : undefined,
       },
       siteConfig(c.env).name,
     ),
@@ -204,7 +217,9 @@ adminUi.get('/articles/:id', async (c) => {
       ? 'A takedown needs a reason — that is what the reader sees.'
       : error === 'unknown-category'
         ? 'That category does not exist. The article was left untouched — reload to pick from the current list.'
-        : error ?? null;
+        : error === 'delete-confirm-mismatch'
+          ? 'Delete needs the article slug typed exactly. Nothing was removed — reload and try again if you meant it.'
+          : error ?? null;
 
   return c.html(
     articleDetailView(
@@ -341,6 +356,54 @@ adminUi.post('/articles/:id/media', async (c) => {
  * §16.3 could not actually be performed from the admin. Each handler maps to one
  * validated transition in src/services/publish.ts.
  */
+/**
+ * SPEC §16 — hard delete, from the article list or the detail page.
+ *
+ * `POST` with a required, repeated confirmation field. The dialog in the browser is a
+ * guard against a misclick, not a security boundary — anything can post this URL — so the
+ * server demands the article id spelled out a second time. That is the same shape the
+ * existing `purge-prefix` endpoint uses, and it is the difference between an accidental
+ * delete and a deliberate one.
+ *
+ * The confirmation is the article's **slug**, not its id: the id is not visible anywhere in
+ * the UI, so an operator who wants to be sure they are deleting what they think they are
+ * would have to copy it out of the URL. The slug is the thing they can read off the row.
+ */
+adminUi.post('/articles/:id/delete', async (c) => {
+  const id = c.req.param('id');
+  const identity = c.get('adminIdentity');
+  const form = await c.req.parseBody();
+
+  const article = await getArticleById(c.env.DB, id);
+  const expected = article?.slug ?? id;
+
+  if (typeof form.confirm !== 'string' || form.confirm.trim() !== expected) {
+    log.warn('article_delete_refused', {
+      article_id: id,
+      actor: identity.actor,
+      // The submitted value is not logged: it is compared against a slug, and there is
+      // nothing to learn from a near-miss beyond the fact that it was one.
+      reason: 'confirmation did not match',
+    });
+    return redirectToArticle(c, id, 'delete-confirm-mismatch');
+  }
+
+  const result = await deleteArticleEverywhere(c.env, id, identity.actor);
+
+  // Redirect to the list, not the article: the detail page it would return to no longer
+  // exists, and a 404 after a successful action reads as a failure.
+  const params = new URLSearchParams({
+    deleted: '1',
+    objects: String(result.objects),
+    bytes: String(result.bytes),
+    ...(result.slug ? { slug: result.slug } : {}),
+  });
+  return new Response(null, {
+    status: 303,
+    headers: { Location: `/admin/articles?${params.toString()}` },
+  });
+});
+
 adminUi.post('/articles/:id/publish', async (c) => {
   const id = c.req.param('id');
   await publishArticle(c.env, id, c.get('adminIdentity').actor);

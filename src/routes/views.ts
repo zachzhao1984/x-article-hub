@@ -323,11 +323,26 @@ export interface ArticleListItem {
 }
 
 export interface ArticleListView {
-  articles: ArticleListItem[];
+  /**
+   * `ArticleRow`, not `ArticleListItem`.
+   *
+   * The list view renders the admin table from `listArticles`, which returns the full row —
+   * it needs `canonical_url` for the source link, `imported_at` for the timestamp, and now
+   * `slug` for the delete confirmation. The declaration said `ArticleListItem` and nothing
+   * caught it because every field the template read happened to exist on both; the first
+   * field that did not was `slug`.
+   */
+  articles: ArticleRow[];
   status: string | null;
   statuses: string[];
   /** Set when the request carries `?published=1`, i.e. a quick action just ran. */
   published?: boolean;
+  /**
+   * SPEC §16 — what a delete just removed. Set from `?deleted=1`, and carries the counts so
+   * the message can name them: "deleted" without a number gives no way to tell a full delete
+   * from one that swept an empty prefix.
+   */
+  deleted?: { slug: string | null; objects: number; bytes: number };
 }
 
 export function articleListView(view: ArticleListView, siteName: string = FALLBACK_SITE_NAME): string {
@@ -367,6 +382,26 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
     </form>`
       : '';
 
+  /**
+   * SPEC §16 — the row's delete button.
+   *
+   * Every row gets one, unlike Publish, because delete is not a state transition: any
+   * article can be removed regardless of where it is in the pipeline, and refusing on
+   * `published` would mean the only way to remove a bad import is to archive it first.
+   *
+   * The confirmation is the row's own title rather than a typed slug. A table cell has no
+   * room for an input, and this is the shortcut: the detail page is where the deliberate,
+   * type-it-out version lives. The browser dialog is a guard against a misclick, not a
+   * security boundary — the server checks that the confirmation field is present and equal
+   * to the slug, so a bare POST to this URL does nothing.
+   */
+  const deleteCell = (id: string, label: string, slug: string | null) =>
+    `<form method="post" action="/admin/articles/${escapeHtml(id)}/delete" class="row-action"
+           onsubmit="return confirm('Delete &quot;' + ${JSON.stringify(label)} + '&quot; and everything archived for it?\\n\\nThis cannot be undone.')">
+      <input type="hidden" name="confirm" value="${escapeHtml(slug ?? id)}">
+      <button class="button button-small button-danger" type="submit" title="Delete permanently">Delete</button>
+    </form>`;
+
   const rows = view.articles
     .map(
       (a) => `<tr>
@@ -376,6 +411,7 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
       <td class="num">${escapeHtml(new Date(a.imported_at).toISOString().replace('T', ' ').slice(0, 16))}</td>
       <td class="wrap"><a href="${escapeHtml(a.canonical_url)}" target="_blank" rel="noreferrer noopener">source</a></td>
       <td class="num">${publishCell(a.status, a.id, view.status)}</td>
+      <td class="num">${deleteCell(a.id, a.title || a.canonical_url, a.slug)}</td>
     </tr>`,
     )
     .join('');
@@ -388,9 +424,17 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
    * `review`: the row is simply gone, and a row disappearing is indistinguishable from a
    * filter being wrong or the page reloading to something unexpected.
    */
+  const deleteBanner = view.deleted
+    ? `<div class="banner banner-ok">
+        Deleted${view.deleted.slug ? ` <code>${escapeHtml(view.deleted.slug)}</code>` : ''} —
+        ${view.deleted.objects} archived object${view.deleted.objects === 1 ? '' : 's'}
+        (${formatBytes(view.deleted.bytes)}) removed, along with every row referencing it.
+      </div>`
+    : '';
+
   const banner = view.published
     ? '<div class="banner banner-ok">Published. It is live at <a href="/latest">the public site</a>.</div>'
-    : '';
+    : deleteBanner;
 
   const body = `<h1>Articles</h1>
 ${banner}
@@ -399,7 +443,7 @@ ${
   view.articles.length === 0
     ? '<div class="card empty">No articles match this filter. <a href="/admin/import">Import some URLs</a> to get started.</div>'
     : `<table class="table">
-  <thead><tr><th>Status</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th></tr></thead>
+  <thead><tr><th>Status</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th><th></th></tr></thead>
   <tbody>${rows}</tbody>
 </table>`
 }
@@ -620,6 +664,28 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
   }
 </section>
 
+<section class="card card-danger">
+  <h2>Delete</h2>
+  <p class="lede">
+    Removes the article and everything belonging to it: the row, its version history, its
+    crawl job records, its curation log, its media rows, and every object stored under its
+    archive prefix — raw captures, every parsed version, every image and avatar.
+  </p>
+  <p class="lede">
+    <strong>This cannot be undone.</strong> There is no soft delete behind it and no backup.
+    If the point is to stop the article being shown, use <em>Archive</em> or <em>Takedown</em>
+    above instead — both keep the capture and both are reversible.
+  </p>
+  <form method="post" action="/admin/articles/${escapeHtml(a.id)}/delete" class="action-inline">
+    <label class="label" for="confirm">
+      Type <code>${escapeHtml(a.slug ?? a.id)}</code> to confirm
+    </label>
+    <input id="confirm" name="confirm" type="text" autocomplete="off" required
+           placeholder="${escapeHtml(a.slug ?? a.id)}">
+    <button class="button button-danger" type="submit">Delete permanently</button>
+  </form>
+</section>
+
 <section class="card">
   <h2>Parsed document (SPEC §9)</h2>
   ${
@@ -811,6 +877,20 @@ export function errorView(status: number, code: string, message: string, siteNam
 <div class="card"><p><strong>${escapeHtml(code)}</strong></p><p>${escapeHtml(message)}</p>
 <p class="hint"><a href="/admin">Back to dashboard</a></p></div>`;
   return layout({ title: `${status}`, active: 'dashboard', siteName },  body);
+}
+
+/**
+ * Bytes at a human scale.
+ *
+ * Three call sites were each formatting this inline and two of them disagreed on precision,
+ * so one article's size read "2.1 MB" in the storage list and "2178 KB" on its own page.
+ * Kept here rather than in a lib because every caller is a view, and the unit a reader wants
+ * is a presentation choice.
+ */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function ts(ms: number): string {
