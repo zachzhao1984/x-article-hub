@@ -163,10 +163,10 @@ adminUi.get('/articles', async (c) => {
         articles,
         status: status ?? null,
         statuses: STATUSES,
-        // SPEC §16.3 — the confirmation for a quick publish, carried in the query string
-        // the handler redirected with. Read as a presence flag rather than a value: there
-        // is nothing to vary on it.
-        published: c.req.query('published') === '1',
+        // SPEC §16.3 — which row action just ran. Passed through as-is; the view matches it
+        // against a fixed map rather than rendering it, so a crafted `?notice=` cannot put
+        // text on the page.
+        notice: c.req.query('notice') ?? null,
         // SPEC §16 — what a delete just removed, carried in the query string the handler
         // redirected with. The counts are read as numbers and re-emitted; a missing or
         // unparseable value falls back to 0 rather than rendering "NaN objects".
@@ -408,29 +408,8 @@ adminUi.post('/articles/:id/publish', async (c) => {
   const id = c.req.param('id');
   await publishArticle(c.env, id, c.get('adminIdentity').actor);
 
-  // SPEC §16.3 — the list's quick action returns to the list.
-  //
-  // `from` is a hidden field the list form sends and the detail page's form does not, so
-  // the destination depends on which button was pressed rather than on the URL. Sending
-  // both to the detail page would strand an editor who published three of twelve rows in a
-  // filtered list; sending both to the list would lose the detail page's own confirmation.
-  //
-  // The status filter rides along so the list comes back filtered the way it was — the
-  // article has just left `review`, and landing on an unfiltered list of everything would
-  // hide the row that changed. Only the status is carried, not the whole query: it is the
-  // one parameter that decides what the reader was looking at, and rebuilding the URL from
-  // an attacker-supplied string is the wrong shape.
-  const form = await c.req.parseBody();
-  if (form.from === 'list') {
-    const status = typeof form.status === 'string' && form.status ? form.status : null;
-    const params = new URLSearchParams({ published: '1' });
-    if (status) params.set('status', status);
-    return new Response(null, {
-      status: 303,
-      headers: { Location: `/admin/articles?${params.toString()}` },
-    });
-  }
-
+  const fromList = listReturn(c, await c.req.parseBody(), 'published');
+  if (fromList) return fromList;
   return redirectToArticle(c, id);
 });
 
@@ -473,9 +452,17 @@ adminUi.post('/articles/:id/category', async (c) => {
 });
 
 adminUi.post('/articles/:id/featured', async (c) => {
-  const article = await getArticleById(c.env.DB, c.req.param('id'));
-  await setFeatured(c.env, c.req.param('id'), c.get('adminIdentity').actor, article?.featured !== 1);
-  return redirectToArticle(c, c.req.param('id'));
+  const id = c.req.param('id');
+  const article = await getArticleById(c.env.DB, id);
+  // The toggle reads the stored value and inverts it. Taking the target state from the
+  // request instead would let a stale page flip an article twice — a form rendered before
+  // somebody else featured it would unfeature it back.
+  const nowFeatured = article?.featured !== 1;
+  await setFeatured(c.env, id, c.get('adminIdentity').actor, nowFeatured);
+
+  const fromList = listReturn(c, await c.req.parseBody(), nowFeatured ? 'featured' : 'unfeatured');
+  if (fromList) return fromList;
+  return redirectToArticle(c, id);
 });
 
 /** SPEC §37 — takedown requires a reason, enforced in the service too. */
@@ -506,6 +493,34 @@ adminUi.post('/articles/:id/restore', async (c) => {
  * or the other way round. The `?` guard keeps an absent value from leaving a bare
  * `?notice=` behind for the view to render as literal text.
  */
+/**
+ * SPEC §16.3 — where a row action returns to.
+ *
+ * The quick actions on the article list post to routes shared with the detail page, and the
+ * two want different destinations: the detail page's own buttons should stay on the article,
+ * while a button pressed on row 7 of a filtered list has to come back to that list. The
+ * list's forms send `from=list`; the detail page's do not.
+ *
+ * Returns null when the request did not come from the list, so the caller can fall through
+ * to its own redirect. That shape rather than a default keeps the decision at the call site,
+ * where the detail page's destination is known.
+ *
+ * The `notice` names which action ran, so one banner can serve every row action instead of a
+ * flag per action. The status filter is forwarded because the article may have just left the
+ * filter the editor was looking at — `publish` moves `review` to `published`, and a list
+ * would otherwise silently lose the row that changed.
+ */
+function listReturn(c: Context, form: Record<string, unknown>, notice: string): Response | null {
+  if (form.from !== 'list') return null;
+  const status = typeof form.status === 'string' && form.status ? form.status : null;
+  // Rebuilt from a fixed set plus one validated-looking value — never from the submitted
+  // form as a whole, because an attacker-chosen path in a Location header is an open
+  // redirect and only the status decides what the editor was looking at.
+  const params = new URLSearchParams({ notice });
+  if (status) params.set('status', status);
+  return new Response(null, { status: 303, headers: { Location: `/admin/articles?${params.toString()}` } });
+}
+
 function redirectToArticle(c: Context, id: string, error?: string, notice?: string): Response {
   const params = new URLSearchParams();
   if (error) params.set('error', error);

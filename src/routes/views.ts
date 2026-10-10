@@ -335,8 +335,16 @@ export interface ArticleListView {
   articles: ArticleRow[];
   status: string | null;
   statuses: string[];
-  /** Set when the request carries `?published=1`, i.e. a quick action just ran. */
-  published?: boolean;
+  /**
+   * Which row action just ran, from `?notice=…`.
+   *
+   * One field for every quick action rather than a boolean each: four actions sharing one
+   * banner is the difference between adding a notice being a line here and being a new
+   * field, a new query parameter and a new branch every time. The value is matched against a
+   * fixed map in the view rather than echoed, so a crafted `?notice=` cannot put text on the
+   * page.
+   */
+  notice?: string | null;
   /**
    * SPEC §16 — what a delete just removed. Set from `?deleted=1`, and carries the counts so
    * the message can name them: "deleted" without a number gives no way to tell a full delete
@@ -352,6 +360,27 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
         `<a class="chip${s === (view.status ?? '') ? ' is-active' : ''}" href="/admin/articles?status=${s}">${escapeHtml(s)}</a>`,
     )
     .join('');
+
+  /**
+   * SPEC §16.3 — what a row action sends so the response comes back to the list.
+   *
+   * Three actions now share this, so it is one function rather than the same two hidden
+   * fields written three times. `from` is what the handler branches on: without it the
+   * shared routes send the editor to the article detail page, which is right for the detail
+   * page's own buttons and wrong here.
+   *
+   * The status filter rides along so the list returns filtered the way it was — an article
+   * that just left `review` would otherwise vanish into an unfiltered list of everything,
+   * hiding the row that changed.
+   *
+   * Only the status is carried. It is the one parameter that decides what the editor was
+   * looking at, and the handler rebuilds the URL from a fixed set rather than from this
+   * value, because an attacker-chosen path in a Location header is an open redirect.
+   */
+  const listReturnFields = (filter: string | null) =>
+    `<input type="hidden" name="from" value="list">${
+      filter ? `<input type="hidden" name="status" value="${escapeHtml(filter)}">` : ''
+    }`;
 
   /**
    * SPEC §16.3 — a one-click publish for the rows that are waiting on it.
@@ -376,11 +405,31 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
   const publishCell = (status: string, id: string, filter: string | null) =>
     status === 'review'
       ? `<form method="post" action="/admin/articles/${escapeHtml(id)}/publish" class="row-action">
-      <input type="hidden" name="from" value="list">
-      ${filter ? `<input type="hidden" name="status" value="${escapeHtml(filter)}">` : ''}
+      ${listReturnFields(filter)}
       <button class="button button-small" type="submit" title="Publish this article">Publish</button>
     </form>`
       : '';
+
+  /**
+   * SPEC §16.3 — the editor's-pick toggle.
+   *
+   * On every row, and the label reports the current state rather than the action: a
+   * featured article says `Unfeature`, everything else says `Feature`. That reads as a
+   * toggle, which is what it is — unlike Publish, which is a one-way transition and is
+   * therefore disabled rather than inverted once it has happened.
+   *
+   * It is not gated on status. An article in `review` can be marked as a pick before it is
+   * published, which is the order an editor actually works in — deciding something is worth
+   * featuring is a judgement about the article, not about whether it has gone live yet.
+   */
+  const featuredCell = (featured: number | null, id: string, filter: string | null) =>
+    `<form method="post" action="/admin/articles/${escapeHtml(id)}/featured" class="row-action">
+      ${listReturnFields(filter)}
+      <button class="button button-small${featured ? '' : ' button-secondary'}" type="submit"
+              title="${featured ? 'Remove from Editor\'s Pick' : "Mark as Editor\'s Pick"}">
+        ${featured ? 'Unfeature' : 'Feature'}
+      </button>
+    </form>`;
 
   /**
    * SPEC §16 — the row's delete button.
@@ -410,6 +459,7 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
       <td>${escapeHtml(a.author_username ?? '—')}</td>
       <td class="num">${escapeHtml(new Date(a.imported_at).toISOString().replace('T', ' ').slice(0, 16))}</td>
       <td class="wrap"><a href="${escapeHtml(a.canonical_url)}" target="_blank" rel="noreferrer noopener">source</a></td>
+      <td class="num">${featuredCell(a.featured, a.id, view.status)}</td>
       <td class="num">${publishCell(a.status, a.id, view.status)}</td>
       <td class="num">${deleteCell(a.id, a.title || a.canonical_url, a.slug)}</td>
     </tr>`,
@@ -432,9 +482,24 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
       </div>`
     : '';
 
-  const banner = view.published
-    ? '<div class="banner banner-ok">Published. It is live at <a href="/latest">the public site</a>.</div>'
-    : deleteBanner;
+  /**
+   * SPEC §16.3 — what the row action did.
+   *
+   * A map rather than a chain of ternaries, and each entry is a fixed string: `notice`
+   * arrives in a query string anybody can send, so it selects from this table and is never
+   * interpolated. The alternative — echoing the value into the banner — is how a crafted
+   * link puts text on a page that looks like it came from the admin.
+   */
+  const NOTICES: Record<string, string> = {
+    published: 'Published. It is live at <a href="/latest">the public site</a>.',
+    featured: "Marked as Editor's Pick. It leads <a href=\"/featured\">the Featured board</a>.",
+    unfeatured: "Removed from Editor's Pick. The article itself is untouched.",
+  };
+  const actionBanner = view.notice && NOTICES[view.notice]
+    ? `<div class="banner banner-ok">${NOTICES[view.notice]}</div>`
+    : '';
+
+  const banner = actionBanner || deleteBanner;
 
   const body = `<h1>Articles</h1>
 ${banner}
@@ -443,7 +508,7 @@ ${
   view.articles.length === 0
     ? '<div class="card empty">No articles match this filter. <a href="/admin/import">Import some URLs</a> to get started.</div>'
     : `<table class="table">
-  <thead><tr><th>Status</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th><th></th></tr></thead>
+  <thead><tr><th>Status</th><th>Pick</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th><th></th></tr></thead>
   <tbody>${rows}</tbody>
 </table>`
 }
