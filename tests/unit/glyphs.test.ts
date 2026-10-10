@@ -35,6 +35,7 @@ const source = (path: string) => readFileSync(resolve(path), 'utf8');
 const header = source('src/components/SiteHeader.astro');
 const themeSwitch = source('src/components/ThemeSwitch.astro');
 const icon = source('src/components/Icon.astro');
+const card = source('src/components/ArticleCard.astro');
 const css = source('public/site.css');
 
 /** The declaration block for a selector, comments stripped. */
@@ -67,6 +68,22 @@ function navIcons(): Array<{ href: string; label: string; icon: string }> {
   }));
 }
 
+/**
+ * The glyph names the article card's engagement row passes to `add(…)`.
+ *
+ * The card is the third place icons are chosen — the nav's come from a literal array, the
+ * theme switch's from `THEME_OPTIONS`, and these from a list of counters built at render
+ * time. Each new surface is another way for a name to be used without being vendored, so
+ * each has to be read from where it actually lives rather than assumed.
+ *
+ * `add` takes the icon first; the two arguments after it are the value and the title, so
+ * anchoring on the call rather than on a bare string keeps a title that happens to be an
+ * icon name from being counted twice.
+ */
+function cardIcons(): string[] {
+  return [...card.matchAll(/\badd\(\s*'([^']+)'/g)].map((m) => m[1] ?? '');
+}
+
 describe('the glyph set', () => {
   it('holds every icon the interface names, and nothing orphaned', () => {
     // The theme switch's glyphs come from `THEME_OPTIONS` at runtime, not from a
@@ -78,6 +95,7 @@ describe('the glyph set', () => {
     const used = new Set([
       ...navIcons().map((item) => item.icon),
       ...THEME_OPTIONS.map((option) => option.icon),
+      ...cardIcons(),
     ]);
     for (const name of used) {
       expect(name in ICON_PATHS, `"${name}" is used but not vendored`).toBe(true);
@@ -260,6 +278,49 @@ describe('the glyph set', () => {
       expect(file, `${name} still has a hand-written path`).not.toMatch(/d="M[\d.]/);
       expect(file, `${name} still uses a 24-grid`).not.toContain('0 0 24 24');
     }
+  });
+
+  it('gives the card a distinct glyph per counter, so the row is not five identical marks', () => {
+    // The card's engagement row names five icons. If two were the same — or if the list were
+    // satisfied by a single icon reused — the row would read as an unlabelled repeat, and the
+    // widened `used` scan in the test above would still pass, because a name used once is
+    // used.
+    const icons = cardIcons();
+    expect(icons.length, 'the card declares no counter icons').toBeGreaterThan(0);
+    expect(new Set(icons).size, 'two counters share a glyph').toBe(icons.length);
+    // And each is actually rendered, not merely named.
+    expect(card).toContain('<Icon name={m.icon}');
+  });
+
+  it('reaches the boards too, where an emoji has quietly survived', () => {
+    // The nav's emoji were removed and the rule written down; the homepage's two board
+    // headings kept theirs — `🔥 Trending` and `🕐 Latest` — because nothing scanned for a
+    // glyph outside the header. A rule enforced on one file is a rule with a hole in it, and
+    // these are on the first screen of the site, in a row of 12px uppercase labels where a
+    // colour emoji is more conspicuous than it ever was in the nav.
+    //
+    // Asserted against every `.astro` page rather than against index.astro, so the next board
+    // added with a `🔥`-style heading fails here instead of shipping. The arrows and the
+    // save star are excluded deliberately — those are typographic characters that *are* the
+    // label (`← Newer`), not illustrations standing in for a word, and the icons module has no
+    // glyph for "back" or "saved" that would be an improvement.
+    const allowed = new Set(['←', '→', '↗', '★', '☆', '·', '—', '–', '…']);
+    const offenders: string[] = [];
+    for (const path of ['src/pages/index.astro', 'src/pages/BoardPage.astro', 'src/components/BoardPage.astro']) {
+      let text: string;
+      try {
+        text = source(path);
+      } catch {
+        continue;
+      }
+      // Strip comments: several files quote a spec sentence in Chinese, and the spec's own
+      // prose is not a glyph standing in for an icon.
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      for (const ch of code) {
+        if (ch.charCodeAt(0) > 0x2100 && !allowed.has(ch)) offenders.push(`${path}: ${ch}`);
+      }
+    }
+    expect(offenders, `a glyph is standing in for an icon: ${offenders.join(', ')}`).toEqual([]);
   });
 
   it('records where the geometry came from', () => {

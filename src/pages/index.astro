@@ -4,6 +4,7 @@ import { env } from 'cloudflare:workers';
 import Base from '../layouts/Base.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import ArticleCard from '../components/ArticleCard.astro';
+import Icon from '../components/Icon.astro';
 import {
   homepageCounts,
   listPublishedArticles,
@@ -106,7 +107,9 @@ const empty = counts.total === 0;
               {trending.length > 0 && (
                 <section class="board">
                   <div class="board-head">
-                    <h2 class="board-title">🔥 Trending</h2>
+                    <h2 class="board-title">
+                      <Icon name="fire" size={17} class="board-icon" /> Trending
+                    </h2>
                     <a class="board-more" href="/trending">All trending →</a>
                   </div>
                   <ol class="ranked-list">
@@ -122,7 +125,9 @@ const empty = counts.total === 0;
               {latest.length > 0 && (
                 <section class="board">
                   <div class="board-head">
-                    <h2 class="board-title">🕐 Latest</h2>
+                    <h2 class="board-title">
+                      <Icon name="clock" size={17} class="board-icon" /> Latest
+                    </h2>
                     <a class="board-more" href="/latest">All latest →</a>
                   </div>
                   <ol class="ranked-list">

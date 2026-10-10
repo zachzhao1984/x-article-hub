@@ -35,13 +35,42 @@ export interface ArticleListItem {
   quality_score: number | null;
 }
 
+/**
+ * Everything a card renders, in one read.
+ *
+ * The cover and the metrics are correlated scalar subqueries rather than joins, and that is
+ * deliberate: joining `media_objects` would multiply the row per image — 24 rows for the
+ * article with 24 figures — and joining `article_metrics` would multiply it again per
+ * snapshot. Both subqueries are covered by an index (`idx_media_article`,
+ * `idx_article_metrics_article`).
+ *
+ * The metrics subqueries take `MAX(captured_at)` because the table is a time series; an
+ * earlier snapshot describes a page that no longer exists.
+ *
+ * `cover_image_id` takes the *first* body image by position — the figure the author put at
+ * the top, which is the one that reads as a cover — and only when its bytes are in R2, so
+ * the card never points at x.com.
+ */
 const LIST_COLUMNS = `
   a.id, a.slug, a.title, a.excerpt,
   a.author_username, a.author_name,
   a.published_at, a.imported_at,
   c.slug AS category_slug, c.name AS category_name,
   a.display_mode, a.featured, a.word_count,
-  a.final_score, a.velocity_score, a.popularity_score, a.quality_score`;
+  a.final_score, a.velocity_score, a.popularity_score, a.quality_score,
+  (SELECT m.id FROM media_objects m
+    WHERE m.article_id = a.id AND m.kind = 'body' AND m.r2_key IS NOT NULL
+    ORDER BY m.position ASC LIMIT 1) AS cover_image_id,
+  (SELECT m2.views     FROM article_metrics m2 WHERE m2.article_id = a.id
+    ORDER BY m2.captured_at DESC LIMIT 1) AS metric_views,
+  (SELECT m2.likes     FROM article_metrics m2 WHERE m2.article_id = a.id
+    ORDER BY m2.captured_at DESC LIMIT 1) AS metric_likes,
+  (SELECT m2.reposts   FROM article_metrics m2 WHERE m2.article_id = a.id
+    ORDER BY m2.captured_at DESC LIMIT 1) AS metric_reposts,
+  (SELECT m2.replies   FROM article_metrics m2 WHERE m2.article_id = a.id
+    ORDER BY m2.captured_at DESC LIMIT 1) AS metric_replies,
+  (SELECT m2.bookmarks FROM article_metrics m2 WHERE m2.article_id = a.id
+    ORDER BY m2.captured_at DESC LIMIT 1) AS metric_bookmarks`;
 
 /** SPEC §15 — the three board orderings. */
 const SORT_SQL: Record<PublicSort, string> = {

@@ -388,6 +388,19 @@ export interface SavedArticleRow {
    * rather than a missing one, which is the harder kind to notice.
    */
   word_count: number;
+  /**
+   * The card's cover, as a `media_objects` id, or null.
+   *
+   * The saved list renders the same `ArticleCard` as every board, so it needs the same
+   * shape — otherwise a saved card would lose its image and its counters the moment it was
+   * saved, which reads as the act of saving having changed the article.
+   */
+  cover_image_id: string | null;
+  metric_views: number | null;
+  metric_likes: number | null;
+  metric_reposts: number | null;
+  metric_replies: number | null;
+  metric_bookmarks: number | null;
 }
 
 /**
@@ -450,7 +463,20 @@ export function listSavedArticles(db: D1Database, userId: string, limit = 100): 
       `SELECT s.article_id, s.saved_at,
               a.slug, a.title, a.excerpt, a.word_count,
               a.author_username, a.author_name,
-              a.published_at
+              a.published_at,
+              (SELECT m.id FROM media_objects m
+                WHERE m.article_id = a.id AND m.kind = 'body' AND m.r2_key IS NOT NULL
+                ORDER BY m.position ASC LIMIT 1) AS cover_image_id,
+              (SELECT m2.views     FROM article_metrics m2 WHERE m2.article_id = a.id
+                ORDER BY m2.captured_at DESC LIMIT 1) AS metric_views,
+              (SELECT m2.likes     FROM article_metrics m2 WHERE m2.article_id = a.id
+                ORDER BY m2.captured_at DESC LIMIT 1) AS metric_likes,
+              (SELECT m2.reposts   FROM article_metrics m2 WHERE m2.article_id = a.id
+                ORDER BY m2.captured_at DESC LIMIT 1) AS metric_reposts,
+              (SELECT m2.replies   FROM article_metrics m2 WHERE m2.article_id = a.id
+                ORDER BY m2.captured_at DESC LIMIT 1) AS metric_replies,
+              (SELECT m2.bookmarks FROM article_metrics m2 WHERE m2.article_id = a.id
+                ORDER BY m2.captured_at DESC LIMIT 1) AS metric_bookmarks
          FROM saved_articles s
          JOIN articles a ON a.id = s.article_id
         WHERE s.user_id = ?1

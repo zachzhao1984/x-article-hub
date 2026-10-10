@@ -5,13 +5,13 @@
  * something measurable:
  *
  * - **No request.** The library's own webfont would add a blocking fetch and a flash
- *   of invisible icons in the header, which is the first thing on every page. Eight
- *   paths inline weigh about 2.2kB of HTML against a font file orders of magnitude
+ *   of invisible icons in the header, which is the first thing on every page. Thirteen
+ *   paths inline weigh about 3.9kB of HTML against a font file orders of magnitude
  *   larger.
  * - **No webfont.** This site loads no webfont at all, and says so in the type
  *   tokens: the whole stack is local-name lookups, because the archive is mostly
  *   Chinese and the CJK faces are the primary rendering. An icon font would be the
- *   one exception, for eight icons.
+ *   one exception, for thirteen icons.
  * - **No drift.** These are the upstream 2.1.1 geometry, unchanged. A dependency
  *   upgrade could restyle the navigation between deploys; a vendored path cannot.
  *
@@ -66,6 +66,27 @@ export const ICON_PATHS = {
   /** Theme: follow the system — the machine that holds the preference. */
   'desktop':
     `M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24h72v16H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16H136V200h72a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40ZM48,56H208a8,8,0,0,1,8,8v80H40V64A8,8,0,0,1,48,56ZM208,184H48a8,8,0,0,1-8-8V160H216v16A8,8,0,0,1,208,184Z`,
+  /**
+   * SPEC §17 — the five engagement counters on a card.
+   *
+   * Upstream 2.1.1 regular geometry, unchanged like the rest of this file. Chosen to match
+   * what each counter means on X rather than to decorate: an eye for views, a heart for
+   * likes, the recycle arrows for reposts, a speech bubble for replies, a bookmark for
+   * saves. X uses the same five shapes, which is why a reader does not have to learn them.
+   */
+  'eye':
+    `M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z`,
+  'heart':
+    `M178,40c-20.65,0-38.73,8.88-50,23.89C116.73,48.88,98.65,40,78,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102A62.07,62.07,0,0,0,178,40ZM128,214.8C109.74,204.16,32,155.69,32,102A46.06,46.06,0,0,1,78,56c19.45,0,35.78,10.36,42.6,27a8,8,0,0,0,14.8,0c6.82-16.67,23.15-27,42.6-27a46.06,46.06,0,0,1,46,46C224,155.61,146.24,204.15,128,214.8Z`,
+  'repeat':
+    `M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z`,
+  /** Replies. `chat-circle` rather than `chat`, so the bubble reads as one comment rather
+   *  than a conversation — the number beside it is a count of replies to this article. */
+  'chat-circle':
+    `M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-6.54-.67L40,216,52.47,178.6a8,8,0,0,0-.66-6.54A88,88,0,1,1,128,216Z`,
+  'bookmark':
+    `M184,32H72A16,16,0,0,0,56,48V224a8,8,0,0,0,12.24,6.78L128,193.43l59.77,37.35A8,8,0,0,0,200,224V48A16,16,0,0,0,184,32Zm0,16V161.57l-51.77-32.35a8,8,0,0,0-8.48,0L72,161.56V48ZM132.23,177.22a8,8,0,0,0-8.48,0L72,209.57V180.43l56-35,56,35v29.14Z`,
+
   /** Authors — two figures, so the page reads as a list of people rather than a person. */
   'users':
     `M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z`,

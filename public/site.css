@@ -422,6 +422,9 @@ a:hover { color: var(--accent); }
 
 .board { margin-bottom: 44px; }
 .board-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   margin: 0 0 16px;
   font-size: 12px;
   font-weight: 700;
@@ -429,6 +432,19 @@ a:hover { color: var(--accent); }
   text-transform: uppercase;
   color: var(--muted);
 }
+/*
+ * The glyph sits on the text baseline, not beside it.
+ *
+ * These two headings used to carry a colour emoji — `🔥 Trending`, `🕐 Latest` — which
+ * rendered in the platform's emoji font at an optical size unrelated to the 12px uppercase
+ * label and in its own palette. The nav traded exactly those for vendored Phosphor paths;
+ * leaving them here, on the first screen of the site, undid that one surface at a time.
+ *
+ * `opacity` rather than a colour: the icon inherits `currentColor` from the heading, so it
+ * follows the theme and any hover state with no rule of its own — the same contract the nav
+ * and the theme switch rely on.
+ */
+.board-icon { flex: none; opacity: 0.8; }
 .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .board-more { font-size: 13px; color: var(--faint); }
 .board-more:hover { color: var(--accent); }
@@ -438,30 +454,84 @@ a:hover { color: var(--accent); }
 .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .ranked-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 
-/* --- article card --- */
+/* --- article card ---
+
+ * SPEC §17 — a cover on top, text beneath.
+ *
+ * The card used to be a horizontal row with the rank number in its own left column. It is a
+ * column now because the cover needs the full width to be worth showing, and because the
+ * rank reads better as a numeral over the image than as a leading margin that competes with
+ * it for the reader's first look.
+ *
+ * `overflow: hidden` is what lets the cover clip to the card's radius. Without it the image's
+ * square corners sit outside the rounded border and the card looks like two stacked
+ * rectangles rather than one object.
+ */
 
 .card-article {
   display: flex;
-  gap: 14px;
-  padding: 16px;
+  flex-direction: column;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
 }
 .card-article:hover { border-color: var(--accent-dim); }
 
+/*
+ * Fixed aspect ratio rather than a fixed height.
+ *
+ * The archived images are whatever shape the author uploaded — 720x1280 portrait, 1280x720
+ * landscape, everything between — so a fixed height would letterbox some and crop others
+ * unpredictably. `aspect-ratio` keeps every cover the same box and `object-fit: cover` fills
+ * it by cropping the overflow, which is the one arrangement where a grid of mixed-shape
+ * images still reads as a grid.
+ */
+.card-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.card-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* No archived image: a flat block rather than a gap, so the card keeps its shape and the
+ * grid rows stay aligned. */
+.card-cover-empty { display: block; width: 100%; height: 100%; background: var(--panel-2); }
+
+/*
+ * The rank sits on the cover, in the accent.
+ *
+ * It is the one number on the card that is about *this position* rather than about the
+ * article, so it is the one thing styled to stand out — and the accent is the token this
+ * design system already uses for "this is the current/active thing".
+ *
+ * `tabular-nums` so 1 and 10 do not shift the layout, and a translucent backing because the
+ * cover underneath is arbitrary: a numeral in accent on a light photograph is unreadable.
+ */
 .rank {
-  flex: 0 0 auto;
-  width: 26px;
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.2;
-  color: var(--faint);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 
-.card-body { min-width: 0; flex: 1; }
+.card-body { min-width: 0; padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }
 .card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 7px; }
 .tag-cat { color: var(--accent); font-weight: 600; }
 .badge {
@@ -494,8 +564,56 @@ a:hover { color: var(--accent); }
   overflow: hidden;
 }
 
-.card-foot { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--faint); }
+/*
+ * Two groups, pushed apart: the author belongs to the article, the counters belong to X.
+ * `margin-top: auto` on the row is what pins both to the bottom of a card whose title is
+ * short, so a row of cards lines up along their feet rather than along their title lengths.
+ */
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 12px;
+  color: var(--faint);
+}
 .author { color: var(--muted); }
+
+.card-metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Each counter: icon then number. `gap: 3px` so the pair reads as one unit while the pairs
+ * stay separated by the row's own 10px — the two distances have to differ or six counters
+ * read as twelve items.
+ */
+.card-metrics li { display: inline-flex; align-items: center; gap: 3px; }
+.metric-icon { flex: none; opacity: 0.75; }
+.metric-value { line-height: 1; }
+
+/* Announced but not shown: the icon conveys the meaning visually and this gives it a name
+ * for a screen reader, which a bare "4.6M" does not have. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 .score { font-variant-numeric: tabular-nums; }
 .muted { color: var(--faint); }
 

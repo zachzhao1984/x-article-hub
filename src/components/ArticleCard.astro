@@ -1,5 +1,30 @@
 ---
-// One article card. Shared by the homepage sections, the boards and the category pages.
+/**
+ * SPEC §17 — one article card.
+ *
+ * Shared by the homepage rows, the boards, `/saved` and the archive pages, so it takes the
+ * shape its callers can all supply: a list row plus the two optional extras the list query
+ * now brings — a cover image and the newest engagement snapshot.
+ *
+ * ## The cover is `/media/<id>`, never an x.com URL
+ *
+ * `cover_image_id` is a `media_objects` row whose bytes are already in R2, so this points at
+ * our own endpoint. The alternative — the figure's original `x.com` URL — would make the
+ * most-requested page on the site depend on X still serving a post that may be deleted, and
+ * the whole point of the archive is that it does not.
+ *
+ * ## The metrics row renders only what exists
+ *
+ * A counter whose value is null is omitted rather than shown as 0, and the row disappears
+ * entirely when nothing was captured. That matters because right now almost nothing *is*
+ * captured: the engagement scrape reaches one article in twenty, so a card that printed
+ * zeroes would be claiming "nobody read this" on nineteen of them. Omitting is the only
+ * version that is true — see the note on `EngagementMetrics` in src/jobs/x-selectors.ts.
+ *
+ * Every icon is a vendored Phosphor path (see src/icons/phosphor.ts), not an emoji: the
+ * repository removed its last Unicode glyph on purpose, and six emoji in a row is how that
+ * decision gets quietly undone.
+ */
 export interface Props {
   article: {
     slug: string | null;
@@ -13,9 +38,20 @@ export interface Props {
     word_count: number;
     featured?: 0 | 1;
     final_score?: number | null;
+    /** Optional so callers with a narrower shape (the saved list) still typecheck. */
+    id?: string;
+    cover_image_id?: string | null;
+    metric_views?: number | null;
+    metric_likes?: number | null;
+    metric_reposts?: number | null;
+    metric_replies?: number | null;
+    metric_bookmarks?: number | null;
   };
   rank?: number;
 }
+
+import Icon from './Icon.astro';
+import type { IconName } from '../icons/phosphor';
 
 const { article, rank } = Astro.props;
 const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
@@ -23,10 +59,61 @@ const dateLabel = article.published_at
   ? new Date(article.published_at).toISOString().slice(0, 10)
   : null;
 const href = article.slug ? `/article/${article.slug}` : '#';
+
+/**
+ * Compact counts, the way every social product writes them.
+ *
+ * One decimal below ten thousand and none above it — `4.6M` rather than `4.637M`, because
+ * the digits past the first are noise at that scale. Rounded rather than floored so `999,999`
+ * reads as `1M` instead of `999K`, which is the direction a reader expects a count to move.
+ */
+function compact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    return `${k < 10 ? k.toFixed(1).replace(/\.0$/, '') : Math.round(k)}K`;
+  }
+  const m = n / 1_000_000;
+  return `${m < 10 ? m.toFixed(1).replace(/\.0$/, '') : Math.round(m)}M`;
+}
+
+/**
+ * The counters, in the order the design shows them, omitting any that are null.
+ *
+ * Built as data rather than as markup so the "omit the missing ones" rule lives in one
+ * place — the em-dash-per-field approach is how a null ends up rendered as zero three
+ * branches later.
+ */
+const metrics: Array<{ icon: IconName; label: string; value: string; title: string }> = [];
+const add = (icon: IconName, value: number | null | undefined, title: string) => {
+  if (typeof value !== 'number') return;
+  metrics.push({ icon, label: String(value), value: compact(value), title });
+};
+add('eye', article.metric_views, 'Views on X');
+add('heart', article.metric_likes, 'Likes on X');
+add('repeat', article.metric_reposts, 'Reposts on X');
+add('chat-circle', article.metric_replies, 'Replies on X');
+add('bookmark', article.metric_bookmarks, 'Bookmarks on X');
 ---
 
 <article class="card-article">
-  {rank && <span class="rank">{rank}</span>}
+  <a class="card-cover" href={href} aria-hidden="true" tabindex="-1">
+    {
+      article.cover_image_id ? (
+        <img
+          src={`/media/${article.cover_image_id}`}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        /* No archived image, or none at all. A placeholder rather than an empty box, so the
+           card keeps its shape and the grid stays aligned. */
+        <span class="card-cover-empty" />
+      )
+    }
+    {rank && <span class="rank">{rank}</span>}
+  </a>
 
   <div class="card-body">
     <div class="card-meta">
@@ -35,7 +122,7 @@ const href = article.slug ? `/article/${article.slug}` : '#';
           {article.category_name}
         </a>
       )}
-      {article.featured === 1 && <span class="badge badge-pick">★ Editor's Pick</span>}
+      {article.featured === 1 && <span class="badge badge-pick">Editor's Pick</span>}
       <span class="muted">{readingMinutes} min read</span>
       {dateLabel && <time class="muted" datetime={new Date(article.published_at!).toISOString()}>{dateLabel}</time>}
     </div>
@@ -47,8 +134,22 @@ const href = article.slug ? `/article/${article.slug}` : '#';
       {
         article.author_username && (
           <a class="author" href={`/author/${article.author_username}`}>
-            {article.author_name ? `@${article.author_username}` : `@${article.author_username}`}
+            @{article.author_username}
           </a>
+        )
+      }
+
+      {
+        metrics.length > 0 && (
+          <ul class="card-metrics" aria-label="Engagement on X">
+            {metrics.map((m) => (
+              <li title={m.title}>
+                <Icon name={m.icon} size={14} class="metric-icon" />
+                <span class="metric-value">{m.value}</span>
+                <span class="sr-only"> {m.title}</span>
+              </li>
+            ))}
+          </ul>
         )
       }
     </div>

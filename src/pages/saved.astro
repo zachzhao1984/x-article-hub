@@ -67,7 +67,6 @@ const description = `${saved.length} saved article${saved.length === 1 ? '' : 's
                 article={{
                   id: a.article_id,
                   slug: a.slug,
-                  slug: a.slug,
                   title: a.title,
                   excerpt: a.excerpt,
                   author_username: a.author_username,
@@ -78,6 +77,14 @@ const description = `${saved.length} saved article${saved.length === 1 ? '' : 's
                   category_slug: null,
                   category_name: null,
                   word_count: a.word_count,
+                  // The same cover and counters every other card shows, so saving an
+                  // article does not change how it looks.
+                  cover_image_id: a.cover_image_id,
+                  metric_views: a.metric_views,
+                  metric_likes: a.metric_likes,
+                  metric_reposts: a.metric_reposts,
+                  metric_replies: a.metric_replies,
+                  metric_bookmarks: a.metric_bookmarks,
                 }}
               />
             ))}
