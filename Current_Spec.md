@@ -342,6 +342,43 @@ category_override  summary_override  featured  unfeatured  retry
 
 单次最多 `MAX_IMPORT_URLS = 200` 条。
 
+### 5.1.1 上游发现：YouMind 的 viral-article 列表（`scripts/import-youmind.sh`）
+
+导入是「给定 URL」的。发现 URL 是另一件事，目前有一个可用的上游：
+
+`https://youmind.com/landing/x-viral-articles/explore` 是一个 **索引页，不是文章源**。
+它聚合「今日病毒式 X 长文」，每条都链回原文 `https://x.com/<user>/status/<id>` ——
+而这正是 §5.1 已接受的 `/status/` 永久链接形态，所以**导入端一行都不用改**。
+
+实测要点（2026-10-11，生产验证）：
+
+- 列表页是 Next.js，**链接直接渲染进 HTML**，一次 `curl` 拿 10 条，**不需要 Browser Rendering**。
+- `?page=N` 是服务端分页，page 1 与 page 2 **零重合**。
+- 默认排序**已经是 time（最新在前）**，`?sort=` 另接受 views/likes/reposts/comments/bookmarks。
+- 页面是 `robots: noindex, follow` —— 不索引、允许跟随链接。
+
+脚本只读前 `--pages` 页（默认 10 页 = 100 篇最新），去重后走现有导入端点。
+
+### 5.1.2 大批量导入会撞浏览器配额（实测，2026-10-11）
+
+**一次导入 100 条会超出 Browser Rendering 的账号级速率限制。** 实测结果：
+
+```
+一次 POST 100 条 → created 100, failed 0        ← 导入本身全部成功
+但随后抓取：19 篇 archived，81 篇 PAGE_BLOCKED(429)
+```
+
+原因：队列消费者 `max_batch_size = 10`，10 个并发抓取 × 每篇一次 `/snapshot`
+浏览器会话，超出了账号配额。81 个任务进入 `crawl.ts` 的 **1 小时冷却**
+（`RATE_LIMIT_COOLDOWN_MS = 3_600_000`）。
+
+**重新导入救不了它们**：SPEC §5.3 去重会返回 `duplicate`，并且（正确地）**不建新的
+crawl_job**。要恢复必须走 **重抓路径** `POST /api/admin/articles/:id/crawl`
+（同步执行、返回真实结果），由 `scripts/recrawl-stuck.py` **串行 + 退避**地逐个补抓。
+
+结论：**批量导入要分波**（`--wave`，默认 15 条一波、波间暂停），而不是一次灌进去。
+这是账号配额约束，不是代码缺陷 —— 并发 1 反而稳定。
+
 ### 5.2 导入结果的三种词汇（SPEC §22）
 
 ```
