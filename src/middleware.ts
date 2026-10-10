@@ -36,6 +36,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // cacheable, and none of them read the session cookie. That is what makes the header's
   // account slot safe — see the note in SiteHeader.astro.
   //
+  // `/saved` is a reader's private list, so it belongs here for the same reason `/account`
+  // does — not "it happens to differ" but "caching it would show one reader another's".
+  //
   // `/auth` is matched as a path *segment* and not by prefix. A prefix test for `/auth`
   // also matches `/authors`, which is a public list page that reads nothing per reader and
   // has no business being uncacheable — and it did not announce itself: the page rendered
@@ -48,6 +51,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (
     path.startsWith('/admin') ||
     path.startsWith('/account') ||
+    path.startsWith('/saved') ||
     path === '/auth' ||
     path.startsWith('/auth/')
   ) {

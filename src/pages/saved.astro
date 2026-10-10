@@ -1,0 +1,93 @@
+---
+/**
+ * SPEC §43 — a reader's saved articles.
+ *
+ * Server-rendered, like `/account`, and for the same reason: it differs per reader and has
+ * to work with no JavaScript. `no-store` comes from src/middleware.ts, so it never reaches
+ * the shared cache — this page lists somebody's private reading list.
+ *
+ * Signed out, it redirects to `/account` with `next` pointing back here, rather than
+ * rendering an empty list. An empty page is indistinguishable from a working page whose list
+ * happens to be empty, and the reader would have no idea they were not signed in.
+ */
+import { env } from 'cloudflare:workers';
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import ArticleCard from '../components/ArticleCard.astro';
+import { listSavedArticles } from '../db/users';
+import { resolveSession } from '../lib/user-session';
+
+const db = env.DB as unknown as D1Database;
+const session = await resolveSession(db, Astro.request.headers.get('cookie'), Date.now());
+
+if (!session) {
+  return Astro.redirect(`/account?next=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const saved = await listSavedArticles(db, session.user.id);
+
+/**
+ * `listSavedArticles` joins `articles` and filters on published-and-not-taken-down, so this
+ * count can be lower than the number of rows a reader has saved. That is deliberate — see
+ * the note on the query — and the page says so rather than silently showing fewer.
+ */
+const description = `${saved.length} saved article${saved.length === 1 ? '' : 's'}.`;
+---
+
+<Base title="Saved" description={description} path="/saved">
+  <SiteHeader>
+    <header class="hero">
+      <h1>Saved</h1>
+      <p class="hero-sub">
+        {
+          saved.length === 0
+            ? 'Nothing saved yet.'
+            : `${saved.length} article${saved.length === 1 ? '' : 's'} · newest first`
+        }
+      </p>
+    </header>
+
+    {
+      saved.length === 0 ? (
+        <div class="empty-state">
+          <h2>No saved articles</h2>
+          <p>
+            Press <strong>Save</strong> on any article and it appears here. Saving is private —
+            nobody else can see this list, and it is not counted anywhere.
+          </p>
+          <p>
+            <a href="/latest">Browse latest →</a>
+          </p>
+        </div>
+      ) : (
+        <>
+          <div class="grid-cards">
+            {saved.map((a) => (
+              <ArticleCard
+                article={{
+                  id: a.article_id,
+                  slug: a.slug,
+                  slug: a.slug,
+                  title: a.title,
+                  excerpt: a.excerpt,
+                  author_username: a.author_username,
+                  author_name: a.author_name,
+                  published_at: a.published_at,
+                  // The list does not join categories — a saved card is about the article,
+                  // not about where it sits in the taxonomy.
+                  category_slug: null,
+                  category_name: null,
+                  word_count: a.word_count,
+                }}
+              />
+            ))}
+          </div>
+          <p class="lede">
+            An article removed from the site by an editor disappears from this list too, which is
+            why it can be shorter than the number you saved.
+          </p>
+        </>
+      )
+    }
+  </SiteHeader>
+</Base>

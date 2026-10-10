@@ -48,7 +48,13 @@ import {
   signOut,
   toPublicUser,
 } from '../lib/user-session';
-import { insertOAuthState, takeOAuthState } from '../db/users';
+import {
+  insertOAuthState,
+  isSaved,
+  saveArticle,
+  takeOAuthState,
+  unsaveArticle,
+} from '../db/users';
 import { resolveLogin } from '../services/login';
 import { toAppError } from '../lib/errors';
 import { log } from '../lib/logger';
@@ -246,6 +252,66 @@ auth.post('/logout', async (c) => {
   const headers = new Headers();
   clearUserCookie(headers, isSecure(c.env));
   return redirect(303, '/', headers);
+});
+
+/**
+ * SPEC §43 — save / unsave, for the reading page's button.
+ *
+ * `POST` for both, because both change state. The two verbs are separate endpoints rather
+ * than one toggle: a toggle has to decide what to do from the request, and a request that
+ * says "flip it" is a request whose outcome depends on state the client read earlier. Two
+ * explicit endpoints make a double-submit idempotent — saving twice leaves one row rather
+ * than un-saving what the first request saved.
+ *
+ * `fetch` rather than a form, because the button must not navigate: the reader is mid
+ * article, and a form POST would either reload the page or lose their scroll position. The
+ * response carries the new state so the button can settle on what the server actually
+ * recorded rather than on what it hoped.
+ *
+ * 401 when signed out, unlike `/auth/me` which answers `{ user: null }`. The difference is
+ * that this is an action: there is no state to report, and the caller has to do something
+ * different (send the reader to sign in) rather than render one of two shapes.
+ */
+auth.post('/saved/:articleId', async (c) => {
+  const session = await resolveSession(c.env.DB, c.req.header('cookie'), Date.now());
+  if (!session) return c.json({ error: 'UNAUTHORIZED', saved: false }, 401, { 'Cache-Control': 'no-store' });
+
+  const articleId = c.req.param('articleId');
+  // The article has to exist and be readable, or a reader could save a private string and
+  // the list would have a row that no query joins to.
+  const article = await c.env.DB.prepare(
+    `SELECT id FROM articles WHERE id = ?1 AND status = 'published' AND display_mode != 'takedown'`,
+  )
+    .bind(articleId)
+    .first<{ id: string }>();
+  if (!article) return c.json({ error: 'NOT_FOUND', saved: false }, 404, { 'Cache-Control': 'no-store' });
+
+  await saveArticle(c.env.DB, session.user.id, articleId, Date.now()).run();
+  return c.json({ saved: true }, 200, { 'Cache-Control': 'no-store' });
+});
+
+auth.delete('/saved/:articleId', async (c) => {
+  const session = await resolveSession(c.env.DB, c.req.header('cookie'), Date.now());
+  if (!session) return c.json({ error: 'UNAUTHORIZED', saved: false }, 401, { 'Cache-Control': 'no-store' });
+
+  // No existence check: removing a row that is not there reaches the same state, and a 404
+  // would make the client treat an already-unsaved article as a failure.
+  await unsaveArticle(c.env.DB, session.user.id, c.req.param('articleId')).run();
+  return c.json({ saved: false }, 200, { 'Cache-Control': 'no-store' });
+});
+
+/**
+ * Whether this reader has saved this article, for the button's initial state.
+ *
+ * Its own endpoint rather than part of `/auth/me`, because the answer depends on which
+ * article is being read — `/auth/me` is cached by nothing and shared by every page, and
+ * hanging a per-article field off it would make it per-article too.
+ */
+auth.get('/saved/:articleId', async (c) => {
+  const session = await resolveSession(c.env.DB, c.req.header('cookie'), Date.now());
+  if (!session) return c.json({ saved: false, authenticated: false }, 200, { 'Cache-Control': 'no-store' });
+  const row = await isSaved(c.env.DB, session.user.id, c.req.param('articleId'));
+  return c.json({ saved: row !== null, authenticated: true }, 200, { 'Cache-Control': 'no-store' });
 });
 
 /**

@@ -601,8 +601,8 @@ describe('SPEC §43 — the pieces this depends on', () => {
   });
 
   it('shows the avatar and never the display name in the header slot', () => {
-    // The slot's whole visible content is an avatar. Not the name, not the email, and not
-    // a hover tooltip that would put the name back on screen — `title` is excluded
+    // The slot's whole visible content is an avatar. Not the name, not the email, and not a
+    // hover tooltip that would put the name back on screen — `title` is excluded
     // deliberately, because it reintroduces exactly what the avatar replaced.
     const script = code(header);
     expect(script).not.toMatch(/\.title\s*=/);
@@ -610,17 +610,52 @@ describe('SPEC §43 — the pieces this depends on', () => {
     // **Structural, not textual.** An earlier version of this matched
     // `name.className = 'auth-name'`, and putting the name back under a different variable
     // name sailed straight through it — the same trap that let a `mergeInto` reintroduction
-    // of the account-merge branch pass its own test. The property is that the link receives
-    // exactly two possible children and both are avatars, so the count is what is asserted.
-    const appends = script.match(/link\.appendChild\(/g) ?? [];
-    expect(appends, 'the link takes exactly two children: an avatar or a letter').toHaveLength(2);
+    // of the account-merge branch pass its own test, in this file.
+    //
+    // The trigger became a `<button>` when it grew a menu, so the appended-to element is
+    // no longer called `link`. What the assertion is about is unchanged: the control takes
+    // exactly two possible visible children and both are avatars, so the count stays.
+    const appends = script.match(/button\.appendChild\(/g) ?? [];
+    expect(
+      appends,
+      'the account control takes exactly two possible children: an avatar or a letter',
+    ).toHaveLength(2);
     expect(script).toMatch(/avatar\.className = 'auth-avatar'/);
     expect(script).toMatch(/letter\.className = 'auth-avatar auth-avatar-letter'/);
 
-    // The avatar is decorative; the link's name is the aria-label. An image with a real
-    // alt would read out a sentence before the link's own label, which is the wrong order.
+    // The avatar is decorative; the control's name is the aria-label. A real alt would make
+    // a screen reader read out an image description before the control's own label.
     expect(script).toMatch(/avatar\.alt = ''/);
-    expect(script).toMatch(/link\.setAttribute\('aria-label'/);
+    expect(script).toMatch(/button\.setAttribute\('aria-label'/);
+  });
+
+  it('opens a menu rather than navigating, now that it has two destinations', () => {
+    // It was an `<a>` straight to /account. With Saved and Account both in it, the trigger
+    // cannot itself be a link: an anchor that does not navigate is a lie to a screen reader,
+    // and it breaks middle-click and "open in new tab" for a control that used to support
+    // them. The two destinations are real links inside the menu.
+    const script = code(header);
+    expect(script).toMatch(/document\.createElement\('button'\)/);
+    expect(script).toMatch(/button\.className = 'nav-item auth-link auth-trigger'/);
+    // The menu's items are anchors, so both destinations still behave like links.
+    const items = script.match(/className = 'auth-menu-item'/g) ?? [];
+    expect(items, 'Saved and Account are both links').toHaveLength(2);
+    expect(script).toMatch(/savedLink\.href = '\/saved'/);
+    expect(script).toMatch(/accountLink\.href = '\/account'/);
+  });
+
+  it('can be dismissed three ways, because a menu you cannot close is a trap', () => {
+    // Toggle on the button, click outside, and Escape. The last one also returns focus to
+    // the trigger — a keyboard user who pressed Escape should not be dropped back at the
+    // top of the document.
+    const script = code(header);
+    expect(script).toMatch(/button\.addEventListener\('click'/);
+    expect(script).toMatch(/document\.addEventListener\('click'/);
+    expect(script).toMatch(/event\.key === 'Escape'/);
+    expect(script).toMatch(/button\.focus\(\)/);
+    // `aria-expanded` tracks the open state, so the control reports what it is doing.
+    expect(script).toMatch(/aria-expanded', 'true'/);
+    expect(script).toMatch(/aria-expanded', 'false'/);
   });
 
   it('never writes the display name as HTML, wherever it now goes', () => {

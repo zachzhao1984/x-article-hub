@@ -33,6 +33,18 @@
   --warn: #b8873a;
   --danger: #b3402a;
 
+  /*
+   * Elevation, per theme.
+   *
+   * A token rather than a literal because the same shadow does not read the same on both
+   * grounds: black at 12% over a near-white page is a visible lift, and over a near-black
+   * one it is nearly invisible. The dark value is therefore both darker and larger.
+   *
+   * This is the only shadow in the stylesheet — the account menu is the only thing that
+   * floats above the page.
+   */
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.12);
+
   /* Non-token values, shared by both themes. */
   --radius: 10px;
   --wrap: 1180px;
@@ -126,6 +138,7 @@
   --accent: #12ccd8;
   --accent-dim: #2ce2e8;
   --accent-contrast: #000;
+  --shadow-menu: 0 10px 30px rgb(0 0 0 / 0.5);
   --ok: #5fc79a;
   --warn: #d3b26a;
   --danger: #d86a52;
@@ -145,6 +158,7 @@
   --accent: #176b75;
   --accent-dim: #145f68;
   --accent-contrast: #fff;
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 0.12);
   --ok: #2f7d5c;
   --warn: #b8873a;
   --danger: #b3402a;
@@ -204,7 +218,7 @@ body {
 .original-link, .byline, .hero-meta, .footer-inner, .fig-missing, .empty-state,
 pre, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
 .hero h1, .stat-row, .author-name .handle, .fig-missing span,
-.auth-link, .banner, .account-email {
+.auth-link, .auth-menu-item, .save-button, .banner, .account-email {
   line-height: 1.5;
 }
 
@@ -1042,6 +1056,92 @@ pre {
 }
 
 .auth-link:hover { color: var(--text); background: var(--panel-2); }
+
+/*
+ * SPEC §43 — the account menu.
+ *
+ * `position: relative` on the slot is what the menu is anchored to, so it opens under the
+ * avatar rather than under the page. `right: 0` because the slot sits at the right edge of
+ * the header: a menu aligned to its left edge would run off the viewport on a narrow one.
+ *
+ * The shadow is the only elevation in this stylesheet. A menu has to read as being above
+ * the page rather than part of it, and the border alone is not enough where it overlaps the
+ * header's own bottom border.
+ */
+.auth-slot { position: relative; }
+
+.auth-trigger { border: 0; background: none; cursor: pointer; font: inherit; }
+.auth-trigger[aria-expanded='true'] { color: var(--text); background: var(--panel-2); }
+
+.auth-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-menu);
+  /* Above the header's sticky/fixed siblings and the article body's own stacking. */
+  z-index: 50;
+}
+
+.auth-menu[hidden] { display: none; }
+
+.auth-menu-item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.auth-menu-item:hover { background: var(--panel-2); color: var(--accent); }
+
+/*
+ * SPEC §43 — the save control on an article.
+ *
+ * `margin-left: auto` inside the crumbs row, which is a flex container, so it sits at the
+ * far right rather than beside "Latest" — the crumbs are navigational and this is an action,
+ * and grouping them would read as a third crumb.
+ *
+ * The saved state uses the accent, the same token the active nav item and the primary button
+ * use, so "this is on" means one thing on this site.
+ */
+.save-slot { margin-left: auto; display: inline-flex; align-items: center; }
+
+.save-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.save-button:hover { border-color: var(--accent-dim); color: var(--text); }
+
+.save-button.is-saved {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+/* The bottom slot is not in a flex row, so it needs its own spacing rather than `auto`. */
+.article-foot .save-slot { margin-left: 0; margin-right: auto; }
 
 .auth-avatar {
   width: 20px;

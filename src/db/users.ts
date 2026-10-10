@@ -370,3 +370,126 @@ export function deleteStaleAuthRows(db: D1Database, now: number): D1PreparedStat
     db.prepare(`DELETE FROM user_sessions WHERE expires_at <= ?1`).bind(now),
   ];
 }
+// --- SPEC §43 — saved articles -----------------------------------------------
+
+/** A saved row with just enough of the article to link to it. */
+export interface SavedArticleRow {
+  article_id: string;
+  saved_at: number;
+  slug: string | null;
+  title: string;
+  excerpt: string | null;
+  author_username: string | null;
+  author_name: string | null;
+  published_at: number | null;
+  /**
+   * Carried so the card can compute its reading time. Without it every saved card would
+   * claim "1 min read", because `ArticleCard` floors the division at 1 — a wrong number
+   * rather than a missing one, which is the harder kind to notice.
+   */
+  word_count: number;
+}
+
+/**
+ * Save, idempotently.
+ *
+ * `ON CONFLICT DO NOTHING` rather than a check-then-insert: the pair is the primary key, so
+ * this is one statement with no window between the read and the write. Two rapid taps on the
+ * button in a browser that fired both requests would otherwise race, and the loser would get
+ * a UNIQUE violation surfaced as an error for something that already succeeded.
+ *
+ * `savedAt` is only used when the row is actually created — a second save must not move the
+ * article to the top of the reader's list.
+ */
+export function saveArticle(
+  db: D1Database,
+  userId: string,
+  articleId: string,
+  savedAt: number,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO saved_articles (user_id, article_id, saved_at)
+       VALUES (?1, ?2, ?3)
+       ON CONFLICT (user_id, article_id) DO NOTHING`,
+    )
+    .bind(userId, articleId, savedAt);
+}
+
+/** Unsave. Deleting a row that is not there is not an error — the end state is the same. */
+export function unsaveArticle(db: D1Database, userId: string, articleId: string): D1PreparedStatement {
+  return db
+    .prepare(`DELETE FROM saved_articles WHERE user_id = ?1 AND article_id = ?2`)
+    .bind(userId, articleId);
+}
+
+export function isSaved(db: D1Database, userId: string, articleId: string): Promise<{ ok: number } | null> {
+  return db
+    .prepare(`SELECT 1 AS ok FROM saved_articles WHERE user_id = ?1 AND article_id = ?2`)
+    .bind(userId, articleId)
+    .first<{ ok: number }>();
+}
+
+/**
+ * A reader's saves, newest first.
+ *
+ * `published_at` is the article's own date rather than the save time: the card renders the
+ * publication date, and `saved_at` only orders the list.
+ *
+ * Inner joins on both sides, and the predicate on `articles` is deliberate: a saved article
+ * that has since been unpublished, taken down or archived must not appear. The reader saved
+ * something they could read; if the editors have withdrawn it, the list has to agree with
+ * every other surface rather than leaking it back through a join that forgot to check.
+ *
+ * The cascade would normally handle a hard-deleted article, so the join cannot find a
+ * dangling row — this predicate is about visibility, not existence.
+ */
+export function listSavedArticles(db: D1Database, userId: string, limit = 100): Promise<SavedArticleRow[]> {
+  return db
+    .prepare(
+      `SELECT s.article_id, s.saved_at,
+              a.slug, a.title, a.excerpt, a.word_count,
+              a.author_username, a.author_name,
+              a.published_at
+         FROM saved_articles s
+         JOIN articles a ON a.id = s.article_id
+        WHERE s.user_id = ?1
+          AND a.status = 'published'
+          AND a.display_mode != 'takedown'
+        ORDER BY s.saved_at DESC
+        LIMIT ?2`,
+    )
+    .bind(userId, limit)
+    .all<SavedArticleRow>()
+    .then((r) => r.results);
+}
+
+export function countSavedArticles(db: D1Database, userId: string): Promise<{ n: number } | null> {
+  return db
+    .prepare(`SELECT COUNT(*) AS n FROM saved_articles WHERE user_id = ?1`)
+    .bind(userId)
+    .first<{ n: number }>();
+}
+
+/**
+ * Whether a reader has saved a batch of articles, as a set.
+ *
+ * The article page needs one answer, but a list view needs many, and asking per-card is the
+ * shape that turns a page into N queries. One `IN (…)` returns the whole set.
+ *
+ * Not currently called with more than one id — it exists because the alternative is the
+ * per-card query being written later by someone who has not read this note.
+ */
+export function listSavedIds(
+  db: D1Database,
+  userId: string,
+  articleIds: string[],
+): Promise<Array<{ article_id: string }>> {
+  if (articleIds.length === 0) return Promise.resolve([]);
+  const placeholders = articleIds.map((_, i) => `?${i + 2}`).join(', ');
+  return db
+    .prepare(`SELECT article_id FROM saved_articles WHERE user_id = ?1 AND article_id IN (${placeholders})`)
+    .bind(userId, ...articleIds)
+    .all<{ article_id: string }>()
+    .then((r) => r.results);
+}

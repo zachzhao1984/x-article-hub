@@ -164,12 +164,23 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
           if (!body || !body.user) return;
           var name = (body.user.displayName || '').trim();
 
-          var link = document.createElement('a');
-          link.className = 'nav-item auth-link';
-          link.href = '/account';
+          /*
+            SPEC §43 — a menu, not a link.
+
+            The avatar used to be an `<a>` straight to /account. It now opens a menu with
+            Saved and Account, which makes it a `<button>`: an anchor that does not navigate
+            is a lie to a screen reader, and it breaks middle-click, the context menu and
+            "open in new tab" for the one item that *is* navigational. The two destinations
+            are real links inside the menu.
+          */
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'nav-item auth-link auth-trigger';
           // Never displayed, and still required: the visible content is an image with an
-          // empty alt, so this is the link's only accessible name.
-          link.setAttribute('aria-label', name ? 'Account: ' + name : 'Account');
+          // empty alt, so this is the control's only accessible name.
+          button.setAttribute('aria-label', name ? 'Account menu: ' + name : 'Account menu');
+          button.setAttribute('aria-haspopup', 'true');
+          button.setAttribute('aria-expanded', 'false');
 
           if (body.user.avatarUrl) {
             var avatar = document.createElement('img');
@@ -180,21 +191,64 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
             avatar.height = 20;
             avatar.loading = 'lazy';
             avatar.decoding = 'async';
-            link.appendChild(avatar);
+            button.appendChild(avatar);
           } else {
-            // Google can return no picture, and `avatar_url` is nullable by schema. With
-            // the name gone, an avatar-only slot with nothing in it would leave a
-            // signed-in reader with no indication at all that they are signed in — the
-            // silent failure this codebase keeps having to guard against. So the first
-            // character stands in.
+            // Google can return no picture, and `avatar_url` is nullable by schema. With the
+            // name gone, an avatar-only slot with nothing in it would leave a signed-in
+            // reader no indication at all that they are signed in — the silent failure this
+            // codebase keeps having to guard against. So the first character stands in.
             var letter = document.createElement('span');
             letter.className = 'auth-avatar auth-avatar-letter';
             letter.textContent = (name || '?').charAt(0).toUpperCase();
-            link.appendChild(letter);
+            button.appendChild(letter);
           }
 
-          slot.replaceChildren(link);
+          var menu = document.createElement('div');
+          menu.className = 'auth-menu';
+          menu.hidden = true;
+
+          var savedLink = document.createElement('a');
+          savedLink.className = 'auth-menu-item';
+          savedLink.href = '/saved';
+          savedLink.textContent = 'Saved';
+
+          var accountLink = document.createElement('a');
+          accountLink.className = 'auth-menu-item';
+          accountLink.href = '/account';
+          accountLink.textContent = 'Account';
+
+          menu.appendChild(savedLink);
+          menu.appendChild(accountLink);
+
+          slot.replaceChildren(button, menu);
           slot.setAttribute('data-auth-state', 'signed-in');
+
+          /*
+            Toggle, dismiss on Escape, dismiss on an outside click.
+
+            Nothing here is required to sign in, sign out or reach either destination —
+            /account and /saved are server-rendered and reachable by URL — so a reader whose
+            script fails loses a shortcut rather than an ability.
+          */
+          function close() {
+            menu.hidden = true;
+            button.setAttribute('aria-expanded', 'false');
+          }
+          function open() {
+            menu.hidden = false;
+            button.setAttribute('aria-expanded', 'true');
+          }
+          button.addEventListener('click', function (event) {
+            event.stopPropagation();
+            if (menu.hidden) { open(); } else { close(); }
+          });
+          document.addEventListener('click', function (event) {
+            if (menu.hidden) return;
+            if (!slot.contains(event.target)) close();
+          });
+          document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !menu.hidden) { close(); button.focus(); }
+          });
         })
         .catch(function () {
           // Offline, or the request failed. The signed-out link is already there and

@@ -85,6 +85,20 @@ const jsonLd = isTakedown
           </>
         )}
         <a href="/latest">Latest</a>
+
+        {/*
+          SPEC §43 — the save control.
+
+          Rendered empty and filled from the API, because this page is served with
+          `s-maxage=3600`: anything the server rendered about the reader would be baked into
+          a cached document and handed to everyone. Same reasoning as the header's account
+          slot, and the reason this is a `<span data-save-slot>` rather than a conditional
+          in the template.
+
+          It sits in the crumbs row so it is visible before the reader starts, which is where
+          the decision to keep something is usually made.
+        */}
+        <span class="save-slot" data-save-slot data-article-id={article.id}></span>
       </nav>
 
       <header class="article-head">
@@ -298,6 +312,9 @@ const jsonLd = isTakedown
               <a class="original-link" href={article.canonical_url} target="_blank" rel="noopener noreferrer nofollow">
                 ↗ View original on X
               </a>
+
+              {/* SPEC §43 — the same control again, for someone who decided at the end. */}
+              <span class="save-slot" data-save-slot data-article-id={article.id}></span>
             </footer>
           </>
         )
@@ -317,4 +334,86 @@ const jsonLd = isTakedown
       }
     </div>
   </SiteHeader>
+
+  {/*
+    SPEC §43 — fill every save slot on the page.
+
+    One script for both, addressing them by `[data-save-slot]` rather than by id: the two
+    controls must agree, and a reader who saves at the top has to see the bottom button
+    change without a reload. Rendering them all from a single call is what stops them
+    drifting — a second copy of this code is how one of them ends up showing the wrong state.
+
+    Nothing is drawn for a signed-out reader. A save button that cannot save is a worse
+    invitation than no button, and the header already offers sign-in.
+  */}
+  <script is:inline>
+    (function () {
+      var slots = document.querySelectorAll('[data-save-slot]');
+      if (slots.length === 0) return;
+      var articleId = slots[0].getAttribute('data-article-id');
+      if (!articleId) return;
+
+      function render(state) {
+        for (var i = 0; i < slots.length; i++) {
+          var slot = slots[i];
+          if (!state.authenticated) {
+            // Signed out: nothing at all. See the note above.
+            slot.replaceChildren();
+            continue;
+          }
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'save-button' + (state.saved ? ' is-saved' : '');
+          button.setAttribute('aria-pressed', state.saved ? 'true' : 'false');
+          button.textContent = state.saved ? '★ Saved' : '☆ Save';
+          button.addEventListener('click', function () {
+            submit(!state.saved);
+          });
+          slot.replaceChildren(button);
+        }
+      }
+
+      function submit(save) {
+        fetch('/auth/saved/' + encodeURIComponent(articleId), {
+          method: save ? 'POST' : 'DELETE',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        })
+          .then(function (res) {
+            if (res.status === 401) {
+              // The session went away between render and click. Sending the reader to sign in
+              // is the only useful response; failing silently would look like a broken button.
+              window.location.href = '/account?next=' + encodeURIComponent(window.location.pathname);
+              return null;
+            }
+            return res.ok ? res.json() : null;
+          })
+          .then(function (body) {
+            if (!body) return;
+            // The server's answer, not the optimistic one: saving twice must leave both
+            // buttons reading saved rather than one of them flipped back.
+            render({ authenticated: true, saved: body.saved === true });
+          })
+          .catch(function () {
+            // Offline. The buttons keep the last state the server confirmed, so they are
+            // stale rather than wrong.
+          });
+      }
+
+      fetch('/auth/saved/' + encodeURIComponent(articleId), {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      })
+        .then(function (res) {
+          return res.ok ? res.json() : null;
+        })
+        .then(function (body) {
+          if (!body) return;
+          render({ authenticated: body.authenticated === true, saved: body.saved === true });
+        })
+        .catch(function () {
+          // Offline: leave the slots empty. They are decoration until the state is known.
+        });
+    })();
+  </script>
 </Base>
