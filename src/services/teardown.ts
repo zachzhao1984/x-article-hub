@@ -58,8 +58,15 @@ export interface TeardownResult {
   /** The counts as they were *before* the delete, since afterwards they are all zero. */
   removed: TeardownCounts;
   r2: { objects: number; bytes: number };
-  /** Rows that survive because they are not archive content. */
-  retained: { users: number; identities: number; sessions: number };
+  /**
+   * Rows that survive because they are not archive content.
+   *
+   * `categories` is here rather than in `removed` even though the rows are briefly deleted:
+   * the five seeded categories are the schema's baseline and are re-inserted in the same
+   * batch, so reporting them as removed would describe a state the database never observably
+   * had. `users` and the session tables are simply never touched.
+   */
+  retained: { users: number; identities: number; sessions: number; categories: number };
 }
 
 /**
@@ -127,6 +134,14 @@ export async function summarizeTeardown(env: Env): Promise<TeardownCounts & { r2
  * reset rather than an unlink: a category with no articles is not a category, and the
  * same is true of a tag or an author row.
  *
+ * **Except the seeded categories, which go straight back.** `0002_seed_categories.sql` is
+ * the schema's own baseline — five fixed categories that the application assumes exist, and
+ * that `seed-demo.ts` resolves through a subquery on their slug. Deleting them and stopping
+ * there leaves the app seeding articles with a null `category_id` and `/category/ai`
+ * returning 404, which is not a reset but a broken install: the acceptance script caught
+ * exactly that. So the delete and the re-insert are in the same batch — the rows are gone
+ * for no observable moment, and the result reports them as retained rather than removed.
+ *
  * `crawl_jobs` is the one table that names an `article_id` without declaring a foreign
  * key to it — the column is a plain string — so its rows would also outlive the articles
  * that spawned them. Deleted explicitly, before the articles, so a job can never point
@@ -170,6 +185,18 @@ export async function teardownArchive(env: Env, actor: string): Promise<Teardown
     env.DB.prepare('DELETE FROM authors'),
     env.DB.prepare('DELETE FROM tags'),
     env.DB.prepare('DELETE FROM categories'),
+    // ...and the five seeded categories straight back, in the same batch, because they are
+    // the schema's baseline rather than content. Duplicating 0002 here is the cost of D1
+    // having no way to re-run a migration on demand; the alternative is leaving the install
+    // without the taxonomy the application and the demo seeder both resolve by slug.
+    env.DB.prepare(
+      `INSERT INTO categories (id, slug, name, description, sort_order, created_at) VALUES
+         ('cat_ai',         'ai',         'AI',         'Models, agents, coding, robotics and the AI industry.',            10, 1759000000000),
+         ('cat_technology', 'technology', 'Technology', 'Developer tools, hardware, semiconductors, cloud and open source.',  20, 1759000000000),
+         ('cat_business',   'business',   'Business',   'Startups, SaaS, venture, strategy and markets.',                   30, 1759000000000),
+         ('cat_science',    'science',    'Science',    'Biology, physics, space and mathematics.',                         40, 1759000000000),
+         ('cat_ideas',      'ideas',      'Ideas',      'Philosophy, the future, society and culture.',                     50, 1759000000000)`,
+    ),
   ]);
 
   log.warn('archive_torn_down', {
@@ -209,6 +236,15 @@ export async function teardownArchive(env: Env, actor: string): Promise<Teardown
       users: retained?.users ?? 0,
       identities: retained?.identities ?? 0,
       sessions: retained?.sessions ?? 0,
+      // Re-inserted in the same batch, so this is the seeded five rather than a surviving
+      // count — read back rather than assumed, so a future edit to the seed list shows up.
+      categories: await countCategories(env),
     },
   };
+}
+
+/** How many categories exist now — read back after the batch rather than assumed. */
+async function countCategories(env: Env): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM categories').first<{ n: number }>();
+  return row?.n ?? 0;
 }

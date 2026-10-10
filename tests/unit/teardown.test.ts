@@ -68,6 +68,27 @@ describe('teardownArchive', () => {
     expect(service).toMatch(/FROM users/);
   });
 
+  it('puts the seeded categories back, so the reset is not a broken install', () => {
+    // The acceptance script caught this the hard way: `/category/ai` returned 404 after the
+    // first reset, because the categories are resolved by slug from `0002_seed_categories.sql`
+    // — the schema's baseline, not content — and `seed-demo.ts` inserts articles with a
+    // `(SELECT id FROM categories WHERE slug = ?)` subquery that silently yields null without
+    // them. A reset has to leave a working install.
+    const body = code(service);
+    expect(body, 'the seeded categories are not restored').toMatch(/INSERT INTO categories/);
+    // In the same batch as the delete, so the rows are never observably missing.
+    const batchStart = body.indexOf('DB.batch(');
+    const batchEnd = body.indexOf(']', body.indexOf('DELETE FROM categories'));
+    expect(body.indexOf('INSERT INTO categories'), 'the restore is outside the batch').toBeLessThan(
+      batchEnd,
+    );
+    expect(batchStart).toBeGreaterThan(0);
+    // And the slugs the application resolves against, so a truncated copy fails here.
+    for (const slug of ['cat_ai', 'cat_technology', 'cat_business', 'cat_science', 'cat_ideas']) {
+      expect(body, `${slug} is not restored`).toContain(slug);
+    }
+  });
+
   it('runs the row deletes as one batch, since D1 rejects BEGIN/COMMIT', () => {
     // A half-applied reset leaves articles whose taxonomy and jobs are already gone. D1
     // rejects an explicit transaction, so `batch` is the only way to get atomicity here.
