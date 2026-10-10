@@ -48,7 +48,14 @@ export type LogEvent =
   | 'ranking_refresh_failed'
   // SPEC §16 — destructive
   | 'article_deleted'
-  | 'article_delete_refused';
+  | 'article_delete_refused'
+  /**
+   * The whole archive emptied: every article, its media, and the taxonomy. Its own event
+   * rather than reusing `article_deleted`, because it is a different act — one row versus
+   * everything — and an audit log that shows them identically cannot answer "was the
+   * archive ever reset", which is exactly what someone reading it later wants to know.
+   */
+  | 'archive_torn_down';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

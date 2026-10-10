@@ -19,6 +19,7 @@ import { retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle, PARSER_VERSION } from '../services/parse';
 import { downloadArticleMedia, findOrphanedPrefixes, mediaSummary } from '../services/media';
+import { summarizeTeardown, teardownArchive } from '../services/teardown';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -487,6 +488,43 @@ adminApi.get('/storage', async (c) => {
  * D1 row is exactly what gets deleted, and refusing to purge the prefix it left
  * behind is what produced 24 invisible ones in the first place.
  */
+/**
+ * The archive reset — every article, its media, and the taxonomy around it.
+ *
+ * Two endpoints rather than one, because the size of the operation has to be knowable
+ * before it is committed to. `GET` reports what a reset would remove; `POST` performs
+ * it. An operator cannot be asked to confirm an irreversible delete without being told
+ * how much it is about to destroy, and reading afterwards would report zeroes.
+ *
+ * Guarded by the admin token like every other route, and by an explicit `confirm` string
+ * that has to name the operation. The purge-prefix endpoint below guards against
+ * *accidental* deletion by refusing a prefix whose row is real content; this is the
+ * opposite case — a deliberate, total reset — so it needs a different guard, and the one
+ * that fits is a spelled-out confirmation rather than a narrower permission.
+ *
+ * Reader accounts are not archive content and are not touched. See teardown.ts.
+ */
+adminApi.get('/maintenance/teardown', async (c) => {
+  return c.json({ wouldRemove: await summarizeTeardown(c.env) });
+});
+
+adminApi.post('/maintenance/teardown', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { confirm?: string };
+  // A string that cannot be sent by accident or arrive from a stale form. The route name
+  // repeated back is the cheapest thing that is unambiguous.
+  if (body.confirm !== 'teardown-archive') {
+    throw new AppError(
+      'BAD_REQUEST',
+      'confirm must be the literal string "teardown-archive"; this deletes every article, all archived media, and the taxonomy',
+      400,
+    );
+  }
+
+  const result = await teardownArchive(c.env, c.get('adminIdentity').actor);
+  return c.json(result);
+});
+
+
 adminApi.post('/maintenance/purge-prefix', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { articleId?: string; confirm?: string };
   const articleId = body.articleId ?? '';
