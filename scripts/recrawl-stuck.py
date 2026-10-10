@@ -120,7 +120,20 @@ def main() -> int:
                 ok += 1
                 # A success means the quota has room again; return to the base pace.
                 backoff = args.delay
-                print(f"  [{i}/{len(targets)}] ✓ {label}")
+                # The crawl enqueues its own parse job, and that job can arrive before the
+                # raw archive is written — it then records `success` having done nothing,
+                # because a parse with no raw returns early. Measured: 7 articles ended up
+                # with a raw capture and no parsed document. So the parse is forced here
+                # rather than trusted to the queue, and it is cheap: `parseArticle` is a
+                # no-op when the document is already current.
+                parsed = ""
+                try:
+                    pr = post(f"/api/admin/articles/{aid}/parse")
+                    if pr.get("ok") is not True:
+                        parsed = f"  (parse {pr.get('errorCode') or 'failed'})"
+                except Exception as e:  # noqa: BLE001
+                    parsed = f"  (parse {type(e).__name__})"
+                print(f"  [{i}/{len(targets)}] ✓ {label}{parsed}")
             else:
                 fail += 1
                 code = res.get("errorCode") or "?"
