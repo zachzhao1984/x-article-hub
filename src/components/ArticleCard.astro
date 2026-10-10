@@ -128,7 +128,17 @@ add('bookmark', article.metric_bookmarks, 'Bookmarks on X');
     </div>
 
     <h3 class="card-title"><a href={href}>{article.title}</a></h3>
-    {article.excerpt && <p class="card-excerpt">{article.excerpt}</p>}
+    {
+      article.excerpt ? (
+        <p class="card-excerpt">{article.excerpt}</p>
+      ) : (
+        /* The same two lines, held open and empty. Without it a card whose article has no
+           summary is two lines shorter than its neighbours and the feet stop lining up —
+           which is the whole reason the slot exists. `aria-hidden` because it is a gap, not
+           content: a screen reader should hear nothing at all. */
+        <p class="card-excerpt-empty" aria-hidden="true" />
+      )
+    }
 
     <div class="card-foot">
       {

@@ -452,7 +452,26 @@ a:hover { color: var(--accent); }
 .board-split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
 
 .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.ranked-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+/*
+ * Trending and Latest, each a two-up grid inside its half of the split.
+ *
+ * These were one card per row, and a card in a half-width column is 667px wide — for a single
+ * article that is a stretched banner, out of scale with the 367px cards in Editor's Pick
+ * directly above it. Two per column puts them back at roughly the same size as every other
+ * card on the page: a card is a card wherever it sits.
+ *
+ * `auto-fill` with a floor rather than a hard `1fr 1fr`, so that when the split itself
+ * collapses to one column at 820px this becomes more cards across instead of two enormous
+ * ones. The rank badge rides on the cover, so a two-up grid does not disturb it.
+ */
+.ranked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
 
 /* --- article card ---
 
@@ -480,57 +499,44 @@ a:hover { color: var(--accent); }
 }
 .card-article:hover { border-color: var(--accent-dim); }
 
-/*
- * The whole image, shrunk proportionally — never cropped.
- *
- * `object-fit: contain` is the part that matters: the image is scaled down until it fits,
- * so nothing is cut off and the aspect ratio is preserved. `cover` would have done the
- * opposite — filled the box by cropping the overflow — which is what this replaced.
- *
- * The box itself is no longer a fixed 16:9. With `contain` a fixed box is a box with bars
- * in it whenever the image is not exactly that shape, and the archived images are whatever
- * the author uploaded: 720x1280 portrait, 1280x720 landscape, everything between. So the
- * box takes the image's own height instead. `width: 100%; height: auto` on the `<img>` lets
- * the intrinsic ratio size the box, and the image is never larger than its own proportions.
- *
- * `max-height` is the one cap, and it is on the image rather than the box so the box follows
- * it. Without it a very tall portrait cover pushes the title below the fold on a phone,
- * which is worse than bars: the card stops being a summary and becomes a picture. A capped
- * image is still whole — `contain` shrinks it to fit whichever limit binds first — so a tall
- * cover is made smaller, never clipped.
- *
- * The consequence, accepted deliberately: cards in a row are no longer the same height, so
- * the grid aligns along the top rather than along a common baseline. Showing the image the
- * author chose is the point; a neat row of identically-cropped images was the thing being
- * complained about.
- */
 .card-cover {
   position: relative;
   display: block;
+  /*
+   * A fixed-height box, filled edge to edge.
+   *
+   * Every card must be the same height, and the cover is the one element whose height is not
+   * determined by text — so it is pinned. A fixed `height` rather than a ratio, because a
+   * ratio made the box a different height in each column: measured at 205px in the two-column
+   * Trending area and 260px in the wide Editor's Pick grid, so the same card was two different
+   * heights depending on where it sat.
+   *
+   * 150px, chosen by measurement. The archived covers are wide banners — 1200x480 is typical,
+   * 2.5:1 — and `cover` scales the image to the box's height and crops the overflow
+   * horizontally, so the box's height *is* the crop. At 220px the image was drawn 550px wide
+   * against a 365px slot and 185px (34%) was thrown away, cutting the first letter off a
+   * headline. At 150px it is drawn 375px wide — 10px, 2.7%, and nothing in the wider Trending
+   * column. So the shorter box shows essentially the whole picture and is still a fixed height.
+   *
+   * `object-fit: cover` crops rather than bars. This is a deliberate reversal of an earlier
+   * `contain`: showing the whole image *and* keeping every card the same height is not
+   * possible at once, and when the two conflict uniformity wins. `contain` in a fixed box left
+   * 37px of grey above and below every 1200x480 image. Bars read as a layout that failed to
+   * load; a cropped banner reads as a thumbnail, which is what a card cover is.
+   *
+   * `flex: none` keeps the box from stretching when the card does. The slack belongs to the
+   * body, where the footer is pinned to the bottom.
+   */
+  height: 150px;
   background: var(--panel-2);
   overflow: hidden;
-  /*
-   * The cover must not stretch when the card does.
-   *
-   * A grid item stretches to its row's height, and the card is a column flex container, so
-   * without this the cover — the first child — absorbs all the extra height. That is
-   * invisible when every cover is a photograph that fills its box, and very visible when one
-   * card's article has no archived image: the placeholder grows into a tall grey slab beside
-   * its neighbours' short covers, so the gap reads as a broken card rather than as an article
-   * with no picture.
-   *
-   * `flex: none` holds the cover at the height its own contents ask for — an image's natural
-   * ratio, or the placeholder's 16:9 band — and lets the slack collect in the body, where
-   * `margin-top: auto` on the footer pins the author and counters to the bottom.
-   */
   flex: none;
 }
 .card-cover img {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 340px;
-  object-fit: contain;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* No archived image, and no image to take a shape from.
@@ -547,8 +553,7 @@ a:hover { color: var(--accent); }
 .card-cover-empty {
   display: block;
   width: 100%;
-  aspect-ratio: 5 / 2;
-  max-height: 340px;
+  height: 100%;
   background: var(--panel-2);
 }
 
@@ -582,7 +587,28 @@ a:hover { color: var(--accent); }
 }
 
 .card-body { min-width: 0; padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }
-.card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 7px; }
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 21px;
+  font-size: 12px;
+  margin-bottom: 7px;
+  /*
+   * One line, a fixed height, clipped rather than wrapped.
+   *
+   * Two things made this row's height vary: the wrap when its four items did not fit, and the
+   * Editor's Pick badge — 11px in a 1px border, so a row containing it measured 21px against
+   * 18px without one, letting a decoration decide the card's height. A fixed `height` with
+   * `align-items: center` puts the badge in the middle of the row instead of setting it.
+   *
+   * The date is the first thing clipped, which is the right priority: the category and the
+   * reading time are what a reader decides on, and the date is the least of the three.
+   */
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
 .tag-cat { color: var(--accent); font-weight: 600; }
 .badge {
   padding: 1px 7px;
@@ -600,6 +626,22 @@ a:hover { color: var(--accent); }
   line-height: 1.3;
   letter-spacing: -0.015em;
   font-weight: 600;
+  /*
+   * One line, ellipsised.
+   *
+   * Titles in this archive run from 25 to 59 characters — real headlines, not the two- or
+   * three-word ones a card layout usually assumes — so letting them wrap gave the same row
+   * cards of three different heights. One line with an ellipsis makes every title one line.
+   *
+   * `min-width: 0` is what makes it work: the title is inside a flex column, and a flex item
+   * defaults to `min-width: auto`, which refuses to shrink below its content — so without
+   * this the title would widen its own column instead of truncating and no ellipsis would
+   * appear. The full headline stays in the DOM; only the painted box is short.
+   */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .card-title a:hover { color: var(--accent); }
 
@@ -609,9 +651,24 @@ a:hover { color: var(--accent); }
   font-size: 13.5px;
   line-height: 1.55;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/*
+ * The same two lines, empty.
+ *
+ * Only cards whose article has a summary render an excerpt, so a feed of mixed ones had two
+ * card heights. The card renders this instead when there is none, holding the space open so
+ * the feet still line up. Height is written as the same arithmetic the real one uses rather
+ * than a magic number, so changing the line count above cannot silently desynchronise them.
+ */
+.card-excerpt-empty {
+  margin: 0 0 10px;
+  height: calc(2 * 1.55 * 13.5px);
+  font-size: 13.5px;
+  line-height: 1.55;
 }
 
 /*
@@ -623,12 +680,23 @@ a:hover { color: var(--accent); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 12px;
   margin-top: auto;
   padding-top: 10px;
   font-size: 12px;
   color: var(--faint);
+  /*
+   * Author on the left, counters on the right, one line.
+   *
+   * It used to wrap, so a card whose counters did not fit pushed them onto a second line and
+   * grew taller than the card beside it — the engagement row was also what broke the grid.
+   * `nowrap` with hidden overflow keeps the height fixed and clips the counters from the
+   * right, which is the correct thing to lose: the author is the attribution, the counters a
+   * bonus. `margin-top: auto` pins the row so leftover height collects above it.
+   */
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
 }
 .author { color: var(--muted); }
 
