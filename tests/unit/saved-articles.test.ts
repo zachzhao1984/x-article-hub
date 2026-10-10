@@ -164,6 +164,37 @@ describe('the account menu', () => {
     expect(header).toMatch(/button\.focus\(\)/);
   });
 
+  it('shows the admin entry only to an account with the role', () => {
+    // `body.user.role` comes from `/auth/me`, so this needs no second endpoint and no extra
+    // request — the menu is built from a response that already carries it.
+    expect(header).toMatch(/if \(body\.user\.role === 'admin'\)/);
+    expect(header).toMatch(/adminLink\.href = '\/admin'/);
+    expect(header).toMatch(/adminLink\.textContent = 'Admin'/);
+  });
+
+  it('is a display decision, not the thing that protects /admin', () => {
+    // Worth pinning explicitly, because the two are easy to conflate when reading the
+    // component. Hiding a link keeps a door out of somebody's sight; `requireAdmin` is what
+    // keeps it locked, and it reads the role from the `users` row on every request — so a
+    // reader who types the URL gets a redirect regardless of what this menu rendered.
+    const adminAuth = readFileSync(resolve('src/middleware/admin-auth.ts'), 'utf8');
+    expect(adminAuth).toMatch(/requireAdmin/);
+    expect(adminAuth).toMatch(/session\.user\.role !== 'admin'/);
+    // And the admin router actually applies it, rather than the check existing unused.
+    const adminUi = readFileSync(resolve('src/routes/admin-ui.ts'), 'utf8');
+    expect(adminUi).toMatch(/adminUi\.use\('\*', requireAdmin\(\)\)/);
+    const adminApi = readFileSync(resolve('src/routes/admin-api.ts'), 'utf8');
+    expect(adminApi).toMatch(/adminApi\.use\('\*', requireAdmin\(\)\)/);
+  });
+
+  it('sets the admin entry apart from the reader\'s own two', () => {
+    // Saved and Account are the reading site; Admin leaves it. A rule above it is the
+    // smallest thing that says so, and it avoids an accent colour — which on this site
+    // means "selected", the wrong idea for a door rather than a state.
+    expect(siteCss).toMatch(/\.auth-menu-item-admin \{[^}]*border-top/);
+    expect(siteCss).not.toMatch(/\.auth-menu-item-admin \{[^}]*var\(--accent\)/);
+  });
+
   it('is positioned so it cannot run off the screen', () => {
     // Anchored to the slot with `position: relative`, and right-aligned because the slot sits
     // at the right edge of the header.

@@ -217,8 +217,26 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
           accountLink.href = '/account';
           accountLink.textContent = 'Account';
 
+          /*
+            SPEC §16 — the admin entry, for an account that has the role.
+
+            Rendered from `body.user.role`, which `/auth/me` already returns, so this is a
+            display decision rather than a second permission check. It is *only* a display
+            decision: `/admin` is gated server-side by `requireAdmin`, which reads the role
+            from the `users` row on every request. Hiding the link from a reader who is not
+            an admin keeps a door out of their sight; it is not what keeps it locked, and
+            nothing here should be read as if it were.
+          */
           menu.appendChild(savedLink);
           menu.appendChild(accountLink);
+
+          if (body.user.role === 'admin') {
+            var adminLink = document.createElement('a');
+            adminLink.className = 'auth-menu-item auth-menu-item-admin';
+            adminLink.href = '/admin';
+            adminLink.textContent = 'Admin';
+            menu.appendChild(adminLink);
+          }
 
           slot.replaceChildren(button, menu);
           slot.setAttribute('data-auth-state', 'signed-in');

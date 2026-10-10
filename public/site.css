@@ -1104,6 +1104,21 @@ pre {
 .auth-menu-item:hover { background: var(--panel-2); color: var(--accent); }
 
 /*
+ * SPEC §16 — the admin entry sits apart from the reader's own two.
+ *
+ * Saved and Account are the reading site; Admin leaves it entirely, for a different
+ * interface with different rules. A rule above it is the smallest thing that says so, and
+ * it avoids the alternative of an accent colour, which on this site means "selected" — the
+ * wrong idea for a door rather than a state.
+ */
+.auth-menu-item-admin {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  border-radius: 0 0 7px 7px;
+}
+
+/*
  * SPEC §43 — the save control on an article.
  *
  * `margin-left: auto` inside the crumbs row, which is a flex container, so it sits at the
