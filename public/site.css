@@ -481,26 +481,76 @@ a:hover { color: var(--accent); }
 .card-article:hover { border-color: var(--accent-dim); }
 
 /*
- * Fixed aspect ratio rather than a fixed height.
+ * The whole image, shrunk proportionally — never cropped.
  *
- * The archived images are whatever shape the author uploaded — 720x1280 portrait, 1280x720
- * landscape, everything between — so a fixed height would letterbox some and crop others
- * unpredictably. `aspect-ratio` keeps every cover the same box and `object-fit: cover` fills
- * it by cropping the overflow, which is the one arrangement where a grid of mixed-shape
- * images still reads as a grid.
+ * `object-fit: contain` is the part that matters: the image is scaled down until it fits,
+ * so nothing is cut off and the aspect ratio is preserved. `cover` would have done the
+ * opposite — filled the box by cropping the overflow — which is what this replaced.
+ *
+ * The box itself is no longer a fixed 16:9. With `contain` a fixed box is a box with bars
+ * in it whenever the image is not exactly that shape, and the archived images are whatever
+ * the author uploaded: 720x1280 portrait, 1280x720 landscape, everything between. So the
+ * box takes the image's own height instead. `width: 100%; height: auto` on the `<img>` lets
+ * the intrinsic ratio size the box, and the image is never larger than its own proportions.
+ *
+ * `max-height` is the one cap, and it is on the image rather than the box so the box follows
+ * it. Without it a very tall portrait cover pushes the title below the fold on a phone,
+ * which is worse than bars: the card stops being a summary and becomes a picture. A capped
+ * image is still whole — `contain` shrinks it to fit whichever limit binds first — so a tall
+ * cover is made smaller, never clipped.
+ *
+ * The consequence, accepted deliberately: cards in a row are no longer the same height, so
+ * the grid aligns along the top rather than along a common baseline. Showing the image the
+ * author chose is the point; a neat row of identically-cropped images was the thing being
+ * complained about.
  */
 .card-cover {
   position: relative;
   display: block;
-  aspect-ratio: 16 / 9;
   background: var(--panel-2);
   overflow: hidden;
+  /*
+   * The cover must not stretch when the card does.
+   *
+   * A grid item stretches to its row's height, and the card is a column flex container, so
+   * without this the cover — the first child — absorbs all the extra height. That is
+   * invisible when every cover is a photograph that fills its box, and very visible when one
+   * card's article has no archived image: the placeholder grows into a tall grey slab beside
+   * its neighbours' short covers, so the gap reads as a broken card rather than as an article
+   * with no picture.
+   *
+   * `flex: none` holds the cover at the height its own contents ask for — an image's natural
+   * ratio, or the placeholder's 16:9 band — and lets the slack collect in the body, where
+   * `margin-top: auto` on the footer pins the author and counters to the bottom.
+   */
+  flex: none;
 }
-.card-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 340px;
+  object-fit: contain;
+}
 
-/* No archived image: a flat block rather than a gap, so the card keeps its shape and the
- * grid rows stay aligned. */
-.card-cover-empty { display: block; width: 100%; height: 100%; background: var(--panel-2); }
+/* No archived image, and no image to take a shape from.
+ *
+ * This has to look like the covers around it rather than like a gap, so its height is tied
+ * to the shape the archived images actually are. Measured across the live homepage they run
+ * about 2.4:1 — wide banners — and `aspect-ratio: 5 / 2` matches that closely enough that a
+ * placeholder sits at the same height as its neighbours instead of towering over them.
+ *
+ * An earlier `16 / 9` was the intuitive choice and measurably wrong: at the Trending column's
+ * width it produced a 307px band beside 218px covers, so the card with *no* image was the
+ * tallest one in the row. A blank block claiming more space than a photograph is the one
+ * error a reader is guaranteed to notice. */
+.card-cover-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 2;
+  max-height: 340px;
+  background: var(--panel-2);
+}
 
 /*
  * The rank sits on the cover, in the accent.
