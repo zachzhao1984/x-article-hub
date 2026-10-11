@@ -29,6 +29,8 @@ export interface ArticleListItem {
   display_mode: DisplayMode;
   featured: 0 | 1;
   word_count: number;
+  /** SPEC §15 — detected at parse time; NULL means not parsed yet. */
+  lang: 'zh' | 'ja' | 'ko' | 'latin' | null;
   final_score: number | null;
   velocity_score: number | null;
   popularity_score: number | null;
@@ -59,7 +61,7 @@ const LIST_COLUMNS = `
   a.author_username, a.author_name,
   a.published_at, a.imported_at,
   c.slug AS category_slug, c.name AS category_name,
-  a.display_mode, a.featured, a.word_count,
+  a.display_mode, a.featured, a.word_count, a.lang,
   a.final_score, a.velocity_score, a.popularity_score, a.quality_score,
   (SELECT m.id FROM media_objects m
     WHERE m.article_id = a.id AND m.r2_key IS NOT NULL AND m.kind IN ('body', 'cover')

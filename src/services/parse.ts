@@ -19,6 +19,7 @@ import type { ArticleDocument } from '../types/article-document';
 import { countWords, documentToPlainText } from '../types/article-document';
 import { parseMarkdownToDocument } from '../parser/markdown';
 import { segmentCjk } from '../lib/cjk';
+import { detectLanguage, languageSample } from '../lib/language';
 import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { newId } from '../lib/ids';
@@ -192,6 +193,7 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
             fts_title = COALESCE(NULLIF(?13, ''), fts_title),
             fts_author_name = COALESCE(?9, fts_author_name),
             fts_author_username = COALESCE(?10, fts_author_username),
+            lang = ?14,
             updated_at = ?12
       WHERE id = ?1`,
   )
@@ -223,6 +225,11 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
       // by binding the same values again — one extra parameter rather than a second
       // code path that could drift from the first.
       segmentCjk(document.title),
+      // SPEC §15 — the language badge. Detected from the title plus the body, because a
+      // Japanese article can have an English title and the body is where the script is
+      // unambiguous. `plainText` is already in hand from the FTS binding above, so this
+      // costs one scan of text the parser has produced anyway.
+      detectLanguage(languageSample(document.title, plainText)),
     )
     .run();
 

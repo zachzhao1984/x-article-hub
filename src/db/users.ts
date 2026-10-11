@@ -389,6 +389,12 @@ export interface SavedArticleRow {
    */
   word_count: number;
   /**
+   * SPEC §15 — the language badge. Carried for the same reason `word_count` and the cover
+   * are: the saved list renders the shared `ArticleCard`, and a card that lost its badge the
+   * moment it was saved would be a visible difference between the two views of one article.
+   */
+  lang: 'zh' | 'ja' | 'ko' | 'latin' | null;
+  /**
    * The card's cover, as a `media_objects` id, or null.
    *
    * The saved list renders the same `ArticleCard` as every board, so it needs the same
@@ -461,7 +467,7 @@ export function listSavedArticles(db: D1Database, userId: string, limit = 100): 
   return db
     .prepare(
       `SELECT s.article_id, s.saved_at,
-              a.slug, a.title, a.excerpt, a.word_count,
+              a.slug, a.title, a.excerpt, a.word_count, a.lang,
               a.author_username, a.author_name,
               a.published_at,
               (SELECT m.id FROM media_objects m

@@ -36,6 +36,8 @@ export interface Props {
     category_slug: string | null;
     category_name: string | null;
     word_count: number;
+    /** SPEC §15 — 'zh' | 'ja' | 'ko' | 'latin'; null until the article is parsed. */
+    lang?: 'zh' | 'ja' | 'ko' | 'latin' | null;
     featured?: 0 | 1;
     final_score?: number | null;
     /** Optional so callers with a narrower shape (the saved list) still typecheck. */
@@ -52,9 +54,11 @@ export interface Props {
 
 import Icon from './Icon.astro';
 import type { IconName } from '../icons/phosphor';
+import { LANGUAGE_LABELS } from '../lib/language';
 
 const { article, rank } = Astro.props;
 const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
+const languageLabel = article.lang ? LANGUAGE_LABELS[article.lang] : null;
 const dateLabel = article.published_at
   ? new Date(article.published_at).toISOString().slice(0, 10)
   : null;
@@ -113,6 +117,13 @@ add('bookmark', article.metric_bookmarks, 'Bookmarks on X');
       )
     }
     {rank && <span class="rank">{rank}</span>}
+    {
+      /* SPEC §15 — the article's language, in the cover's top-right. All cards carry it, so
+         the badge is a constant presence rather than an annotation that occasionally
+         appears; `lang-label` sits opposite `.rank` so the two never collide. A NULL (not
+         parsed yet) shows nothing rather than a guess. */
+      languageLabel && <span class="lang-badge">{languageLabel}</span>
+    }
   </a>
 
   <div class="card-body">

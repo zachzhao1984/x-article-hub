@@ -21,6 +21,9 @@ import { parseArticle, PARSER_VERSION } from '../services/parse';
 import { downloadArticleMedia, findOrphanedPrefixes, mediaSummary } from '../services/media';
 import { summarizeTeardown, teardownArchive } from '../services/teardown';
 import { generateCover, generateMissingCovers } from '../services/cover';
+import { readArticleDocument } from '../services/archive';
+import { documentToPlainText } from '../types/article-document';
+import { detectLanguage, languageSample } from '../lib/language';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -379,6 +382,48 @@ adminApi.post('/articles/:id/media', async (c) => {
   // response and in media_objects. Reporting 400 would make the admin UI treat a
   // single deleted image as a broken endpoint.
   return c.json({ articleId: id, ...outcome, summary });
+});
+
+/**
+ * SPEC §15 — backfill the language badge for articles parsed before 0013.
+ *
+ * The detector runs inside the parser, so an article parsed before the column existed has
+ * `lang IS NULL`. Re-parsing them would work but spends a full parse per article to compute
+ * one field. This reads each article's stored document instead, takes the same
+ * title-plus-body sample the parser does, and writes only `lang` — the parse output is
+ * unchanged, so nothing about the article is recomputed.
+ *
+ * Idempotent: it selects `lang IS NULL`, so a second run finds nothing left to do.
+ */
+adminApi.post('/maintenance/backfill-language', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { limit?: number };
+  const limit = Number.isFinite(body.limit) ? Math.min(Math.max(Number(body.limit), 1), 200) : 50;
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, title, content_r2_key FROM articles
+      WHERE lang IS NULL AND content_r2_key IS NOT NULL
+      ORDER BY imported_at DESC LIMIT ?1`,
+  )
+    .bind(limit)
+    .all<{ id: string; title: string | null; content_r2_key: string }>();
+
+  let updated = 0;
+  const failed: string[] = [];
+
+  for (const row of results) {
+    const document = await readArticleDocument(c.env.ARCHIVE, row.content_r2_key);
+    if (!document) {
+      failed.push(row.id);
+      continue;
+    }
+    // The same sample the parser takes, so a backfilled article and a freshly parsed one
+    // cannot disagree about what the language is.
+    const lang = detectLanguage(languageSample(row.title, documentToPlainText(document)));
+    await c.env.DB.prepare(`UPDATE articles SET lang = ?2 WHERE id = ?1`).bind(row.id, lang).run();
+    updated += 1;
+  }
+
+  return c.json({ considered: results.length, updated, failed: failed.length, failedIds: failed });
 });
 
 /**

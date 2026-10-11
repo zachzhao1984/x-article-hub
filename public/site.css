@@ -586,6 +586,32 @@ a:hover { color: var(--accent); }
   color: var(--accent);
 }
 
+/* SPEC §15 — the language badge, in the cover's top-right, opposite `.rank` at the
+   bottom-left. Same translucent pill so the two read as the same kind of annotation over
+   whatever image sits behind them. Uses the sans stack rather than `.rank`'s serif because
+   it carries words (`中文`, `日本語`) rather than a numeral, and CJK glyphs in the serif
+   face fall back inconsistently across platforms. */
+.lang-badge {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  /* The cover image is not a predictable colour, and the pill is only mostly opaque, so a
+     subtle text shadow keeps the label legible if a light image shows through. */
+  text-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
 .card-body { min-width: 0; padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }
 .card-meta {
   display: flex;
