@@ -118,7 +118,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
       <span class="logo-text">{SITE_NAME}</span>
     </a>
 
-    <nav class="nav" aria-label="Primary" {...i18nSpread('nav.primary')}>
+    <nav class="nav" {...i18nAttrSpread('aria-label', 'nav.primary')}>
       {
         nav.map((item) => (
           <a href={item.href} class:list={['nav-item', { active: isActive(item.href) }]}>
@@ -328,7 +328,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     })();
   </script>
 
-  <div class="wrap category-bar" aria-label="Categories" {...i18nSpread('nav.categories')}>
+  <div class="wrap category-bar" {...i18nAttrSpread('aria-label', 'nav.categories')}>
     {
       categories.map(
         (c) => (

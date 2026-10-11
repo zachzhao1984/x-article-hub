@@ -164,7 +164,7 @@ add('bookmark', article.metric_bookmarks, 'Bookmarks on X', 'card.bookmarks');
 
       {
         metrics.length > 0 && (
-          <ul class="card-metrics" aria-label="Engagement on X" {...i18nSpread('card.engagement')}>
+          <ul class="card-metrics" {...i18nAttrSpread('aria-label', 'card.engagement')}>
             {metrics.map((m) => (
               <li title={m.title} {...i18nAttrSpread('title', m.key)}>
                 <Icon name={m.icon} size={14} class="metric-icon" />

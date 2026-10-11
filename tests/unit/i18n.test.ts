@@ -205,6 +205,19 @@ describe('the public surfaces are wired', () => {
     }
   });
 
+  it('never swaps textContent on an element that has an aria-label and children', () => {
+    // The bug this pins: `i18nSpread` sets `textContent`, so putting it on a `<nav>` or a
+    // `<ul>` that already has an `aria-label` replaces the element's *children* with the
+    // label. The nav rendered as the single word "Primary" and the links were gone — the
+    // page still loaded and nothing errored. An aria-label belongs in `i18nAttrSpread`.
+    for (const file of PUBLIC_SURFACES) {
+      const src = readFileSync(resolve(file), 'utf8');
+      // A tag carrying both `aria-label="…"` and `{...i18nSpread(…)}` is the shape.
+      const bad = src.match(/<\w+[^>]*aria-label="[^"]*"[^>]*\{\.\.\.i18nSpread\(/);
+      expect(bad, `${file} uses i18nSpread on an aria-label element: ${bad?.[0] ?? ''}`).toBeNull();
+    }
+  });
+
   it('does not translate the admin', () => {
     // SPEC §17.4 scopes this to the public site: the admin is a single-operator tool and its
     // strings are not translated.
