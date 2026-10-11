@@ -16,6 +16,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 import ArticleCard from '../components/ArticleCard.astro';
 import { listSavedArticles } from '../db/users';
 import { resolveSession } from '../lib/user-session';
+import { i18nSpread } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 const session = await resolveSession(db, Astro.request.headers.get('cookie'), Date.now());
@@ -37,11 +38,11 @@ const description = `${saved.length} saved article${saved.length === 1 ? '' : 's
 <Base title="Saved" description={description} path="/saved">
   <SiteHeader>
     <header class="hero">
-      <h1>Saved</h1>
+      <h1 {...i18nSpread('saved.title')}>Saved</h1>
       <p class="hero-sub">
         {
           saved.length === 0
-            ? 'Nothing saved yet.'
+            ? <span {...i18nSpread('saved.heroSub')}>Your saved articles, newest first.</span>
             : `${saved.length} article${saved.length === 1 ? '' : 's'} · newest first`
         }
       </p>
@@ -50,13 +51,15 @@ const description = `${saved.length} saved article${saved.length === 1 ? '' : 's
     {
       saved.length === 0 ? (
         <div class="empty-state">
-          <h2>No saved articles</h2>
+          <h2 {...i18nSpread('saved.emptyHeading')}>No saved articles</h2>
           <p>
-            Press <strong>Save</strong> on any article and it appears here. Saving is private —
-            nobody else can see this list, and it is not counted anywhere.
+            <span {...i18nSpread('saved.emptyBody')}>
+              Press <strong>Save</strong> on any article and it appears here. Saving is private —
+              nobody else can see this list, and it is not counted anywhere.
+            </span>
           </p>
           <p>
-            <a href="/latest">Browse latest →</a>
+            <a href="/latest" {...i18nSpread('saved.browse')}>Browse latest →</a>
           </p>
         </div>
       ) : (
@@ -89,7 +92,7 @@ const description = `${saved.length} saved article${saved.length === 1 ? '' : 's
               />
             ))}
           </div>
-          <p class="lede">
+          <p class="lede" {...i18nSpread('saved.note')}>
             An article removed from the site by an editor disappears from this list too, which is
             why it can be shorter than the number you saved.
           </p>

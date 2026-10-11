@@ -5,6 +5,7 @@ import Base from '../../layouts/Base.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import { listPublishedArticles } from '../../db/public';
+import { i18nSpread } from '../../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 const { slug = '' } = Astro.params;
@@ -43,7 +44,7 @@ const sorts: Array<{ key: typeof sort; label: string; href: string }> = [
 <Base title={title} description={description} path={`/category/${slug}`}>
   <SiteHeader>
     <header class="hero">
-      <h1>Category</h1>
+      <h1 {...i18nSpread('category.heading')}>Category</h1>
       <p class="hero-sub">{title}</p>
       {description && <p class="hero-meta">{description}</p>}
     </header>
@@ -62,7 +63,7 @@ const sorts: Array<{ key: typeof sort; label: string; href: string }> = [
       articles.length === 0 ? (
         <div class="empty-state">
           <h2>No articles in {title} yet</h2>
-          <p>Nothing has been published under this category.</p>
+          <p {...i18nSpread('category.emptyBody')}>Nothing has been published under this category.</p>
         </div>
       ) : (
         <div class="grid-cards">
@@ -76,9 +77,9 @@ const sorts: Array<{ key: typeof sort; label: string; href: string }> = [
     {
       articles.length === PER_PAGE && (
         <nav class="pager">
-          {page > 1 ? <a href={`?sort=${sort}&page=${page - 1}`}>← Newer</a> : <span />}
-          <span class="muted">Page {page}</span>
-          <a href={`?sort=${sort}&page=${page + 1}`}>Older →</a>
+          {page > 1 ? <a href={`?sort=${sort}&page=${page - 1}`} {...i18nSpread('board.newer')}>← Newer</a> : <span />}
+          <span class="muted" {...i18nSpread('board.page', { page })}>Page {page}</span>
+          <a href={`?sort=${sort}&page=${page + 1}`} {...i18nSpread('board.older')}>Older →</a>
         </nav>
       )
     }

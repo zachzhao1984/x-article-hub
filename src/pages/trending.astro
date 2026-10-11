@@ -2,12 +2,13 @@
 // SPEC §15 — Trending: `final_score DESC`, the weighted blend of popularity,
 // velocity, quality and editor score.
 import BoardPage from '../components/BoardPage.astro';
+import { i18nSpread } from '../lib/i18n';
 ---
 
 <BoardPage
   sort="trending"
-  heading="Trending"
-  lede="What the archive is reading right now."
+  heading={<span {...i18nSpread('home.trending')}>Trending</span>}
+  lede={<span {...i18nSpread('trending.lede')}>What the archive is reading right now.</span>}
   path="/trending"
   description="Trending X Articles, ranked by a blend of engagement, velocity, quality and editor score."
 />

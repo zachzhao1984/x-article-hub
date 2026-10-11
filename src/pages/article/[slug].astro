@@ -6,6 +6,7 @@ import SiteHeader from '../../components/SiteHeader.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from '../../db/public';
 import { readArticleDocument } from '../../services/archive';
+import { i18nSpread } from '../../lib/i18n';
 import type { ArticleBlock } from '../../types/article-document';
 
 const db = env.DB as unknown as D1Database;
@@ -84,7 +85,7 @@ const jsonLd = isTakedown
             <span class="muted">/</span>
           </>
         )}
-        <a href="/latest">Latest</a>
+        <a href="/latest" {...i18nSpread('article.latest')}>Latest</a>
 
         {/*
           SPEC §43 — the save control.
@@ -134,7 +135,7 @@ const jsonLd = isTakedown
               {new Date(article.published_at).toISOString().slice(0, 10)}
             </time>
           )}
-          <span class="muted">{readingMinutes} min read</span>
+          <span class="muted">{readingMinutes} <span {...i18nSpread('card.minRead')}>min read</span></span>
         </div>
       </header>
 
@@ -143,29 +144,29 @@ const jsonLd = isTakedown
           // SPEC §37 — a takedown is explained, not hidden. A shared link should
           // not silently look like a broken page.
           <div class="notice">
-            <h2>This article has been taken down</h2>
-            <p>
+            <h2 {...i18nSpread('article.takenDown')}>This article has been taken down</h2>
+            <p {...i18nSpread('article.takenDownBody')}>
               The archived copy is no longer displayed. This usually means the author requested removal, or
               the content raised a rights concern.
             </p>
-            {article.takedown_reason && <p><strong>Reason:</strong> {article.takedown_reason}</p>}
+            {article.takedown_reason && <p><strong {...i18nSpread('article.reason')}>Reason:</strong> {article.takedown_reason}</p>}
           </div>
         ) : (
           <>
             {
               (article.final_score !== null || article.quality_score !== null) && (
                 <div class="stat-row">
-                  {article.final_score !== null && <span>Final <b>{article.final_score.toFixed(0)}</b></span>}
-                  {article.popularity_score !== null && <span>Popularity <b>{article.popularity_score.toFixed(0)}</b></span>}
-                  {article.quality_score !== null && <span>Quality <b>{article.quality_score.toFixed(0)}</b></span>}
+                  {article.final_score !== null && <span><span {...i18nSpread('article.score.final')}>Final</span> <b>{article.final_score.toFixed(0)}</b></span>}
+                  {article.popularity_score !== null && <span><span {...i18nSpread('article.score.popularity')}>Popularity</span> <b>{article.popularity_score.toFixed(0)}</b></span>}
+                  {article.quality_score !== null && <span><span {...i18nSpread('article.score.quality')}>Quality</span> <b>{article.quality_score.toFixed(0)}</b></span>}
                 </div>
               )
             }
 
             {article.display_mode === 'link_only' ? (
               <div class="notice">
-                <h2>Full text not displayed</h2>
-                <p>
+                <h2 {...i18nSpread('article.fullTextHidden')}>Full text not displayed</h2>
+                <p {...i18nSpread('article.fullTextHiddenBody')}>
                   This archive does not republish the full text of this article. Read it at the original
                   source instead.
                 </p>
@@ -177,7 +178,7 @@ const jsonLd = isTakedown
             {
               article.display_mode === 'excerpt' && (
                 <div class="notice">
-                  <p><strong>Excerpt only.</strong> The full text is archived but not published.</p>
+                  <p><strong {...i18nSpread('article.excerptOnly')}>Excerpt only.</strong> <span {...i18nSpread('article.excerptNote')}>The full text is archived but not published.</span></p>
                 </div>
               )
             }
@@ -225,10 +226,11 @@ const jsonLd = isTakedown
                                   href={img.sourceUrl}
                                   target="_blank"
                                   rel="noopener noreferrer nofollow"
+                                  {...i18nSpread('article.videoLink')}
                                 >
                                   Watch the video on x.com
                                 </a>
-                                <span>the recording is not archived here; this link goes to X</span>
+                                <span {...i18nSpread('article.videoNote')}>the recording is not archived here; this link goes to X</span>
                               </p>
                             );
                           }
@@ -264,8 +266,8 @@ const jsonLd = isTakedown
                                   target="_blank"
                                   rel="noopener noreferrer nofollow"
                                 >
-                                  Image not archived
-                                  <span>this figure still loads from x.com and may stop working</span>
+                                  <span {...i18nSpread('article.imageMissing')}>Image not archived</span>
+                                  <span {...i18nSpread('article.imageNote')}>this figure still loads from x.com and may stop working</span>
                                 </a>
                               )}
                               {img.altText && !isCoverCaption(img.altText) && (
@@ -278,7 +280,7 @@ const jsonLd = isTakedown
                           return <p>{block.text}</p>;
                         case 'embed':
                           return (
-                            <p class="muted">
+                            <p class="muted" {...i18nSpread('article.embed')}>
                               [Embedded X post <code>{block.postId}</code>]
                             </p>
                           );
@@ -291,7 +293,7 @@ const jsonLd = isTakedown
               {
                 showBody && !document && (
                   <div class="notice">
-                    <p>The archived document for this article is not available yet.</p>
+                    <p {...i18nSpread('article.noDocument')}>The archived document for this article is not available yet.</p>
                   </div>
                 )
               }
@@ -309,7 +311,7 @@ const jsonLd = isTakedown
               }
 
               <!-- SPEC §33 — the X link is explicit and separate from our canonical. -->
-              <a class="original-link" href={article.canonical_url} target="_blank" rel="noopener noreferrer nofollow">
+              <a class="original-link" href={article.canonical_url} target="_blank" rel="noopener noreferrer nofollow" {...i18nSpread('article.viewOriginal')}>
                 ↗ View original on X
               </a>
 
@@ -323,7 +325,7 @@ const jsonLd = isTakedown
       {
         related_.length > 0 && !isTakedown && (
           <section class="board" style="margin-top:56px">
-            <h2 class="board-title">More in {article.category_name ?? 'this topic'}</h2>
+            <h2 class="board-title" {...i18nSpread('article.moreIn', { category: article.category_name ?? 'this topic' })}>More in {article.category_name ?? 'this topic'}</h2>
             <div class="grid-cards">
               {related_.map((r) => (
                 <ArticleCard article={r} />
@@ -346,12 +348,25 @@ const jsonLd = isTakedown
     Nothing is drawn for a signed-out reader. A save button that cannot save is a worse
     invitation than no button, and the header already offers sign-in.
   */}
-  <script is:inline>
+  <script is:inline define:vars={{ saveText: i18nSpread('article.save'), savedText: i18nSpread('article.saved'), lang: (function () {
+    var m = document.cookie.match(/(?:^|; )xah_lang=([^;]*)/);
+    try { return m ? decodeURIComponent(m[1]) : 'en'; } catch (e) { return 'en'; }
+  })() }}>
     (function () {
       var slots = document.querySelectorAll('[data-save-slot]');
       if (slots.length === 0) return;
       var articleId = slots[0].getAttribute('data-article-id');
       if (!articleId) return;
+
+      // SPEC §17.4 — the button text is created in the reader's language. The strings come
+      // from the same catalog the server rendered, so the script and the page cannot
+      // disagree about what the control is called.
+      function tr(attrs) {
+        return lang === 'en' ? attrs['data-i18n-en'] : (attrs['data-i18n-' + lang] || attrs['data-i18n-en']);
+      }
+      function applyI18n(el, attrs) {
+        for (var k in attrs) { if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]); }
+      }
 
       function render(state) {
         for (var i = 0; i < slots.length; i++) {
@@ -365,7 +380,8 @@ const jsonLd = isTakedown
           button.type = 'button';
           button.className = 'save-button' + (state.saved ? ' is-saved' : '');
           button.setAttribute('aria-pressed', state.saved ? 'true' : 'false');
-          button.textContent = state.saved ? '★ Saved' : '☆ Save';
+          button.textContent = state.saved ? tr(savedText) : tr(saveText);
+          applyI18n(button, state.saved ? savedText : saveText);
           button.addEventListener('click', function () {
             submit(!state.saved);
           });

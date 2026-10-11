@@ -1,0 +1,64 @@
+---
+/**
+ * SPEC §17.4 — the language switcher, in the header's top-right.
+ *
+ * ## Why these are buttons and not links
+ *
+ * The theme switch is radios and the language could have been radios too, but a language is a
+ * *choice within the page*, not a form submission — and the choice is applied by script, so
+ * there is nothing for a radio group's name to submit to. Buttons with `aria-pressed` say
+ * what they are doing: pressing one selects a language and the page changes in place.
+ *
+ * They are `<button type="button">`, never `<a>`. There is no URL per language (the choice
+ * lives in a cookie), and an anchor that does not navigate is a lie to a screen reader and
+ * breaks middle-click — the same reasoning the account slot follows.
+ *
+ * ## Why the labels are the language's own name
+ *
+ * `English`, `中文`, `日本語` — a reader looking for their language looks for the word they
+ * would write, not for the word the current interface uses for it. `ZH`/`JA` are compact but
+ * need decoding.
+ *
+ * The `data-lang-option` attribute is what `LANG_SCRIPT` binds to; the script marks the
+ * active one and persists a click. Without script every button is inert but the page is
+ * complete in English, which is the documented degradation.
+ */
+import { SITE_LANGS } from '../lib/i18n';
+import type { SiteLang } from '../lib/i18n';
+
+export interface Props {
+  /** The language the server rendered, so the control starts with the right one marked. */
+  current?: SiteLang;
+}
+
+const { current = 'en' } = Astro.props;
+
+/** The name of each language *in that language*. */
+const LABELS: Record<SiteLang, string> = {
+  en: 'English',
+  zh: '中文',
+  ja: '日本語',
+};
+
+/** Compact codes for the accessible name, where the full word would be repeated. */
+const CODES: Record<SiteLang, string> = { en: 'EN', zh: '中', ja: '日' };
+
+const LANGS: SiteLang[] = [...SITE_LANGS];
+---
+
+<div class="lang-switch" role="group" aria-label="Language">
+  {
+    LANGS.map((lang) => (
+      <button
+        type="button"
+        class:list={['lang-switch__option', { 'is-active': current === lang }]}
+        data-lang-option={lang}
+        title={LABELS[lang]}
+        aria-label={LABELS[lang]}
+        aria-pressed={current === lang ? 'true' : 'false'}
+      >
+        {CODES[lang]}
+      </button>
+    ))
+  }
+</div>

@@ -23,8 +23,23 @@ export interface Props {
 import Icon from './Icon.astro';
 import { THEME_OPTIONS } from '../lib/theme';
 import type { ThemeChoice } from '../lib/theme';
+import { TRANSLATIONS, i18nSpread, i18nAttrSpread } from '../lib/i18n';
 
 const { current = 'system' } = Astro.props;
+
+/**
+ * The theme labels, translated (SPEC §17.4).
+ *
+ * The English comes from `THEME_OPTIONS` as before; the other two are looked up from the
+ * catalog by a small map, so the two surfaces that render this control (the public header
+ * and the admin) still agree on the option list while the *words* can differ by language.
+ * The admin is not translated, so it keeps showing `THEME_OPTIONS`' labels.
+ */
+const THEME_KEYS: Record<ThemeChoice, 'theme.light' | 'theme.dark' | 'theme.system'> = {
+  light: 'theme.light',
+  dark: 'theme.dark',
+  system: 'theme.system',
+};
 
 /**
  * The three choices come from `lib/theme.ts`, not from here.
@@ -42,21 +57,37 @@ const OPTIONS = THEME_OPTIONS;
 ---
 
 <fieldset class="theme-switch">
-  <legend class="visually-hidden">Colour theme</legend>
-  <div class="theme-switch__options" role="radiogroup" aria-label="Colour theme">
+  <legend class="visually-hidden" {...i18nSpread('theme.legend')}>Colour theme</legend>
+  <div
+    class="theme-switch__options"
+    role="radiogroup"
+    aria-label="Colour theme"
+    {...i18nAttrSpread('aria-label', 'theme.legend')}
+  >
     {
-      OPTIONS.map((option) => (
-        <label class="theme-switch__option" title={option.label}>
-          <input
-            type="radio"
-            name="theme"
-            value={option.value}
-            checked={current === option.value}
-            aria-label={option.label}
-          />
-          <Icon name={option.icon} size={15} class="theme-switch__icon" />
-        </label>
-      ))
+      OPTIONS.map((option) => {
+        const key = THEME_KEYS[option.value];
+        return (
+          <label class="theme-switch__option" title={option.label}>
+            <input
+              type="radio"
+              name="theme"
+              value={option.value}
+              checked={current === option.value}
+              aria-label={option.label}
+              data-i18n-attr-title-key={key}
+              data-i18n-attr-title-en={TRANSLATIONS.en[key]}
+              data-i18n-attr-title-zh={TRANSLATIONS.zh[key]}
+              data-i18n-attr-title-ja={TRANSLATIONS.ja[key]}
+              data-i18n-attr-aria-label-key={key}
+              data-i18n-attr-aria-label-en={TRANSLATIONS.en[key]}
+              data-i18n-attr-aria-label-zh={TRANSLATIONS.zh[key]}
+              data-i18n-attr-aria-label-ja={TRANSLATIONS.ja[key]}
+            />
+            <Icon name={option.icon} size={15} class="theme-switch__icon" />
+          </label>
+        );
+      })
     }
   </div>
 </fieldset>

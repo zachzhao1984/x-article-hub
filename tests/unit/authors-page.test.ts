@@ -140,7 +140,7 @@ describe('/authors', () => {
   it('is in the navigation, which is what the tab was for', () => {
     // Before this, `/author/*` was reachable only from a card's byline — you had to
     // already know whose name to look for.
-    expect(header).toMatch(/\{ href: '\/authors', label: 'Authors', icon: 'users' \}/);
+    expect(header).toMatch(/\{ href: '\/authors', [^}]*icon: 'users'[^}]*\}/);
     // The label matches the route so the active state works: `isActive` matches path
     // prefixes, and a label pointing somewhere else would highlight the wrong tab.
     expect(header).toMatch(/isActive = \(href: string\)/);

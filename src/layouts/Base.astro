@@ -15,6 +15,8 @@ export interface Props {
 import { env } from 'cloudflare:workers';
 import { MANIFEST_HREF, SITE_ICONS, THEME_COLOR } from '../config/icons';
 import { THEME_BODY_SCRIPT, THEME_HEAD_SCRIPT } from '../lib/theme';
+import { LANG_SCRIPT, LANG_COOKIE, SITE_LANGS } from '../lib/i18n';
+import type { SiteLang } from '../lib/i18n';
 
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
 const ORIGIN = ((env.SITE_ORIGIN as string) || 'https://x-article-hub.workers.dev').replace(/\/+$/, '');
@@ -27,6 +29,13 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
 ---
 
 <!doctype html>
+<!--
+  SPEC §17.4 — `lang="en"`, always the default and never the reader's choice. SPEC §23 caches
+  these pages at the edge without varying on cookies, so a tag written from the cookie would
+  be the first reader's language and wrong for everybody after them. `LANG_SCRIPT` corrects it
+  in the browser before first paint, so a cached copy served to a reader of another language
+  is still announced correctly by a screen reader.
+-->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -91,5 +100,13 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
       the highlight and left the page light until a reload.
     */}
     <script is:inline set:html={THEME_BODY_SCRIPT} />
+    {/*
+      SPEC §17.4 — applies the reader's language.
+
+      Same placement and same reason as the theme script above: inline, in the body, so it
+      runs before the first paint rather than after it. Shared with any surface that renders
+      its own HTML, from `lib/i18n.ts`.
+    */}
+    <script is:inline set:html={LANG_SCRIPT} />
   </body>
 </html>

@@ -24,6 +24,7 @@ import { env } from 'cloudflare:workers';
 import Base from '../layouts/Base.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import { listAuthors } from '../db/public';
+import { i18nSpread } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 
@@ -50,11 +51,11 @@ const labelFor = (author: { display_name: string | null; username: string }) =>
 <Base title="Authors" description={description} path="/authors">
   <SiteHeader>
     <header class="hero">
-      <h1>Authors</h1>
+      <h1 {...i18nSpread('authors.title')}>Authors</h1>
       <p class="hero-sub">
         {
           authors.length === 0
-            ? 'Nobody has published here yet.'
+            ? <span {...i18nSpread('authors.heroSub')}>The people behind the articles in this archive.</span>
             : `${authors.length} author${authors.length === 1 ? '' : 's'} · ${totalArticles} article${totalArticles === 1 ? '' : 's'} archived`
         }
       </p>
@@ -62,7 +63,7 @@ const labelFor = (author: { display_name: string | null; username: string }) =>
 
     {
       authors.length === 0 ? (
-        <p class="empty-state">No authors yet — the archive is empty.</p>
+        <p class="empty-state" {...i18nSpread('authors.empty')}>No authors yet — the archive is empty.</p>
       ) : (
         <ul class="author-grid">
           {authors.map((author) => (

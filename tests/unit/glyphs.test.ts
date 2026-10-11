@@ -59,7 +59,10 @@ function ruleFor(selector: string): string | undefined {
 function navIcons(): Array<{ href: string; label: string; icon: string }> {
   return [
     ...header.matchAll(
-      /\{ href: '([^']+)', label: (?:'([^']*)'|"([^"]*)"), icon: '([^']+)' \}/g,
+      // `key` is optional and trailing: the entry gained an i18n key when the interface
+      // became multilingual (SPEC §17.4), and a scanner that broke on a new field would
+      // report every nav glyph as orphaned rather than failing where the change was.
+      /\{ href: '([^']+)', label: (?:'([^']*)'|"([^"]*)"), icon: '([^']+)'(?:, key: '[^']*')? \}/g,
     ),
   ].map((m) => ({
     href: m[1] ?? '',
@@ -145,7 +148,10 @@ describe('the glyph set', () => {
     // destination is linked at all.
     expect(header).toMatch(/<form class="search-mini" action="\/search"/);
     // About is in the footer, which is on every page.
-    expect(header).toMatch(/<a href="\/about">About<\/a>/);
+      // About is in the footer, which is on every page. The link carries i18n attributes
+      // now (SPEC §17.4), so the assertion is on the href and the English text rather than
+      // on the exact tag — those attributes are what the language switcher reads.
+      expect(header).toMatch(/<a href="\/about"[^>]*>About<\/a>/);
   });
 
   it('gives each board a distinct glyph, since they order by different things', () => {

@@ -4,6 +4,7 @@ import { env } from 'cloudflare:workers';
 import Base from '../layouts/Base.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import { homepageCounts } from '../db/public';
+import { i18nSpread } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 const counts = await homepageCounts(db);
@@ -16,42 +17,48 @@ const counts = await homepageCounts(db);
 >
   <SiteHeader>
     <article class="prose">
-      <h1>About</h1>
+      <h1 {...i18nSpread('about.title')}>About</h1>
 
       <p>
-        X Article Hub is an archive of long-form posts from X, chosen by a human and organized by
-        machines. It is currently holding <strong>{counts.total}</strong> published article{counts.total === 1 ? '' : 's'}.
+        <span {...i18nSpread('about.intro')}>
+          X Article Hub is an archive of long-form posts from X, chosen by a human and organized by
+          machines. It is currently holding
+        </span> <strong>{counts.total}</strong>{' '}
+        <span {...i18nSpread('about.introCount')}>published articles.</span>
       </p>
 
-      <h2>How an article gets here</h2>
+      <h2 {...i18nSpread('about.how')}>How an article gets here</h2>
       <ol>
-        <li>An editor pastes an X Article URL into the <a href="/admin/import">importer</a>.</li>
-        <li>The URL is normalized and de-duplicated by its canonical form.</li>
-        <li>A crawl job fetches the rendered page and archives the raw HTML and Markdown.</li>
-        <li>A parser converts that into a structured document, preserving the author's structure.</li>
-        <li>AI produces a summary, a suggested category and tags — all treated as suggestions.</li>
-        <li>An editor reviews, overrides what it disagrees with, and publishes.</li>
+        <li>
+          <span {...i18nSpread('about.step1')}>An editor pastes an X Article URL into the</span>{' '}
+          <a href="/admin/import" {...i18nSpread('about.importer')}>importer</a>.
+        </li>
+        <li {...i18nSpread('about.step2')}>The URL is normalized and de-duplicated by its canonical form.</li>
+        <li {...i18nSpread('about.step3')}>A crawl job fetches the rendered page and archives the raw HTML and Markdown.</li>
+        <li {...i18nSpread('about.step4')}>A parser converts that into a structured document, preserving the author's structure.</li>
+        <li {...i18nSpread('about.step5')}>AI produces a summary, a suggested category and tags — all treated as suggestions.</li>
+        <li {...i18nSpread('about.step6')}>An editor reviews, overrides what it disagrees with, and publishes.</li>
       </ol>
 
-      <h2>How articles are ranked</h2>
-      <p>
+      <h2 {...i18nSpread('about.rank')}>How articles are ranked</h2>
+      <p {...i18nSpread('about.rankIntro')}>
         Four signals are kept separate and blended with configurable weights, so no single number
         decides what you see:
       </p>
       <ul>
-        <li><strong>Popularity</strong> — log-compressed likes, reposts, replies, quotes, bookmarks and views.</li>
-        <li><strong>Velocity</strong> — how fast engagement is arriving, averaged over 1h, 6h and 24h windows.</li>
-        <li><strong>Quality</strong> — an AI assessment that can inform ranking but never publishes anything.</li>
-        <li><strong>Editor score</strong> — a human override.</li>
+        <li {...i18nSpread('about.rankPopularity')}><strong>Popularity</strong> — log-compressed likes, reposts, replies, quotes, bookmarks and views.</li>
+        <li {...i18nSpread('about.rankVelocity')}><strong>Velocity</strong> — how fast engagement is arriving, averaged over 1h, 6h and 24h windows.</li>
+        <li {...i18nSpread('about.rankQuality')}><strong>Quality</strong> — an AI assessment that can inform ranking but never publishes anything.</li>
+        <li {...i18nSpread('about.rankEditor')}><strong>Editor score</strong> — a human override.</li>
       </ul>
-      <p>
+      <p {...i18nSpread('about.rankOutro')}>
         <a href="/trending">Trending</a> uses the blend. <a href="/latest">Latest</a> is strictly chronological.
         Editor's Picks are a human decision and are not a ranking. <a href="/authors">Authors</a> is every writer
         in the archive, most prolific first.
       </p>
 
-      <h2>Content and rights</h2>
-      <p>
+      <h2 {...i18nSpread('about.rights')}>Content and rights</h2>
+      <p {...i18nSpread('about.rightsBody')}>
         Articles here are archived copies of work written by other people. Each reading page links
         back to the original. Some articles are shown as an excerpt or as a link only, depending on
         the editorial and rights decision recorded for that article — archived does not automatically
@@ -59,8 +66,8 @@ const counts = await homepageCounts(db);
         rather than pretending the link never existed.
       </p>
 
-      <h2>Built on Cloudflare</h2>
-      <p>
+      <h2 {...i18nSpread('about.built')}>Built on Cloudflare</h2>
+      <p {...i18nSpread('about.builtBody')}>
         Workers, D1, R2, Queues, Browser Run and Workers AI. No external search cluster, no
         self-hosted browser fleet, no separate VPS.
       </p>

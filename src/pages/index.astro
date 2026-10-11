@@ -10,6 +10,7 @@ import {
   listPublishedArticles,
   listTagsWithCounts,
 } from '../db/public';
+import { i18nSpread } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 
@@ -51,20 +52,23 @@ const empty = counts.total === 0;
 >
   <SiteHeader>
     <section class="hero">
-      <h1>X Article</h1>
-      <p class="hero-sub">Editor's Pick</p>
+      <h1 {...i18nSpread('home.eyebrow')}>X Article</h1>
+      <p class="hero-sub" {...i18nSpread('home.pickSub')}>Editor's Pick</p>
       <p class="hero-meta">
-        {counts.total} article{counts.total === 1 ? '' : 's'} · curated by hand, archived and ranked by machine
+        {counts.total} <span {...i18nSpread('home.countSuffix')}>· curated by hand, archived and ranked by machine</span>
       </p>
     </section>
 
     {
       empty ? (
         <div class="empty-state">
-          <h2>No published articles yet</h2>
+          <h2 {...i18nSpread('home.noArticles')}>No published articles yet</h2>
           <p>
-            Articles appear here after an editor publishes them. Paste X Article URLs in the
-            <a href="/admin/import">admin importer</a> to start the pipeline.
+            <span {...i18nSpread('home.noArticlesBody')}>
+              Articles appear here after an editor publishes them. Paste X Article URLs in the
+            </span>{' '}
+            <a href="/admin/import" {...i18nSpread('home.importer')}>admin importer</a>{' '}
+            <span {...i18nSpread('home.startPipeline')}>to start the pipeline.</span>
           </p>
           <pre><code>https://x.com/username/article/1234567890</code></pre>
         </div>
@@ -73,8 +77,8 @@ const empty = counts.total === 0;
           {featured.length > 0 && (
             <section class="board">
               <div class="board-head">
-                <h2 class="board-title">Editor's Pick</h2>
-                <a class="board-more" href="/featured">All picks →</a>
+                <h2 class="board-title" {...i18nSpread('home.pick')}>Editor's Pick</h2>
+                <a class="board-more" href="/featured" {...i18nSpread('home.allPicks')}>All picks →</a>
               </div>
               <div class="grid-cards">
                 {featured.map((a) => (
@@ -108,9 +112,9 @@ const empty = counts.total === 0;
                 <section class="board">
                   <div class="board-head">
                     <h2 class="board-title">
-                      <Icon name="fire" size={17} class="board-icon" /> Trending
+                      <Icon name="fire" size={17} class="board-icon" /> <span {...i18nSpread('home.trending')}>Trending</span>
                     </h2>
-                    <a class="board-more" href="/trending">All trending →</a>
+                    <a class="board-more" href="/trending" {...i18nSpread('home.allTrending')}>All trending →</a>
                   </div>
                   <ol class="ranked-list">
                     {trending.map((a, i) => (
@@ -126,9 +130,9 @@ const empty = counts.total === 0;
                 <section class="board">
                   <div class="board-head">
                     <h2 class="board-title">
-                      <Icon name="clock" size={17} class="board-icon" /> Latest
+                      <Icon name="clock" size={17} class="board-icon" /> <span {...i18nSpread('home.latest')}>Latest</span>
                     </h2>
-                    <a class="board-more" href="/latest">All latest →</a>
+                    <a class="board-more" href="/latest" {...i18nSpread('home.allLatest')}>All latest →</a>
                   </div>
                   <ol class="ranked-list">
                     {latest.map((a) => (
@@ -143,7 +147,7 @@ const empty = counts.total === 0;
 
           {tags.length > 0 && (
             <section class="board">
-              <h2 class="board-title">Popular tags</h2>
+              <h2 class="board-title" {...i18nSpread('home.popularTags')}>Popular tags</h2>
               <div class="tag-cloud">
                 {tags.map((t) => (
                   <a class="tag" href={`/tag/${t.slug}`}>

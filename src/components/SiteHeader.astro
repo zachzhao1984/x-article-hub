@@ -4,8 +4,11 @@
 import { listCategoriesWithCounts } from '../db/public';
 import { env } from 'cloudflare:workers';
 import ThemeSwitch from './ThemeSwitch.astro';
+import LangSwitch from './LangSwitch.astro';
 import Icon from './Icon.astro';
 import type { IconName } from '../icons/phosphor';
+import { LANG_COOKIE, SITE_LANGS, i18nSpread, TRANSLATIONS } from '../lib/i18n';
+import type { SiteLang, TranslationKey } from '../lib/i18n';
 
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
 
@@ -26,6 +29,18 @@ const theme = (() => {
 })();
 
 const path = Astro.url.pathname;
+
+/**
+ * SPEC §17.4 — the reader's language, read from the same cookie `LANG_SCRIPT` writes, so the
+ * switcher renders already holding the right option.
+ *
+ * Validated rather than trusted, like the theme value below it: it is a cookie the client
+ * controls, so anything that is not one of the three languages is treated as no choice.
+ */
+const lang: SiteLang = (() => {
+  const raw = Astro.cookies.get(LANG_COOKIE)?.value;
+  return (SITE_LANGS as readonly string[]).includes(raw ?? '') ? (raw as SiteLang) : 'en';
+})();
 
 /**
  * Home, plus the three boards of SPEC §15, plus Authors. Not the seven entries this used
@@ -62,12 +77,12 @@ const path = Astro.url.pathname;
  * Typed as `IconName` rather than `string` so a typo or an icon that was never
  * vendored fails the build instead of rendering an empty box next to a label.
  */
-const nav: Array<{ href: string; label: string; icon: IconName }> = [
-  { href: '/', label: 'Home', icon: 'house' },
-  { href: '/featured', label: 'Featured', icon: 'star' },
-  { href: '/latest', label: 'Latest', icon: 'clock' },
-  { href: '/trending', label: 'Trending', icon: 'fire' },
-  { href: '/authors', label: 'Authors', icon: 'users' },
+const nav: Array<{ href: string; label: string; icon: IconName; key: TranslationKey }> = [
+  { href: '/', label: 'Home', icon: 'house', key: 'nav.home' },
+  { href: '/featured', label: 'Featured', icon: 'star', key: 'nav.featured' },
+  { href: '/latest', label: 'Latest', icon: 'clock', key: 'nav.latest' },
+  { href: '/trending', label: 'Trending', icon: 'fire', key: 'nav.trending' },
+  { href: '/authors', label: 'Authors', icon: 'users', key: 'nav.authors' },
 ];
 
 const categories = await listCategoriesWithCounts(env.DB as unknown as D1Database);
@@ -103,20 +118,33 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
       <span class="logo-text">{SITE_NAME}</span>
     </a>
 
-    <nav class="nav" aria-label="Primary">
+    <nav class="nav" aria-label="Primary" {...i18nSpread('nav.primary')}>
       {
         nav.map((item) => (
           <a href={item.href} class:list={['nav-item', { active: isActive(item.href) }]}>
             <Icon name={item.icon} size={18} class="nav-icon" />
-            {item.label}
+            <span {...i18nSpread(item.key)}>{item.label}</span>
           </a>
         ))
       }
     </nav>
 
     <form class="search-mini" action="/search" method="get" role="search">
-      <input type="search" name="q" placeholder="Search articles" aria-label="Search articles" />
+      <input
+        type="search"
+        name="q"
+        placeholder="Search articles"
+        aria-label="Search articles"
+        data-i18n-placeholder-key="header.search.placeholder"
+        data-i18n-placeholder-zh={TRANSLATIONS.zh['header.search.placeholder']}
+        data-i18n-placeholder-ja={TRANSLATIONS.ja['header.search.placeholder']}
+        data-i18n-aria-key="header.search.label"
+        data-i18n-aria-zh={TRANSLATIONS.zh['header.search.label']}
+        data-i18n-aria-ja={TRANSLATIONS.ja['header.search.label']}
+      />
     </form>
+
+    <LangSwitch current={lang} />
 
     <ThemeSwitch current={theme} />
 
@@ -148,14 +176,36 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
       server-rendered, so signing in and out never depends on this script.
     */}
     <span class="auth-slot" data-auth-slot>
-      <a class="nav-item auth-link" href="/account">Sign in</a>
+      <a class="nav-item auth-link" href="/account" {...i18nSpread('header.signIn')}>Sign in</a>
     </span>
   </div>
 
-  <script is:inline>
+  <script is:inline define:vars={{ authText: {
+    accountMenu: TRANSLATIONS.en['header.accountMenu'],
+    accountMenuNamed: TRANSLATIONS.en['header.accountMenuNamed'],
+    saved: TRANSLATIONS.en['header.menu.saved'],
+    account: TRANSLATIONS.en['header.menu.account'],
+    admin: TRANSLATIONS.en['header.menu.admin'],
+  }, authI18n: {
+    saved: i18nSpread('header.menu.saved'),
+    account: i18nSpread('header.menu.account'),
+    admin: i18nSpread('header.menu.admin'),
+    accountMenu: i18nSpread('header.accountMenu'),
+  }, lang: lang }}>
     (function () {
       var slot = document.querySelector('[data-auth-slot]');
       if (!slot) return;
+      // SPEC §17.4 — the menu items are created in the reader's language. The three labels
+      // come from the same catalog the server rendered, so the script and the markup cannot
+      // disagree about what a menu item is called.
+      function tr(key) {
+        var el = authI18n[key];
+        return lang === 'en' ? el['data-i18n-en'] : (el['data-i18n-' + lang] || el['data-i18n-en']);
+      }
+      function applyI18n(el, key) {
+        var attrs = authI18n[key];
+        for (var k in attrs) { if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]); }
+      }
       fetch('/auth/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
         .then(function (res) {
           return res.ok ? res.json() : null;
@@ -178,7 +228,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
           button.className = 'nav-item auth-link auth-trigger';
           // Never displayed, and still required: the visible content is an image with an
           // empty alt, so this is the control's only accessible name.
-          button.setAttribute('aria-label', name ? 'Account menu: ' + name : 'Account menu');
+          button.setAttribute('aria-label', name ? tr('accountMenuNamed').replace('{name}', name) : tr('accountMenu'));
           button.setAttribute('aria-haspopup', 'true');
           button.setAttribute('aria-expanded', 'false');
 
@@ -210,12 +260,14 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
           var savedLink = document.createElement('a');
           savedLink.className = 'auth-menu-item';
           savedLink.href = '/saved';
-          savedLink.textContent = 'Saved';
+          savedLink.textContent = tr('saved');
+          applyI18n(savedLink, 'saved');
 
           var accountLink = document.createElement('a');
           accountLink.className = 'auth-menu-item';
           accountLink.href = '/account';
-          accountLink.textContent = 'Account';
+          accountLink.textContent = tr('account');
+          applyI18n(accountLink, 'account');
 
           /*
             SPEC §16 — the admin entry, for an account that has the role.
@@ -234,7 +286,8 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
             var adminLink = document.createElement('a');
             adminLink.className = 'auth-menu-item auth-menu-item-admin';
             adminLink.href = '/admin';
-            adminLink.textContent = 'Admin';
+            adminLink.textContent = tr('admin');
+            applyI18n(adminLink, 'admin');
             menu.appendChild(adminLink);
           }
 
@@ -275,7 +328,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     })();
   </script>
 
-  <div class="wrap category-bar" aria-label="Categories">
+  <div class="wrap category-bar" aria-label="Categories" {...i18nSpread('nav.categories')}>
     {
       categories.map(
         (c) => (
@@ -296,13 +349,13 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 <footer class="site-footer">
   <div class="wrap footer-inner">
     <p>
-      {SITE_NAME} — human-curated X Articles, archived and indexed on Cloudflare.
+      {SITE_NAME} — <span {...i18nSpread('footer.tagline')}>human-curated X Articles, archived and indexed on Cloudflare.</span>
     </p>
     <p class="footer-links">
-      <a href="/about">About</a>
-      <a href="/feed.xml">RSS</a>
-      <a href="/sitemap.xml">Sitemap</a>
-      <a href="/admin">Admin</a>
+      <a href="/about" {...i18nSpread('footer.about')}>About</a>
+      <a href="/feed.xml" {...i18nSpread('footer.rss')}>RSS</a>
+      <a href="/sitemap.xml" {...i18nSpread('footer.sitemap')}>Sitemap</a>
+      <a href="/admin" {...i18nSpread('footer.admin')}>Admin</a>
     </p>
   </div>
 </footer>

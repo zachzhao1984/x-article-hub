@@ -5,6 +5,7 @@ import Base from '../../layouts/Base.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import { listPublishedArticles } from '../../db/public';
+import { i18nSpread } from '../../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 const { slug = '' } = Astro.params;
@@ -30,7 +31,7 @@ const articles = await listPublishedArticles(db, { tagSlug: slug, limit: PER_PAG
 >
   <SiteHeader>
     <header class="hero">
-      <h1>Tag</h1>
+      <h1 {...i18nSpread('tag.heading')}>Tag</h1>
       <p class="hero-sub">#{tag.name}</p>
     </header>
 
@@ -38,7 +39,7 @@ const articles = await listPublishedArticles(db, { tagSlug: slug, limit: PER_PAG
       articles.length === 0 ? (
         <div class="empty-state">
           <h2>Nothing tagged #{tag.name} yet</h2>
-          <p>Tags are assigned during AI enrichment.</p>
+          <p {...i18nSpread('tag.emptyBody')}>Tags are assigned during AI enrichment.</p>
         </div>
       ) : (
         <div class="grid-cards">
@@ -52,9 +53,9 @@ const articles = await listPublishedArticles(db, { tagSlug: slug, limit: PER_PAG
     {
       articles.length === PER_PAGE && (
         <nav class="pager">
-          {page > 1 ? <a href={`?page=${page - 1}`}>← Newer</a> : <span />}
-          <span class="muted">Page {page}</span>
-          <a href={`?page=${page + 1}`}>Older →</a>
+          {page > 1 ? <a href={`?page=${page - 1}`} {...i18nSpread('board.newer')}>← Newer</a> : <span />}
+          <span class="muted" {...i18nSpread('board.page', { page })}>Page {page}</span>
+          <a href={`?page=${page + 1}`} {...i18nSpread('board.older')}>Older →</a>
         </nav>
       )
     }

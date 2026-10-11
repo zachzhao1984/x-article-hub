@@ -154,9 +154,12 @@ describe('the account menu', () => {
 
   it('lists Saved and Account, as links', () => {
     expect(header).toMatch(/savedLink\.href = '\/saved'/);
-    expect(header).toMatch(/savedLink\.textContent = 'Saved'/);
+    // The labels come from the translation catalog now (SPEC §17.4), so the assertion is
+    // that the item is *labelled from the catalog* rather than carrying a literal — a
+    // hardcoded 'Saved' here would show the wrong language to a reader who chose another.
+    expect(header).toMatch(/savedLink\.textContent = tr\('saved'\)/);
     expect(header).toMatch(/accountLink\.href = '\/account'/);
-    expect(header).toMatch(/accountLink\.textContent = 'Account'/);
+    expect(header).toMatch(/accountLink\.textContent = tr\('account'\)/);
   });
 
   it('can be closed by keyboard, not only by mouse', () => {
@@ -169,7 +172,7 @@ describe('the account menu', () => {
     // request — the menu is built from a response that already carries it.
     expect(header).toMatch(/if \(body\.user\.role === 'admin'\)/);
     expect(header).toMatch(/adminLink\.href = '\/admin'/);
-    expect(header).toMatch(/adminLink\.textContent = 'Admin'/);
+    expect(header).toMatch(/adminLink\.textContent = tr\('admin'\)/);
   });
 
   it('is a display decision, not the thing that protects /admin', () => {

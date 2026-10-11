@@ -6,6 +6,7 @@ import Base from '../layouts/Base.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import ArticleCard from '../components/ArticleCard.astro';
 import { listPublishedArticles, type PublicSort } from '../db/public';
+import { i18nSpread } from '../lib/i18n';
 
 export interface Props {
   sort: PublicSort;
@@ -39,10 +40,11 @@ const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
     {
       articles.length === 0 ? (
         <div class="empty-state">
-          <h2>Nothing here yet</h2>
+          <h2 {...i18nSpread('board.empty')}>Nothing here yet</h2>
           <p>
-            No published articles match this board. Import and publish some from the{' '}
-            <a href="/admin">admin</a>, or check <a href="/latest">Latest</a>.
+            <span {...i18nSpread('board.emptyBody')}>No published articles match this board. Import and publish some from the</span>{' '}
+            <a href="/admin" {...i18nSpread('board.admin')}>admin</a>
+            <span {...i18nSpread('board.orCheck')}>, or check</span> <a href="/latest" {...i18nSpread('board.latest')}>Latest</a>.
           </p>
         </div>
       ) : (
@@ -55,9 +57,9 @@ const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
 
           {(prevHref || nextHref) && (
             <nav class="pager">
-              {prevHref ? <a href={prevHref}>← Newer</a> : <span />}
-              <span class="muted">Page {page}</span>
-              {nextHref ? <a href={nextHref}>Older →</a> : <span />}
+              {prevHref ? <a href={prevHref} {...i18nSpread('board.newer')}>← Newer</a> : <span />}
+              <span class="muted" {...i18nSpread('board.page', { page })}>Page {page}</span>
+              {nextHref ? <a href={nextHref} {...i18nSpread('board.older')}>Older →</a> : <span />}
             </nav>
           )}
         </>

@@ -11,12 +11,13 @@
 // article page has a Feature button — and it is the same condition the homepage's pick
 // row is under.
 import BoardPage from '../components/BoardPage.astro';
+import { i18nSpread } from '../lib/i18n';
 ---
 
 <BoardPage
   sort="featured"
-  heading="Editor's Pick"
-  lede="What an editor flagged, newest first."
+  heading={<span {...i18nSpread('home.pick')}>Editor's Pick</span>}
+  lede={<span {...i18nSpread('featured.lede')}>What an editor flagged, newest first.</span>}
   path="/featured"
   description="The X Articles an editor has flagged as worth coming back to."
 />

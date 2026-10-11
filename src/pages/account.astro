@@ -17,6 +17,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 import { configuredProviders, safeRedirectPath } from '../lib/oauth';
 import { listIdentities } from '../db/users';
 import { resolveSession, touchSession } from '../lib/user-session';
+import { i18nSpread, TRANSLATIONS } from '../lib/i18n';
+import type { TranslationKey } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 const now = Date.now();
@@ -27,22 +29,25 @@ const now = Date.now();
  * and matched against a fixed set rather than echoed, so a crafted `?error=…` cannot put
  * arbitrary text on the page.
  */
-const FAILURES: Record<string, string> = {
-  cancelled: 'Sign-in was cancelled, so nothing changed.',
-  declined: 'The provider declined the sign-in request.',
-  'not-configured': 'That sign-in method is not configured on this deployment.',
-  'unknown-provider': 'That sign-in method does not exist.',
-  incomplete: 'The provider sent back an incomplete response. Try again.',
-  state:
-    'That sign-in link could not be verified. It is single-use and expires after ten minutes, so starting again is the fix.',
-  oauth_token_exchange_failed: 'The provider rejected the sign-in. This usually means the callback URL does not match the one registered with the provider.',
-  oauth_profile_failed: 'Signed in, but the provider would not return a profile. Try again in a moment.',
-  oauth_unknown_provider: 'That sign-in method does not exist.',
-  oauth_not_configured: 'That sign-in method is not configured on this deployment.',
+const FAILURES: Record<string, TranslationKey> = {
+  cancelled: 'account.err.cancelled',
+  declined: 'account.err.declined',
+  'not-configured': 'account.err.notConfigured',
+  'unknown-provider': 'account.err.unknownProvider',
+  incomplete: 'account.err.incomplete',
+  state: 'account.err.state',
+  oauth_token_exchange_failed: 'account.err.tokenExchange',
+  oauth_profile_failed: 'account.err.profile',
+  oauth_unknown_provider: 'account.err.unknownProvider',
+  oauth_not_configured: 'account.err.notConfigured',
 };
 
 const errorParam = Astro.url.searchParams.get('error');
-const errorMessage = errorParam ? (FAILURES[errorParam] ?? 'Sign-in did not complete.') : null;
+// A catalog key, never a literal: the message renders through `i18nSpread`, so a reader in
+// another language sees it translated rather than in English.
+const errorKey: TranslationKey | null = errorParam
+  ? (FAILURES[errorParam] ?? 'account.err.generic')
+  : null;
 
 /**
  * The next destination, carried through the flow by `?next=`. Only a site-relative path
@@ -67,9 +72,9 @@ const joinedLabel = (provider: string) => (provider === 'google' ? 'Google' : pr
 <Base title="Account" description="Your account, and how you sign in." path="/account">
   <SiteHeader>
     <article class="prose">
-      <h1>Account</h1>
+      <h1 {...i18nSpread('account.title')}>Account</h1>
 
-      {errorMessage && <div class="banner banner-warn" role="status">{errorMessage}</div>}
+      {errorKey && <div class="banner banner-warn" role="status" {...i18nSpread(errorKey)}>{TRANSLATIONS.en[errorKey]}</div>}
 
       {
         session ? (
@@ -81,11 +86,11 @@ const joinedLabel = (provider: string) => (provider === 'google' ? 'Google' : pr
               <div>
                 <p class="account-name">{session.user.display_name}</p>
                 {session.user.email && <p class="account-email">{session.user.email}</p>}
-                {session.user.role === 'admin' && <p class="pill pill-featured">admin</p>}
+                {session.user.role === 'admin' && <p class="pill pill-featured" {...i18nSpread('account.adminRole')}>admin</p>}
               </div>
             </div>
 
-            <h2>Connected accounts</h2>
+            <h2 {...i18nSpread('account.connected')}>Connected accounts</h2>
             <ul class="account-idents">
               {identities.map((identity) => (
                 <li>
@@ -94,33 +99,37 @@ const joinedLabel = (provider: string) => (provider === 'google' ? 'Google' : pr
                 </li>
               ))}
             </ul>
-            <p class="lede">
+            <p class="lede" {...i18nSpread('account.identityNote')}>
               Identity here is keyed on the id Google assigned when the account was created, not on your email
               address. Google lets an account holder change that address, so keying on it would hand whoever
               holds it next the identity — the address belongs to you, the id does not move.
             </p>
 
             <form method="post" action="/auth/logout">
-              <button type="submit" class="btn">Sign out</button>
+              <button type="submit" class="btn" {...i18nSpread('account.signOut')}>Sign out</button>
             </form>
           </section>
         ) : providers.length > 0 ? (
           <section class="account">
-            <h2>Sign in</h2>
-            <p class="lede">
+            <h2 {...i18nSpread('account.signIn')}>Sign in</h2>
+            <p class="lede" {...i18nSpread('account.signInNote')}>
               An account exists so there is something for a future feature to belong to. Nothing about
               reading, archiving or searching the site changes when you sign in.
             </p>
             <ul class="account-providers">
               {providers.map((provider) => (
                 <li>
-                  <a class="btn btn-primary" href={`/auth/${provider.id}/start?next=${encodeURIComponent(next)}`}>
+                  <a
+                    class="btn btn-primary"
+                    href={`/auth/${provider.id}/start?next=${encodeURIComponent(next)}`}
+                    {...i18nSpread('account.continueWith', { provider: provider.label })}
+                  >
                     Continue with {provider.label}
                   </a>
                 </li>
               ))}
             </ul>
-            <p class="lede">
+            <p class="lede" {...i18nSpread('account.googleNote')}>
               Google is the only method. There is no password to choose, forget or leak, and Google hands this
               site nothing beyond what it already knows — an id it assigned once, a name, a picture, and an
               address it has verified. Your account here is keyed on the id, not the address, so changing your
@@ -129,11 +138,14 @@ const joinedLabel = (provider: string) => (provider === 'google' ? 'Google' : pr
           </section>
         ) : (
           <section class="account">
-            <h2>Sign in is not available</h2>
+            <h2 {...i18nSpread('account.unavailable')}>Sign in is not available</h2>
             <p class="lede">
-              No sign-in provider is configured on this deployment. That is a deployment setting rather than
-              a broken page: <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> have to be
-              present as secrets.
+              <span {...i18nSpread('account.unavailableNote')}>
+                No sign-in provider is configured on this deployment. That is a deployment setting rather than
+                a broken page:
+              </span>{' '}
+              <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>{' '}
+              <span {...i18nSpread('account.secretsNote')}>have to be present as secrets.</span>
             </p>
           </section>
         )

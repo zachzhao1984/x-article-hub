@@ -1,12 +1,13 @@
 ---
 // SPEC §15 — Latest: `published_at DESC`.
 import BoardPage from '../components/BoardPage.astro';
+import { i18nSpread } from '../lib/i18n';
 ---
 
 <BoardPage
   sort="latest"
-  heading="Latest"
-  lede="Everything published, newest first."
+  heading={<span {...i18nSpread('home.latest')}>Latest</span>}
+  lede={<span {...i18nSpread('latest.lede')}>Everything published, newest first.</span>}
   path="/latest"
   description="The most recently published X Articles in the archive."
 />

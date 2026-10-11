@@ -662,7 +662,7 @@ describe('SPEC §43 — the pieces this depends on', () => {
     // Still load-bearing after the name stopped being visible: it reaches the DOM as the
     // aria-label and, without an avatar, as the letter fallback. Both are untrusted strings
     // from a Google account holder.
-    const script = header.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1] ?? '';
+    const script = header.match(/<script is:inline[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? '';
     expect(script).toContain('textContent');
     expect(script).toContain('setAttribute');
     expect(script).not.toContain('innerHTML');
@@ -672,7 +672,7 @@ describe('SPEC §43 — the pieces this depends on', () => {
     // `avatar_url` is nullable and Google can return no picture. With the name gone, an
     // empty slot would leave a signed-in reader with nothing at all — the failure is
     // invisible precisely because nothing is broken.
-    const script = header.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1] ?? '';
+    const script = header.match(/<script is:inline[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? '';
     expect(script).toMatch(/else \{[\s\S]*auth-avatar-letter/);
     expect(script).toMatch(/\(name \|\| '\?'\)\.charAt\(0\)/);
 

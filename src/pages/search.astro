@@ -4,6 +4,7 @@ import { env } from 'cloudflare:workers';
 import Base from '../layouts/Base.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import { searchPublishedArticles } from '../db/public';
+import { i18nSpread, TRANSLATIONS } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 const q = (Astro.url.searchParams.get('q') ?? '').trim();
@@ -21,8 +22,8 @@ const result = q ? await searchPublishedArticles(db, q, PER_PAGE, (page - 1) * P
 >
   <SiteHeader>
     <header class="hero">
-      <h1>Search</h1>
-      <p class="hero-sub">Find anything in the archive.</p>
+      <h1 {...i18nSpread('search.title')}>Search</h1>
+      <p class="hero-sub" {...i18nSpread('search.heroSub')}>Find anything in the archive.</p>
     </header>
 
     <form class="search-form" action="/search" method="get" role="search">
@@ -32,29 +33,39 @@ const result = q ? await searchPublishedArticles(db, q, PER_PAGE, (page - 1) * P
         value={q}
         placeholder="Search titles, body text, authors and tags"
         aria-label="Search articles"
+        data-i18n-placeholder-key="search.placeholder"
+        data-i18n-placeholder-zh={TRANSLATIONS.zh['search.placeholder']}
+        data-i18n-placeholder-ja={TRANSLATIONS.ja['search.placeholder']}
+        data-i18n-aria-key="search.label"
+        data-i18n-aria-zh={TRANSLATIONS.zh['search.label']}
+        data-i18n-aria-ja={TRANSLATIONS.ja['search.label']}
         autofocus
       />
-      <button type="submit">Search</button>
+      <button type="submit" {...i18nSpread('search.submit')}>Search</button>
     </form>
 
     {
       !q ? (
         <div class="empty-state">
-          <h2>Search the archive</h2>
+          <h2 {...i18nSpread('search.emptyHeading')}>Search the archive</h2>
           <p>
-            Titles, summaries, full body text, author names and tags are all indexed. Try{' '}
-            <a href="/search?q=agents">agents</a> or <a href="/search?q=inference">inference</a>.
+            <span {...i18nSpread('search.emptyBody')}>
+              Titles, summaries, full body text, author names and tags are all indexed. Try{' '}
+            </span>
+            <a href="/search?q=agents">agents</a>{' '}
+            <span {...i18nSpread('search.or')}>or</span>{' '}
+            <a href="/search?q=inference">inference</a>.
           </p>
         </div>
       ) : result.total === 0 ? (
         <div class="empty-state">
-          <h2>No results for &ldquo;{q}&rdquo;</h2>
-          <p>Nothing matched. Try fewer or broader terms.</p>
+          <h2 {...i18nSpread('search.noResults', { q })}>No results for &ldquo;{q}&rdquo;</h2>
+          <p {...i18nSpread('search.noResultsBody')}>Nothing matched. Try fewer or broader terms.</p>
         </div>
       ) : (
         <>
           <p class="muted" style="margin:0 0 18px">
-            {result.total} result{result.total === 1 ? '' : 's'} for &ldquo;{q}&rdquo;
+            <span {...i18nSpread('search.results', { count: result.total, q })}>{result.total} result{result.total === 1 ? '' : 's'} for &ldquo;{q}&rdquo;</span>
           </p>
 
           <div style="display:flex;flex-direction:column;gap:4px">
@@ -92,12 +103,12 @@ const result = q ? await searchPublishedArticles(db, q, PER_PAGE, (page - 1) * P
           {result.items.length === PER_PAGE && (
             <nav class="pager">
               {page > 1 ? (
-                <a href={`?q=${encodeURIComponent(q)}&page=${page - 1}`}>← Previous</a>
+                <a href={`?q=${encodeURIComponent(q)}&page=${page - 1}`} {...i18nSpread('search.previous')}>← Previous</a>
               ) : (
                 <span />
               )}
-              <span class="muted">Page {page}</span>
-              <a href={`?q=${encodeURIComponent(q)}&page=${page + 1}`}>Next →</a>
+              <span class="muted" {...i18nSpread('board.page', { page })}>Page {page}</span>
+              <a href={`?q=${encodeURIComponent(q)}&page=${page + 1}`} {...i18nSpread('search.next')}>Next →</a>
             </nav>
           )}
         </>

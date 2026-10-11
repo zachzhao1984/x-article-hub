@@ -55,6 +55,8 @@ export interface Props {
 import Icon from './Icon.astro';
 import type { IconName } from '../icons/phosphor';
 import { LANGUAGE_LABELS } from '../lib/language';
+import { i18nSpread, i18nAttrSpread } from '../lib/i18n';
+import type { TranslationKey } from '../lib/i18n';
 
 const { article, rank } = Astro.props;
 const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
@@ -88,16 +90,16 @@ function compact(n: number): string {
  * place — the em-dash-per-field approach is how a null ends up rendered as zero three
  * branches later.
  */
-const metrics: Array<{ icon: IconName; label: string; value: string; title: string }> = [];
-const add = (icon: IconName, value: number | null | undefined, title: string) => {
+const metrics: Array<{ icon: IconName; label: string; value: string; title: string; key: TranslationKey }> = [];
+const add = (icon: IconName, value: number | null | undefined, title: string, key: TranslationKey) => {
   if (typeof value !== 'number') return;
-  metrics.push({ icon, label: String(value), value: compact(value), title });
+  metrics.push({ icon, label: String(value), value: compact(value), title, key });
 };
-add('eye', article.metric_views, 'Views on X');
-add('heart', article.metric_likes, 'Likes on X');
-add('repeat', article.metric_reposts, 'Reposts on X');
-add('chat-circle', article.metric_replies, 'Replies on X');
-add('bookmark', article.metric_bookmarks, 'Bookmarks on X');
+add('eye', article.metric_views, 'Views on X', 'card.views');
+add('heart', article.metric_likes, 'Likes on X', 'card.likes');
+add('repeat', article.metric_reposts, 'Reposts on X', 'card.reposts');
+add('chat-circle', article.metric_replies, 'Replies on X', 'card.replies');
+add('bookmark', article.metric_bookmarks, 'Bookmarks on X', 'card.bookmarks');
 ---
 
 <article class="card-article">
@@ -133,8 +135,8 @@ add('bookmark', article.metric_bookmarks, 'Bookmarks on X');
           {article.category_name}
         </a>
       )}
-      {article.featured === 1 && <span class="badge badge-pick">Editor's Pick</span>}
-      <span class="muted">{readingMinutes} min read</span>
+      {article.featured === 1 && <span class="badge badge-pick" {...i18nSpread('card.editorsPick')}>Editor's Pick</span>}
+      <span class="muted">{readingMinutes} <span {...i18nSpread('card.minRead')}>min read</span></span>
       {dateLabel && <time class="muted" datetime={new Date(article.published_at!).toISOString()}>{dateLabel}</time>}
     </div>
 
@@ -162,12 +164,12 @@ add('bookmark', article.metric_bookmarks, 'Bookmarks on X');
 
       {
         metrics.length > 0 && (
-          <ul class="card-metrics" aria-label="Engagement on X">
+          <ul class="card-metrics" aria-label="Engagement on X" {...i18nSpread('card.engagement')}>
             {metrics.map((m) => (
-              <li title={m.title}>
+              <li title={m.title} {...i18nAttrSpread('title', m.key)}>
                 <Icon name={m.icon} size={14} class="metric-icon" />
                 <span class="metric-value">{m.value}</span>
-                <span class="sr-only"> {m.title}</span>
+                <span class="sr-only" {...i18nSpread(m.key)}> {m.title}</span>
               </li>
             ))}
           </ul>

@@ -1515,6 +1515,61 @@ pre {
   pointer-events: none;
 }
 
+/*
+ * SPEC §17.4 — the language switcher, beside the theme control in the header.
+ *
+ * Buttons rather than radios: the choice is applied by script and there is nothing for a
+ * form to submit to, so a radio group's semantics would be a form that never posts. The same
+ * segmented-control box as the theme switch, because the two sit next to each other and a
+ * second visual language for the same kind of control would read as two different things.
+ */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+
+.lang-switch__option {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  /* The sans stack, not the serif: these render 中文 / 日本語 glyphs, and the serif face
+     falls back inconsistently for CJK across platforms. */
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--faint);
+  cursor: pointer;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.lang-switch__option:hover { color: var(--muted); }
+
+/* `.is-active` is written by LANG_SCRIPT on load and on every click, so the highlight
+   follows the applied language rather than a server-rendered guess. Without script nothing
+   is marked — the page is complete in English and the control is inert, which is the
+   documented degradation. */
+.lang-switch__option.is-active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.lang-switch__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .theme-switch__option { transition: none; }
 }
