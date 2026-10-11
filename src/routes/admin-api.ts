@@ -408,22 +408,53 @@ adminApi.post('/articles/:id/cover', async (c) => {
 /**
  * Generate covers for every article that has none, newest first.
  *
+ * ## Why this returns before the covers exist
+ *
+ * A cover takes tens of seconds of model time, and a synchronously-awaited batch of even
+ * three exceeded the point at which the edge gives up — measured: `HTTP 000` after 61
+ * seconds, with the covers generated anyway. The response was being lost, not the work.
+ *
+ * So the request answers immediately with what it is about to do, and the generation runs
+ * via `waitUntil`, which is the mechanism for exactly this: work that must outlive the
+ * response. The caller polls — `/api/admin/articles?status=…` shows the covers appearing —
+ * or simply reloads the admin list.
+ *
  * Bounded by `limit` because a model call per article costs money and time, and an operator
- * running this wants the recent articles covered rather than a request that spends the whole
- * archive in one call. Run it again to continue; done articles are skipped by the same
- * idempotency check the single-article endpoint uses.
+ * running this wants the recent articles covered rather than one request that spends the
+ * whole archive. Run it again to continue; done articles are skipped by the idempotency
+ * check in `generateCover`.
  */
-adminApi.post('/covers/generate', async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { limit?: number };
-  const limit = Number.isFinite(body.limit) ? Math.min(Math.max(Number(body.limit), 1), 50) : 10;
-  const result = await generateMissingCovers(c.env, limit);
-  log.info('ai_success', {
-    action: 'covers_generated',
-    attempted: result.attempted,
-    generated: result.generated,
-    failed: result.failed,
-  });
-  return c.json(result);
+adminApi.post('/covers/generate', (c) => {
+  const body: { limit?: number } = {};
+  // A body is optional here (the operation has a default), so a parse failure is not an
+  // error — it just means "use the default".
+  return c.req
+    .json()
+    .catch(() => ({}))
+    .then((parsed: { limit?: number }) => {
+      Object.assign(body, parsed);
+      const limit = Number.isFinite(body.limit) ? Math.min(Math.max(Number(body.limit), 1), 50) : 10;
+
+      c.executionCtx.waitUntil(
+        generateMissingCovers(c.env, limit)
+          .then((result) => {
+            log.info('ai_success', {
+              action: 'covers_generated',
+              attempted: result.attempted,
+              generated: result.generated,
+              failed: result.failed,
+            });
+          })
+          .catch((error: unknown) => {
+            log.error('ai_failed', {
+              error_code: 'COVER_BATCH_FAILED',
+              error_message: error instanceof Error ? error.message : String(error),
+            });
+          }),
+      );
+
+      return c.json({ accepted: true, limit, status: 'generating' }, 202);
+    });
 });
 
 /** SPEC §10 — per-image state, so the admin can see what is and is not archived. */

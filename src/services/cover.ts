@@ -51,6 +51,42 @@ const MAX_PROMPT_CHARS = 400;
 
 export type CoverErrorCode = 'MODEL_UNAVAILABLE' | 'EMPTY_IMAGE' | 'INVALID_IMAGE' | 'NOT_FOUND';
 
+/**
+ * How many covers are generated at once.
+ *
+ * Bounded so a fifty-article run opens a handful of model calls rather than fifty: the point
+ * is to stay under the response timeout, not to remove the limit.
+ */
+const COVER_CONCURRENCY = 5;
+
+/**
+ * Run `fn` over `items` with at most `limit` in flight.
+ *
+ * Deliberately not `Promise.all` over everything: the caller's `limit` can be 50, and firing
+ * 50 model calls at once would trade one problem (a slow sequential batch) for another
+ * (hammering the model endpoint). A worker-pool keeps the wall time near one call and the
+ * concurrency bounded.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index]!, index);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export interface CoverOutcome {
   ok: boolean;
   /** `generated` on success, `exists` when a cover was already stored. */
@@ -300,6 +336,18 @@ async function readImageBytes(response: ReadableStream<Uint8Array> | { image?: s
  * Bounded rather than "all": a model call per article costs money and time, and an operator
  * asking for this wants the recent articles to have covers, not the whole archive in one
  * request. The caller can run it again to continue.
+ *
+ * ## Why the calls run concurrently
+ *
+ * A cover takes roughly fifteen seconds of model time, so doing five of them one after
+ * another exceeds the point at which the edge gives up on the response — measured: a
+ * synchronous batch of five returned `HTTP 000` after 61 seconds even though the covers
+ * were generated. They are independent, so they run together instead, and the wall time
+ * becomes roughly one cover rather than the sum.
+ *
+ * The pool is wider than the article limit can reach (`limit` is capped at 50 by the route,
+ * which is the real bound), because these are model calls against Workers AI's own
+ * concurrency rather than the browser quota the crawler shares.
  */
 export async function generateMissingCovers(
   env: Env,
@@ -318,15 +366,18 @@ export async function generateMissingCovers(
     .bind(limit)
     .all<{ id: string }>();
 
+  const outcomes = await mapWithConcurrency(missing.results, COVER_CONCURRENCY, async (row) => ({
+    articleId: row.id,
+    outcome: await generateCover(env, row.id),
+  }));
+
   let generated = 0;
   const failures: Array<{ articleId: string; errorCode: string }> = [];
-
-  for (const row of missing.results) {
-    const outcome = await generateCover(env, row.id);
+  for (const { articleId, outcome } of outcomes) {
     if (outcome.ok) {
       if (outcome.result === 'generated') generated += 1;
     } else {
-      failures.push({ articleId: row.id, errorCode: outcome.errorCode ?? 'UNPREDICTABLE' });
+      failures.push({ articleId, errorCode: outcome.errorCode ?? 'UNPREDICTABLE' });
     }
   }
 
