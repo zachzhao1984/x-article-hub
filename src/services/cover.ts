@@ -46,9 +46,6 @@ import { sniffImageType } from './media';
  */
 export const COVER_MODEL = '@cf/black-forest-labs/flux-1-schnell';
 
-/** A title-only prompt makes a better image than a truncated body; this bounds the input. */
-const MAX_PROMPT_CHARS = 400;
-
 export type CoverErrorCode = 'MODEL_UNAVAILABLE' | 'EMPTY_IMAGE' | 'INVALID_IMAGE' | 'NOT_FOUND';
 
 /**
@@ -101,56 +98,67 @@ export interface CoverOutcome {
 interface ArticleRow {
   id: string;
   title: string | null;
-  excerpt: string | null;
-  ai_summary: string | null;
-  editor_summary: string | null;
-  author_name: string | null;
   category_name: string | null;
 }
 
 /**
- * Build the text-to-image prompt from what the article already stores.
+ * Build the text-to-image prompt from the article's category.
  *
- * Deliberately not the article body: the point of the image is to be a cover, and a prompt
- * built from several thousand words of argument produces a scene rather than a cover. The
- * title plus a summary line is what a human designer would be given.
+ * Deliberately not the article's title or body. The title was tried and the model drew it as
+ * literal text into the image (see the note below); the body would produce a scene rather
+ * than a cover. The category is the one field that names a visual register without naming
+ * anything a model would try to spell.
  *
- * Exported because the shape of this prompt is the part most likely to need tuning, and a
- * test asserting "the title reaches the model" is worth more than one asserting a string
- * literal.
+ * Exported because the prompt's wording is the part most likely to need tuning, and a test
+ * asserting the property that matters — that no title reaches the model — is worth more than
+ * one asserting a particular string literal.
  */
-export function buildCoverPrompt(article: {
-  title: string | null;
-  excerpt: string | null;
-  aiSummary: string | null;
-  editorSummary: string | null;
-  categoryName: string | null;
-}): string {
-  const subject = (article.title ?? '').trim();
-  const summary = (article.editorSummary ?? article.aiSummary ?? article.excerpt ?? '').trim();
-  const theme = (article.categoryName ?? '').trim();
+export function buildCoverPrompt(article: { categoryName: string | null }): string {
+  const category = (article.categoryName ?? '').trim();
 
-  const parts = [
-    // An editorial illustration, not a photo: it reads as a deliberate placeholder rather
-    // than pretending to be a photograph of something in the article. The composition
-    // instruction is load-bearing — the first covers generated centred the subject low in
-    // the frame with the top third empty, and the card crops to a wide strip (SPEC §15
-    // renders it `object-fit: cover`), which a centred, space-filling composition survives
-    // and a bottom-weighted one does not.
-    'A clean, modern abstract editorial illustration suitable as an article cover image.',
-    theme ? `Theme: ${theme}.` : '',
-    subject ? `Subject: ${subject}` : '',
-    summary ? `Context: ${summary}` : '',
-    'Flat vector style, bold shapes, a restrained two-to-three colour palette, the subject centred and filling the frame, no text, no words, no letters.',
-  ];
+  // The article's title is deliberately **not** put into the prompt.
+  //
+  // It was, and flux drew it as literal text into the image — the full title with its
+  // question mark, rendered as a caption, across two different prompt wordings. The title
+  // is the one field most likely to be short, quotable and punctuation-bearing, which is
+  // exactly what a diffusion model turns into type. There is no negative prompt to prevent
+  // it (flux refuses one, 5006), and no OCR in the pipeline to detect it and retry.
+  //
+  // The cover is a placeholder, so it does not need to depict the particular article — a
+  // per-category palette and motif reads as deliberate where a botched title reads as
+  // broken. This trades specificity for the property that actually matters on a card.
+  const theme = CATEGORY_THEMES[category.toLowerCase()] ?? CATEGORY_THEMES.default!;
 
-  // SPEC §13.4 — the cap is on the way in, so a long summary cannot grow the prompt without
-  // bound. Titles are short; summaries are the variable part, which is why they are last.
-  return parts
-    .filter((p) => p.length > 0)
-    .join(' ')
-    .slice(0, MAX_PROMPT_CHARS);
+  return [
+    'An abstract editorial illustration for a magazine cover, flat vector style, minimalist, bold simple geometric shapes, deep saturated colours.',
+    `Visual theme: ${theme}`,
+    // The composition instruction is load-bearing. The first covers placed the subject in a
+    // band with a large empty margin above or below it, and the card crops to a wide strip
+    // (SPEC §15 renders it `object-fit: cover`), so a vertical band loses its subject to the
+    // crop. A wide, edge-to-edge composition survives it.
+    'A wide composition that fills the entire frame, edge to edge, with no empty borders and no blank margins.',
+    // Restated and specific, because this is the property that most often fails: a cover
+    // with a misspelled caption is worse than no cover at all.
+    'Purely pictorial. Contains absolutely no text, no words, no letters, no numbers, no captions, no titles, no typography, no labels, no writing of any kind.',
+  ].join(' ');
 }
+
+/**
+ * A visual brief per top-level category.
+ *
+ * The categories are fixed (0002), so this is a small, complete map rather than a
+ * classifier: whatever an article is about, its category names the palette and the kind of
+ * shapes to draw. `default` covers the categories that exist but have no entry here, and an
+ * article with no category at all.
+ */
+const CATEGORY_THEMES: Record<string, string> = {
+  ai: 'an abstract network of connected nodes and flowing lines, blues and violets, evoking computation and pattern',
+  technology: 'an abstract arrangement of interlocking geometric circuits and blocks, teals and greys, evoking engineering',
+  business: 'an abstract upward composition of ascending bars and shapes, greens and ambers, evoking growth and markets',
+  science: 'an abstract orbital pattern of circles and ellipses, deep blues and warm highlights, evoking discovery',
+  ideas: 'an abstract layered composition of organic shapes and arcs, warm reds and creams, evoking thought and culture',
+  default: 'an abstract composition of balanced geometric shapes and flowing curves, a restrained modern palette',
+};
 
 /**
  * Generate and store a cover for one article.
@@ -187,19 +195,14 @@ export async function generateCover(env: Env, articleId: string): Promise<CoverO
     return { ok: true, result: 'exists', imageId: existing.id, r2Key: existing.r2_key };
   }
 
-  const prompt = buildCoverPrompt({
-    title: article.title,
-    excerpt: article.excerpt,
-    aiSummary: article.ai_summary,
-    editorSummary: article.editor_summary,
-    categoryName: article.category_name,
-  });
+  const prompt = buildCoverPrompt({ categoryName: article.category_name });
 
   let buffer: Uint8Array;
   try {
-    // SPEC §32 — the model's input is `prompt` and `steps` only; it decides its own output
-    // dimensions. A fixed step count keeps the cost per cover predictable, which matters
-    // when this can run once for every article in the archive.
+    // SPEC §32 — the model's input is `prompt` and `steps` only, and it is strict: sending
+    // `negative_prompt` is refused outright (5006, "Additional or unevaluated properties not
+    // allowed"), so the "no text" instruction has to live in the positive prompt and be
+    // emphatic. That is why the wording below restates it.
     const response = await env.AI.run(COVER_MODEL, { prompt, steps: 4 });
 
     buffer = await readImageBytes(response as ReadableStream<Uint8Array> | { image?: string });

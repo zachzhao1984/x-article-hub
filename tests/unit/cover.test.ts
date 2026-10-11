@@ -33,64 +33,39 @@ const schema = readdirSync(resolve('migrations'))
 const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 describe('buildCoverPrompt', () => {
-  it('puts the title and a summary into the prompt', () => {
-    // The whole point of deriving the prompt is that the image relates to the article. A
-    // prompt that dropped the title would generate something unrelated and still "work".
-    const prompt = buildCoverPrompt({
-      title: 'How LLM inference actually works',
-      excerpt: null,
-      aiSummary: null,
-      editorSummary: 'A tour of prefill and decode.',
-      categoryName: 'AI',
-    });
-    expect(prompt).toContain('How LLM inference actually works');
-    expect(prompt).toContain('A tour of prefill and decode.');
-    expect(prompt).toContain('AI');
+  it('names the category, not the article title', () => {
+    // The measured reason: given the title, flux drew it as literal text into the image —
+    // the whole title with its question mark, across two prompt wordings. The title is the
+    // field most likely to be short, quotable and punctuation-bearing, which is exactly what
+    // a diffusion model renders as type, and there is no negative prompt to stop it (flux
+    // refuses one, 5006). The category carries the theme instead.
+    const prompt = buildCoverPrompt({ categoryName: 'AI' });
+    expect(prompt.toLowerCase()).toContain('network');
+    // And the title never appears, because it is never passed.
+    expect(prompt).not.toContain('Is The Assembly');
   });
 
-  it('prefers an editor summary over the AI summary over the excerpt', () => {
-    // Most-edited wins: an editor who rewrote the summary expects that to be what the image
-    // is about, not the machine's first pass.
-    const all = buildCoverPrompt({
-      title: 'T',
-      excerpt: 'EXCERPT',
-      aiSummary: 'AI_SUMMARY',
-      editorSummary: 'EDITOR_SUMMARY',
-      categoryName: null,
-    });
-    expect(all).toContain('EDITOR_SUMMARY');
-    expect(all).not.toContain('AI_SUMMARY');
+  it('gives each top-level category its own visual brief', () => {
+    const seen = new Set(
+      ['AI', 'Technology', 'Business', 'Science', 'Ideas'].map((c) => buildCoverPrompt({ categoryName: c })),
+    );
+    expect(seen.size).toBe(5);
+  });
 
-    const ai = buildCoverPrompt({
-      title: 'T',
-      excerpt: 'EXCERPT',
-      aiSummary: 'AI_SUMMARY',
-      editorSummary: null,
-      categoryName: null,
-    });
-    expect(ai).toContain('AI_SUMMARY');
-
-    const ex = buildCoverPrompt({ title: 'T', excerpt: 'EXCERPT', aiSummary: null, editorSummary: null, categoryName: null });
-    expect(ex).toContain('EXCERPT');
+  it('falls back to a default brief when the category is unknown or absent', () => {
+    // A freshly imported article may have no category at all; the prompt still has to work.
+    const none = buildCoverPrompt({ categoryName: null });
+    const unknown = buildCoverPrompt({ categoryName: 'Astrology' });
+    expect(none.length).toBeGreaterThan(0);
+    expect(none).toBe(unknown);
   });
 
   it('always asks for no text, because a model that writes words produces garbage on a cover', () => {
-    const prompt = buildCoverPrompt({ title: 'T', excerpt: null, aiSummary: null, editorSummary: null, categoryName: null });
-    expect(prompt.toLowerCase()).toMatch(/no text|no words|no letters/);
-  });
-
-  it('caps the prompt length (SPEC §13.4)', () => {
-    // A very long summary must not grow the model input without bound.
-    const huge = 'x'.repeat(5000);
-    const prompt = buildCoverPrompt({ title: huge, excerpt: null, aiSummary: null, editorSummary: huge, categoryName: null });
-    expect(prompt.length).toBeLessThanOrEqual(400);
-  });
-
-  it('survives an article with nothing but a title', () => {
-    // A freshly imported article has no summary at all; the prompt still has to be usable.
-    const prompt = buildCoverPrompt({ title: 'Only a title', excerpt: null, aiSummary: null, editorSummary: null, categoryName: null });
-    expect(prompt.length).toBeGreaterThan(0);
-    expect(prompt).toContain('Only a title');
+    // This is the failure the whole strategy is built around, so it is asserted directly.
+    const prompt = buildCoverPrompt({ categoryName: 'AI' });
+    expect(prompt.toLowerCase()).toMatch(/no text/);
+    expect(prompt.toLowerCase()).toMatch(/no words/);
+    expect(prompt.toLowerCase()).toMatch(/no letters/);
   });
 });
 
