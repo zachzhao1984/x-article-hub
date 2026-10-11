@@ -550,7 +550,7 @@ export interface ArticleDetailView {
   media?: {
     imageId: string;
     position: number;
-    kind: 'body' | 'avatar';
+    kind: 'body' | 'avatar' | 'cover';
     status: 'ready' | 'failed' | 'external_fallback';
     contentType: string | null;
     byteSize: number | null;

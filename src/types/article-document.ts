@@ -97,6 +97,16 @@ export const R2_PATHS = {
    * its own contents is exactly the failure this parameter exists to prevent.
    */
   avatar: (articleId: string, extension: string) => `articles/${articleId}/media/avatar.${extension}`,
+  /**
+   * A generated cover for an article whose document has no body image to use.
+   *
+   * Its own name rather than a body ordinal, for the same reason `avatar` has one: it is
+   * not part of the article, so giving it a position would put it in competition with the
+   * figures the author actually inserted, and `downloadArticleMedia`'s sweep would delete
+   * it as an unclaimed object. Under `media/` it still lives inside the prefix the article
+   * owns, so SPEC §16's hard delete sweeps it with everything else.
+   */
+  cover: (articleId: string, extension: string) => `articles/${articleId}/media/cover.${extension}`,
 } as const;
 
 /** SPEC §13.4 / §12 — derive indexable plain text. Never hand raw HTML to a model or FTS. */

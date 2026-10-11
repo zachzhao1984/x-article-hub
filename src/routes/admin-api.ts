@@ -20,6 +20,7 @@ import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle, PARSER_VERSION } from '../services/parse';
 import { downloadArticleMedia, findOrphanedPrefixes, mediaSummary } from '../services/media';
 import { summarizeTeardown, teardownArchive } from '../services/teardown';
+import { generateCover, generateMissingCovers } from '../services/cover';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
 import {
   archiveArticle,
@@ -378,6 +379,51 @@ adminApi.post('/articles/:id/media', async (c) => {
   // response and in media_objects. Reporting 400 would make the admin UI treat a
   // single deleted image as a broken endpoint.
   return c.json({ articleId: id, ...outcome, summary });
+});
+
+/**
+ * Generate a cover for one article (SPEC §15).
+ *
+ * A separate endpoint from `/media` on purpose: the media run downloads figures the
+ * article already references, while this asks a model to make a new image. One is a
+ * fetch, the other is a generation, and an operator wants to trigger them for different
+ * reasons. Running this on an article that already has a body image is allowed but
+ * pointless — the card would still prefer the author's own figure — so it is not refused;
+ * the response says what happened and the caller decides.
+ *
+ * A generation that fails is a `200` with `ok: false` and the reason, not an error status,
+ * for the same reason `/media` reports partial success that way: the model being unavailable
+ * is a fact about this attempt, and the admin UI should show it rather than treat the whole
+ * request as broken.
+ */
+adminApi.post('/articles/:id/cover', async (c) => {
+  const id = c.req.param('id');
+  const outcome = await generateCover(c.env, id);
+  if (outcome.errorCode === 'NOT_FOUND') {
+    throw new AppError('NOT_FOUND', `Article not found: ${id}`, 404);
+  }
+  return c.json({ articleId: id, ...outcome });
+});
+
+/**
+ * Generate covers for every article that has none, newest first.
+ *
+ * Bounded by `limit` because a model call per article costs money and time, and an operator
+ * running this wants the recent articles covered rather than a request that spends the whole
+ * archive in one call. Run it again to continue; done articles are skipped by the same
+ * idempotency check the single-article endpoint uses.
+ */
+adminApi.post('/covers/generate', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { limit?: number };
+  const limit = Number.isFinite(body.limit) ? Math.min(Math.max(Number(body.limit), 1), 50) : 10;
+  const result = await generateMissingCovers(c.env, limit);
+  log.info('ai_success', {
+    action: 'covers_generated',
+    attempted: result.attempted,
+    generated: result.generated,
+    failed: result.failed,
+  });
+  return c.json(result);
 });
 
 /** SPEC §10 — per-image state, so the admin can see what is and is not archived. */

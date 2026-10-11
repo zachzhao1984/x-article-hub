@@ -47,9 +47,12 @@ export interface ArticleListItem {
  * The metrics subqueries take `MAX(captured_at)` because the table is a time series; an
  * earlier snapshot describes a page that no longer exists.
  *
- * `cover_image_id` takes the *first* body image by position — the figure the author put at
- * the top, which is the one that reads as a cover — and only when its bytes are in R2, so
- * the card never points at x.com.
+ * `cover_image_id` prefers the article's own first `body` image by position — the figure the
+ * author put at the top, which is the one that reads as a cover — and falls back to a
+ * generated `cover` row (0012) when the document has no body image at all. Both branches
+ * require `r2_key IS NOT NULL`, so the card never points at x.com and never points at a row
+ * whose bytes were never stored. The `CASE` keeps both alternatives in one subquery because
+ * they are the same slot; a second column would push the choice onto every caller.
  */
 const LIST_COLUMNS = `
   a.id, a.slug, a.title, a.excerpt,
@@ -59,8 +62,8 @@ const LIST_COLUMNS = `
   a.display_mode, a.featured, a.word_count,
   a.final_score, a.velocity_score, a.popularity_score, a.quality_score,
   (SELECT m.id FROM media_objects m
-    WHERE m.article_id = a.id AND m.kind = 'body' AND m.r2_key IS NOT NULL
-    ORDER BY m.position ASC LIMIT 1) AS cover_image_id,
+    WHERE m.article_id = a.id AND m.r2_key IS NOT NULL AND m.kind IN ('body', 'cover')
+    ORDER BY CASE m.kind WHEN 'body' THEN 0 ELSE 1 END, m.position ASC LIMIT 1) AS cover_image_id,
   (SELECT m2.views     FROM article_metrics m2 WHERE m2.article_id = a.id
     ORDER BY m2.captured_at DESC LIMIT 1) AS metric_views,
   (SELECT m2.likes     FROM article_metrics m2 WHERE m2.article_id = a.id

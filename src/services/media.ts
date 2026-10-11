@@ -39,7 +39,7 @@ interface MediaRow {
   id: string;
   article_id: string;
   position: number;
-  kind: 'body' | 'avatar';
+  kind: 'body' | 'avatar' | 'cover';
   source_url: string;
   r2_key: string | null;
   status: 'ready' | 'failed' | 'external_fallback';
@@ -205,16 +205,23 @@ async function reconcilePositions(env: Env, articleId: string): Promise<void> {
       WHERE article_id = ? AND r2_key IS NOT NULL`,
   )
     .bind(articleId)
-    .all<{ id: string; position: number; kind: 'body' | 'avatar'; r2_key: string; content_type: string | null }>();
+    .all<{ id: string; position: number; kind: 'body' | 'avatar' | 'cover'; r2_key: string; content_type: string | null }>();
 
   // The expected key is derived from the row's own position AND its own content
   // type, so this catches both a figure that moved and a key whose extension no
   // longer describes its bytes.
   const stale = results.filter((row) => {
+    const extension = extensionFor(row.content_type);
+    // A generated cover is not positioned in the article flow, so its key comes from its
+    // kind rather than from `position`. Without this branch the reconciler would compute
+    // `media/000.<ext>`, judge the real key stale, clear it, and sweep the bytes — silently
+    // deleting every generated cover on the next media run.
     const expected =
       row.kind === 'avatar'
-        ? R2_PATHS.avatar(articleId, extensionFor(row.content_type))
-        : R2_PATHS.media(articleId, row.position, extensionFor(row.content_type));
+        ? R2_PATHS.avatar(articleId, extension)
+        : row.kind === 'cover'
+          ? R2_PATHS.cover(articleId, extension)
+          : R2_PATHS.media(articleId, row.position, extension);
     return row.r2_key !== expected;
   });
 
@@ -616,7 +623,7 @@ function ascii(bytes: Uint8Array, start: number, length: number): string {
 export interface MediaRowView {
   imageId: string;
   position: number;
-  kind: 'body' | 'avatar';
+  kind: 'body' | 'avatar' | 'cover';
   status: 'ready' | 'failed' | 'external_fallback';
   contentType: string | null;
   byteSize: number | null;
@@ -642,7 +649,7 @@ export async function listArticleMedia(db: D1Database, articleId: string): Promi
     .all<{
       id: string;
       position: number;
-      kind: 'body' | 'avatar';
+      kind: 'body' | 'avatar' | 'cover';
       status: 'ready' | 'failed' | 'external_fallback';
       content_type: string | null;
       byte_size: number | null;

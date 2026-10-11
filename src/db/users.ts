@@ -465,8 +465,8 @@ export function listSavedArticles(db: D1Database, userId: string, limit = 100): 
               a.author_username, a.author_name,
               a.published_at,
               (SELECT m.id FROM media_objects m
-                WHERE m.article_id = a.id AND m.kind = 'body' AND m.r2_key IS NOT NULL
-                ORDER BY m.position ASC LIMIT 1) AS cover_image_id,
+                WHERE m.article_id = a.id AND m.r2_key IS NOT NULL AND m.kind IN ('body', 'cover')
+                ORDER BY CASE m.kind WHEN 'body' THEN 0 ELSE 1 END, m.position ASC LIMIT 1) AS cover_image_id,
               (SELECT m2.views     FROM article_metrics m2 WHERE m2.article_id = a.id
                 ORDER BY m2.captured_at DESC LIMIT 1) AS metric_views,
               (SELECT m2.likes     FROM article_metrics m2 WHERE m2.article_id = a.id
