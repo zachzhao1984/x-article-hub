@@ -218,6 +218,24 @@ describe('the public surfaces are wired', () => {
     }
   });
 
+  it('imports every i18n helper it uses', () => {
+    // The gap this closes: an Astro template is not typechecked by `tsc` (and `astro check` is
+    // not installed), so a helper used but not imported compiles, passes every test, deploys,
+    // and then throws `ReferenceError` on the Worker — the page rendered its <head> and
+    // stopped, which is exactly what happened with `i18nAttrSpread`.
+    for (const file of PUBLIC_SURFACES) {
+      const src = readFileSync(resolve(file), 'utf8');
+      const frontmatter = src.slice(0, src.indexOf('---', 3));
+      for (const helper of ['i18nSpread', 'i18nAttrSpread']) {
+        // A use in the markup, not in the import line.
+        const used = new RegExp(`\\.\\.\\.${helper}\\(`).test(src);
+        if (!used) continue;
+        const imported = new RegExp(`import[^;]*\\b${helper}\\b[^;]*from`).test(frontmatter);
+        expect(imported, `${file} uses ${helper} but does not import it`).toBe(true);
+      }
+    }
+  });
+
   it('does not translate the admin', () => {
     // SPEC §17.4 scopes this to the public site: the admin is a single-operator tool and its
     // strings are not translated.

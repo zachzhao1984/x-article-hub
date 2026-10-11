@@ -7,7 +7,7 @@ import ThemeSwitch from './ThemeSwitch.astro';
 import LangSwitch from './LangSwitch.astro';
 import Icon from './Icon.astro';
 import type { IconName } from '../icons/phosphor';
-import { LANG_COOKIE, SITE_LANGS, i18nSpread, TRANSLATIONS } from '../lib/i18n';
+import { LANG_COOKIE, SITE_LANGS, i18nSpread, i18nAttrSpread, TRANSLATIONS } from '../lib/i18n';
 import type { SiteLang, TranslationKey } from '../lib/i18n';
 
 const SITE_NAME = (env.SITE_NAME as string) || 'X Article Hub';
