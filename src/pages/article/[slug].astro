@@ -246,6 +246,7 @@ const jsonLd = isTakedown
                                 >
                                   Watch the video on x.com
                                 </a>
+                                {img.altText && <span>{img.altText}</span>}
                                 <span {...i18nSpread('article.videoNote')}>the recording is not archived here; this link goes to X</span>
                               </p>
                             );

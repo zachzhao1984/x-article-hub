@@ -15,6 +15,7 @@
  */
 
 import { R2_PATHS } from '../types/article-document';
+import { recoverVideoLinks } from '../parser/video';
 import type { ArticleDocument } from '../types/article-document';
 import { countWords, documentToPlainText, inlineToText } from '../types/article-document';
 import { parseMarkdownToDocument } from '../parser/markdown';
@@ -59,8 +60,9 @@ import { readRawArchive } from './crawl';
  *     makes the archive re-parse rather than serving documents the page cannot read.
  *   v8 - normalize duplicated bold delimiters and escaped punctuation from X captures,
  *     and rebuild stored link labels with emphasis markers removed.
+ *   v9 - recover original video links from HTML when Markdown conversion omits them.
  */
-export const PARSER_VERSION = 8;
+export const PARSER_VERSION = 9;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 
@@ -133,6 +135,7 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     parserVersion: PARSER_VERSION,
     capturedAt,
   });
+  recoverVideoLinks(document, archive.html ?? '');
 
   // SPEC §9.3 — the crawl's metadata is authoritative when the Markdown had none;
   // a Parser that dropped the title would be a silent data loss.
