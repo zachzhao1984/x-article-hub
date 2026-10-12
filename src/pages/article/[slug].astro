@@ -348,11 +348,20 @@ const jsonLd = isTakedown
     Nothing is drawn for a signed-out reader. A save button that cannot save is a worse
     invitation than no button, and the header already offers sign-in.
   */}
-  <script is:inline define:vars={{ saveText: i18nSpread('article.save'), savedText: i18nSpread('article.saved'), lang: (function () {
-    var m = document.cookie.match(/(?:^|; )xah_lang=([^;]*)/);
-    try { return m ? decodeURIComponent(m[1]) : 'en'; } catch (e) { return 'en'; }
-  })() }}>
+  <script is:inline define:vars={{ saveText: i18nSpread('article.save'), savedText: i18nSpread('article.saved') }}>
     (function () {
+      // SPEC §17.4 — the reader's language is read *here*, in the browser, not through
+      // `define:vars`. `define:vars` evaluates its object while rendering the page, on the
+      // server, where `document` does not exist: computing it there threw and turned every
+      // article page into a 500. Only serialisable values may cross that boundary, so the
+      // cookie is read inside the script that runs after it.
+      var lang = (function () {
+        try {
+          var m = document.cookie.match(/(?:^|; )xah_lang=([^;]*)/);
+          return m ? decodeURIComponent(m[1]) : 'en';
+        } catch (e) { return 'en'; }
+      })();
+
       var slots = document.querySelectorAll('[data-save-slot]');
       if (slots.length === 0) return;
       var articleId = slots[0].getAttribute('data-article-id');
