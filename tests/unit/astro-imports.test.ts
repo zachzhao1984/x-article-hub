@@ -112,6 +112,15 @@ describe('astro templates import what they use', () => {
       const source = readFileSync(file, 'utf8');
       const { front, template } = split(source);
       const known = declared(front);
+      // A name declared inside the template is in scope for the template — `const Tag = …`
+      // inside a `switch` case is the case that matters, and it is not in the frontmatter.
+      // Collecting bindings from both halves means the check only reports a name that appears
+      // nowhere as a declaration.
+      for (const m of (front + '\n' + template).matchAll(
+        /(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/g,
+      )) {
+        if (m[1]) known.add(m[1]);
+      }
 
         // Both halves are scanned. `tsc` processes neither — an `.astro` file is not a `.ts`
         // file it looks at — so a name missing from the frontmatter imports goes unchecked there
@@ -122,7 +131,13 @@ describe('astro templates import what they use', () => {
         // SQL fragment both look like calls otherwise.
         const strip = (t: string): string =>
           t
-            .replace(/<script[\s\S]*?<\/script>/g, '')
+            // Two forms: a self-closing `<script … />` (a JSON-LD block) and a real
+            // open/close pair. The self-closing one has to be matched on its own, or a
+            // non-greedy `</script>` runs from it to the *next* closing tag — which on the
+            // article page is far below and swallowed the entire body, hiding the component
+            // that this test exists to find.
+            .replace(/<script\b[^>]*\/>/g, '')
+            .replace(/<script\b(?:(?!<\/script>)[\s\S])*<\/script>/g, '')
             .replace(/\/\*[\s\S]*?\*\//g, '')
             .replace(/^\s*\/\/.*$/gm, '')
             .replace(/<!--[\s\S]*?-->/g, '')
@@ -132,13 +147,24 @@ describe('astro templates import what they use', () => {
 
         const markup = strip(front) + '\n' + strip(template);
 
-      // Only call-shaped identifiers: `name(`. A bare name in text is prose, and a component
-      // used as a tag is already covered because Astro resolves it from the import.
-      for (const m of markup.matchAll(/(?:^|[^\w$.])([A-Za-z_$][\w$]*)\s*\(/g)) {
-        const name = m[1];
-        if (!name || ALLOWED.has(name) || known.has(name)) continue;
-        // A member call (`a.b(`) is not this; the lookbehind above already excludes `.`.
-        problems.push(`${file.replace(resolve('.'), '.')}: ${name}(`);
+      // Two shapes, because both are how a missing import actually showed up.
+      //
+      //   1. a call — `inlineToText(first.spans)`
+      //   2. a component tag — `<InlineText spans={…} />`, which is *not* a call and was missed
+      //      by an earlier version of this test that only looked for `name(`
+      //
+      // A component in Astro is referenced by its bare identifier, so a tag is exactly as
+      // unchecked as a call. A lowercase tag is an HTML element and not in scope to import.
+      const shapes: RegExp[] = [
+        /(?:^|[^\w$.])([A-Za-z_$][\w$]*)\s*\(/g,
+        /<([A-Z][\w$]*)(?=[\s/>])/g,
+      ];
+      for (const re of shapes) {
+        for (const m of markup.matchAll(re)) {
+          const name = m[1];
+          if (!name || ALLOWED.has(name) || known.has(name)) continue;
+          problems.push(`${file.replace(resolve('.'), '.')}: ${name}`);
+        }
       }
     }
     expect(problems, `undefined identifiers:\n${problems.join('\n')}`).toEqual([]);

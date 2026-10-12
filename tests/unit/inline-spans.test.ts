@@ -41,6 +41,21 @@ function firstParagraph(md: string) {
 }
 
 describe('inline spans', () => {
+  it('handles duplicated bold delimiters from X captures', () => {
+    expect(firstParagraph('****Smoother mission progression:**** Fixed.')).toEqual([
+      { type: 'strong', text: 'Smoother mission progression:' },
+      { type: 'text', text: ' Fixed.' },
+    ]);
+  });
+
+  it('preserves escaped footnote stars inside bold prose', () => {
+    expect(firstParagraph('**\\*\\*Owners of PlayStation 4.**')).toEqual([
+      { type: 'strong', text: '**Owners of PlayStation 4.' },
+    ]);
+    expect(firstParagraph('Use `\\*literal\\*` here.')[1]).toEqual({
+      type: 'code', text: '\\*literal\\*',
+    });
+  });
   it('turns **bold** into a strong span, not literal asterisks', () => {
     const spans = firstParagraph('This is **bold** text.');
     expect(spans).toEqual([

@@ -58,7 +58,7 @@ import { readRawArchive } from './crawl';
  *     not render at all. The idempotence check keys on this version, so the bump is what
  *     makes the archive re-parse rather than serving documents the page cannot read.
  */
-export const PARSER_VERSION = 7;
+export const PARSER_VERSION = 8;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 

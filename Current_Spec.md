@@ -449,18 +449,18 @@ articles/{id}/avatar.{ext}                      头像
 
 ## 7. 解析
 
-`src/parser/markdown.ts`（420 行）+ `src/services/parse.ts`。
+`src/parser/markdown.ts` + `src/services/parse.ts`。
 
-**`PARSER_VERSION = 5`。** `parseArticle` 有幂等短路：文章已是当前版本且有 `content_r2_key` 就直接返回，所以重复触发解析不会重复消耗。
+**`PARSER_VERSION = 8`。** `parseArticle` 有幂等短路：文章已是当前版本且有 `content_r2_key` 就直接返回，所以重复触发解析不会重复消耗。版本 7 将正文字符串改为内联片段；版本 8 处理 X 捕获里的重复加粗分隔符和转义标点，并让存量文档重新解析。
 
 ### 7.1 输出的 7 种 block
 
 ```ts
 type ArticleBlock =
-  | { type: 'paragraph'; text: string }
-  | { type: 'heading'; level: 1|2|3; text: string }
-  | { type: 'quote'; text: string }
-  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'paragraph'; spans: InlineSpan[] }
+  | { type: 'heading'; level: 1|2|3; spans: InlineSpan[] }
+  | { type: 'quote'; spans: InlineSpan[] }
+  | { type: 'list'; ordered: boolean; items: InlineSpan[][] }
   | { type: 'image'; imageId: string }
   | { type: 'code'; language?: string; code: string }
   | { type: 'embed'; postId: string }
@@ -470,7 +470,7 @@ type ArticleBlock =
 
 **头像不是图。** `LINKED_IMAGE_RE` 匹配到的行，如果 href 是 profile 或 src 命中头像 CDN 模式，就被提取成 `authorChip` 而不是一张图。SPEC §9.3 说"保留作者结构"，没说要把别人的脸作为插图发在文章中间。
 
-**`links` 从不渲染。** 解析器收集了所有内联链接和裸 URL，但阅读页只用 `<p>{block.text}</p>` 渲染段落。`document.links` 的唯一消费者是 `parse.ts:231` 的一个**计数**（`link_count`）。所以文章正文里的裸 URL 是**纯文本、不可点**。
+**内联格式由片段渲染。** `InlineSpan` 支持 `text`、`strong`、`em`、`code` 和带 `href` 的 `link`，阅读页统一通过 `InlineText.astro` 渲染。Markdown 链接保持可点击；裸 URL 仍是纯文本，并被收集到 `document.links`。按用户选择，链接标签内的强调标记去除，标签不保留嵌套加粗。X 捕获中的 `****标题****` 按加粗处理；转义星号保留为作者的字面标点。`inlineToText` 为搜索、字数和摘要提取纯文本。
 
 ---
 

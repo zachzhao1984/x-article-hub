@@ -91,7 +91,16 @@ function stripEmphasis(s: string): string {
 
 function parseInline(text: string): InlineSpan[] {
   const spans: InlineSpan[] = [];
-  let rest = text;
+  // X's capture can duplicate bold delimiters (****label****). Keep code
+  // literal, and protect escaped punctuation while matching emphasis.
+  const escaped: string[] = [];
+  let rest = text.split(/(`[^`\n]+`)/).map((part, index) => index % 2 ? part : part
+    .replace(/\\([\\`*_[\]{}()#+.!>~-])/g, (_match, character: string) => {
+      escaped.push(character);
+      return `\uE000${escaped.length - 1}\uE001`;
+    })
+    .replace(/\*{4}(?=\S)([\s\S]*?\S)\*{4}/g, '**$1**')
+  ).join('');
 
   const push = (span: InlineSpan): void => {
     const last = spans[spans.length - 1];
@@ -143,7 +152,10 @@ function parseInline(text: string): InlineSpan[] {
   const lastSpan = spans[spans.length - 1];
   if (first && first.type === 'text') first.text = first.text.replace(/^\s+/, '');
   if (lastSpan && lastSpan.type === 'text') lastSpan.text = lastSpan.text.replace(/\s+$/, '');
-  return spans.filter((s) => s.text !== '');
+  return spans.filter((s) => s.text !== '').map((span) => ({
+    ...span,
+    text: span.text.replace(/\uE000(\d+)\uE001/g, (_match, index: string) => escaped[Number(index)] ?? ''),
+  }));
 }
 
 /**

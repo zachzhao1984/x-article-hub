@@ -4,6 +4,7 @@ import { env } from 'cloudflare:workers';
 import Base from '../../layouts/Base.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
+import InlineText from '../../components/InlineText.astro';
 import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from '../../db/public';
 import { readArticleDocument } from '../../services/archive';
 import { i18nSpread } from '../../lib/i18n';
