@@ -23,7 +23,7 @@ import { detectLanguage, languageSample } from '../lib/language';
 import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { newId } from '../lib/ids';
-import { getArticleById } from '../db/articles';
+import { getArticleById, setArticleStatus } from '../db/articles';
 import { writeArticleDocument } from '../services/archive';
 import { readRawArchive } from './crawl';
 
@@ -88,6 +88,11 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
   if (article.parser_version === PARSER_VERSION && article.content_r2_key) {
     const existing = await env.ARCHIVE.head(article.content_r2_key);
     if (existing) {
+      // The document is current, but the article may still be stranded at `failed` from a
+      // crawl that failed after writing its capture. Nothing else moves it, so the promotion
+      // happens here too — an idempotent no-op parse is still the moment an editor is asking
+      // for the article to be usable.
+      await promoteIfStranded(env, article);
       return {
         ok: true,
         result: 'unchanged',
@@ -247,6 +252,8 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     warnings: warnings.length,
   });
 
+  await promoteIfStranded(env, article);
+
   return {
     ok: true,
     result: article.content_r2_key ? 'reparsed' : 'parsed',
@@ -257,6 +264,48 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     warnings,
   };
 }
+
+/**
+ * Move an article out of `failed` now that it has a document.
+ *
+ * ## Why this lives in the service rather than the job handler
+ *
+ * The status belongs to the crawl, and a parse is not an editorial decision — but a crawl can
+ * fail *after* writing its capture (a `PAGE_BLOCKED` on a retry, a partial-then-complete
+ * fetch), and the article is then stranded at `failed` with a complete document in R2. Nothing
+ * else moves it: it is invisible to the editor and unreachable by every public query, so the
+ * import reads as broken for content that is already archived. Measured on production: 13 of
+ * 100 articles were in this state, and the same 13 stayed stuck when the admin's own re-parse
+ * endpoint was used, because the promotion lived in the queue handler that endpoint does not
+ * call.
+ *
+ * So it belongs here, on both success paths, where every caller gets it.
+ *
+ * ## The guard
+ *
+ * Only `failed` is promoted. `pending` and `fetching` mean a crawl is still in flight and
+ * racing it would put an article in review before its capture settled; `published`,
+ * `takedown`, `archived` and `rejected` are editorial decisions a machine step must not
+ * overwrite — the same rule `nextStatusAfterCrawl` follows. The `raw_r2_key` guard is
+ * defensive: a parse cannot reach either success path without a capture, but the condition is
+ * what makes that a property of the code rather than of the caller.
+ */
+export async function promoteIfStranded(
+  env: Env,
+  article: { id: string; status: string; raw_r2_key: string | null },
+): Promise<boolean> {
+  if (article.status !== 'failed' || !article.raw_r2_key) return false;
+
+  await setArticleStatus(env.DB, article.id, 'review');
+  log.info('publish', {
+    article_id: article.id,
+    actor: 'system:parse',
+    action: 'promoted_to_review',
+    status: 'failed',
+  });
+  return true;
+}
+
 
 /** The latest crawl version supplies the directory for the parsed document. */
 async function currentCrawlVersion(env: Env, articleId: string): Promise<number> {
