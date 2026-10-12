@@ -8,6 +8,7 @@ import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from
 import { readArticleDocument } from '../../services/archive';
 import { i18nSpread } from '../../lib/i18n';
 import type { ArticleBlock } from '../../types/article-document';
+import { inlineToText } from '../../types/article-document';
 
 const db = env.DB as unknown as D1Database;
 const bucket = env.ARCHIVE as unknown as R2Bucket;
