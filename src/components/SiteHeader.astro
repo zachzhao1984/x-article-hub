@@ -191,6 +191,11 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     account: i18nSpread('header.menu.account'),
     admin: i18nSpread('header.menu.admin'),
     accountMenu: i18nSpread('header.accountMenu'),
+    // Required by the `tr('accountMenuNamed')` call below. It was in `authText` but not here,
+    // so `tr` indexed `undefined` and threw on `['data-i18n-en']` — and the trailing `.catch`
+    // swallows errors silently, so a signed-in reader simply had no avatar and nothing
+    // anywhere said why.
+    accountMenuNamed: i18nSpread('header.accountMenuNamed'),
   }, lang: lang }}>
     (function () {
       var slot = document.querySelector('[data-auth-slot]');
@@ -321,9 +326,18 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
             if (event.key === 'Escape' && !menu.hidden) { close(); button.focus(); }
           });
         })
-        .catch(function () {
-          // Offline, or the request failed. The signed-out link is already there and
-          // still works, so there is nothing to repair and nothing worth saying.
+        .catch(function (error) {
+          // Offline, or the request failed. The signed-out link is already there and still
+          // works, so there is nothing to repair — but the error is *reported*, not swallowed.
+          //
+          // It used to be silent, and that is how a signed-in reader lost their avatar with
+          // nothing anywhere saying why: `tr('accountMenuNamed')` read a key missing from
+          // `authI18n`, threw on `undefined['data-i18n-en']`, and this handler ate it. A
+          // caught-and-ignored error in a UI upgrade path is invisible by construction, so
+          // anything that reaches here says so.
+          if (window.console && console.warn) {
+            console.warn('[auth-slot] could not render the account control:', error);
+          }
         });
     })();
   </script>
