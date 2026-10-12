@@ -595,7 +595,9 @@ featured : COALESCE(a.published_at, a.imported_at) DESC, a.id DESC   // + WHERE 
 
 `featured` 成为独立板块靠的是 WHERE 子句 `if (sort === 'featured') where.push('a.featured = 1')`，不是排序本身。
 
-### ⚠️ 实测：三个榜单返回完全相同的顺序
+### ⚠️ 历史实测（已修复）：三个榜单曾返回完全相同的顺序
+
+> **这一节记录的是 2026-10-08 的状态，现已不成立**，保留是因为它是"为什么重建排序"的证据：`/rising` 已被删除（`9aa186f`），`velocity` 从 `final_score` 里去掉，权重改为 popularity 0.57 / quality 0.29 / editor 0.14，`refreshRanking` 由 `*/30` cron 驱动。
 
 ```
 /latest    dae9eb6410df4b73  (15 cards)
@@ -605,7 +607,7 @@ featured : COALESCE(a.published_at, a.imported_at) DESC, a.id DESC   // + WHERE 
 
 **md5 完全一致。** 原因链条：
 
-1. `applyRankingScores` 定义在 `src/services/publish.ts:183`，**零调用者**
+1. `applyRankingScores` 定义在 `src/services/publish.ts:183`，**零调用者**（已被 `refreshRanking` 取代）
 2. `wrangler.jsonc` 的 `triggers` 为空 —— SPEC §21 的排名刷新 cron 不存在
 3. `article_metrics` 表 **0 行**
 4. 全部 16 篇文章的 `final_score` / `velocity_score` / `popularity_score` / `quality_score` **全是 NULL**
@@ -614,7 +616,7 @@ featured : COALESCE(a.published_at, a.imported_at) DESC, a.id DESC   // + WHERE 
 
 `article-metrics` 队列有生产者声明但**没有 consumer**（§2.2）。
 
-**这是缺陷 D1，见 §16。**
+> **这一段描述的问题已经不存在**（2026-10-12）。榜单已重建为三个信号（popularity/quality/editor），`refreshRanking` 由 `*/30` cron 驱动，`article_metrics` 也有数据了。现在的互动数据问题不是"全 NULL"，而是"85% 的文章 X 没返回互动栏"——见 §16 的 D1（已改写）。
 
 ---
 
@@ -808,13 +810,33 @@ DELETE FROM articles WHERE slug LIKE 'karpathy-%' OR slug LIKE 'someone-%' OR sl
 
 按影响排序。每条都是实测结论。
 
-### D1 🔴 四个榜单里三个返回完全相同的顺序
+### D1 🟡 85% 的文章没有互动数据，因为 X 对部分文章返回了不含互动栏的页面
 
-**症状**：`/latest`、`/trending`、`/rising` 的 md5 都是 `dae9eb6410df4b73`。
+**症状**：`article_metrics` 里每篇都有行，但 98 篇已发布文章中 **85 篇**的 `views`/`likes`/`reposts`/`replies`/`bookmarks` 全是 `NULL`。表面上像"很多文章没人互动"。
 
-**根因链**：`applyRankingScores` 零调用 → `triggers` 为空（无 cron）→ `article_metrics` 0 行 → 全部 16 篇的分数列全 NULL → `COALESCE(…, 0)` 三个都退化成并列 → 落到第二键 `published_at DESC`。
+**实测（2026-10-12）**：不是没人互动，是**页面上根本没有互动栏**。
 
-**修**需要：给 `article-metrics` 队列加 consumer + 在 `wrangler.jsonc` 加 cron + 写入 `article_metrics`。X 的互动数据是天然来源。**注意：X 的 API 分层对读互动数据有要求。**
+| 文章 | raw HTML 大小 | `data-engagement-action` 出现次数 |
+|---|---|---|
+| `rabi-guha-…`（有数据） | **151 KB** | 4 个（like/retweet/reply/generic） |
+| `shiraishi-x-…`（无数据） | **67 KB** | **0** |
+
+无数据那篇的 HTML 里连 `aria-label="Like"` 都是 0 —— **整个互动区（点赞/转发/回复/查看）不存在**，但文章正文正常渲染。
+
+**已排除的原因**：
+- ❌ **不是选择器坏了**。把 `extractEngagement` 喂给有数据那篇的 HTML，五个值全部正确解析（`23K`→23000、`5.8M`→5800000）。
+- ❌ **不是抓取时机**。当天重新抓取 `shiraishi-x`，抓取成功，但新 HTML 仍是 66,693 字节、互动标记仍为 0、新 metrics 行仍全 NULL。
+- ❌ **不是语言、导入时间、或抓取成功与否**。成功的抓取里也有大量 NULL（28 篇 success 但无数据）。
+
+**目前判断**：X 在**未登录**状态下对部分文章返回精简页面。`wrangler secret list` 确认 **`X_COOKIES_JSON` 未配置**（只有 `ADMIN_TOKEN`/`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`USER_SESSION_SECRET`），而 `crawl.ts:183` 的注释正是为这种情况写的：*"X served its logged-out shell … set the X_COOKIES_JSON secret, then retry."*
+
+**为什么现在不修**（2026-10-12 决定）：功能没有坏 —— `extractEngagement` 返回 `null` 而非 `0` 是刻意设计（写 0 会让"选择器坏了"和"文章很冷清"看起来一样），榜单的 `COALESCE(…, 0)` 把无数据的排在后面。覆盖率低，但行为正确。
+
+**若要改善**，两条路：
+1. **配 `X_COOKIES_JSON`**（从自己的 X 账号导出 `auth_token`/`ct0`）。登录态下 X 大概率渲染完整互动栏，**但未经验证**。
+2. **定期重抓无互动的文章**。X 的行为可能变化，某次重抓可能就拿到了。
+
+> 这份诊断是实测的：抓取样本、字节数、选择器输出都是跑出来的，不是推测。诊断脚本未保留（是一次性验证），但结论可以用同样的方法在半小时内复现。
 
 ### D2 🟡 `overrideSummary` 只有 API，没有界面
 
@@ -862,7 +884,7 @@ note LIKE 'crawled v%'   17 条   ← 全部是误记的抓取事件
 
 ### D8 🟢 `article-metrics` 队列有生产者无消费者
 
-`wrangler.jsonc` 声明了 `ARTICLE_METRICS_QUEUE` 生产者，但 consumers 列表里没有 `article-metrics`。D1 的上游之一。
+`wrangler.jsonc` 声明了 `ARTICLE_METRICS_QUEUE` 生产者，但 consumers 列表里没有 `article-metrics`。互动数据目前由**抓取时**直接写入 `article_metrics`（`crawl.ts:341`），不走这个队列，所以这不是当前的问题源。但队列绑定的存在暗示当初设想的是异步刷新路径 —— 要么接线，要么删掉这个声明。
 
 ### D9 🟢 账号表的三处维护功能全是死的
 
@@ -894,7 +916,7 @@ note LIKE 'crawled v%'   17 条   ← 全部是误记的抓取事件
 
 | 导出 | 位置 | 说明 |
 |---|---|---|
-| `applyRankingScores` | `services/publish.ts:183` | D1 的核心 |
+| `applyRankingScores` | `services/publish.ts:183` | 零调用；已被 `refreshRanking` 取代 |
 | `restoreArticle` | — | D3 |
 | `deleteDisplayMode` | — | D5 |
 | `deleteArticle` | — | D5，**不可逆且留下孤儿 R2 对象** |
@@ -966,7 +988,7 @@ npx vitest run                                  # 335 个单元测试
 | 导入没反应 | 是否 `not-configured` / 是否超出 `MAX_IMPORT_URLS` |
 | 抓取失败 | `crawl_jobs` 的 `error_code` + `error_message` |
 | 搜索无结果 | `articles_fts` 是否有行；CJK 是否需要回填 |
-| 榜单顺序相同 | D1 |
+| 榜单顺序相同 | 理论上不该再发生了（§11 已重建排序）；若再现，查 `final_score` 是否全 NULL |
 | 登录失败 | 日志的 `oauth_state_rejected` / `oauth_token_exchange_failed` |
 | 图片没归档 | `media_objects.status = 'failed'` + `error_code` |
 | 进不了 admin | 日志的 `admin_denied_role`（会写明是哪个账号） |
@@ -974,8 +996,11 @@ npx vitest run                                  # 335 个单元测试
 ### 18.4 数据完整性检查
 
 ```sql
--- 分数全 NULL（D1 的确认）
-SELECT COUNT(*) FROM articles WHERE final_score IS NOT NULL;      -- 0 = D1 未修
+-- 分数是否已计算（榜单排序的前提）
+SELECT COUNT(*) FROM articles WHERE final_score IS NOT NULL;      -- 应等于已发布数
+
+-- 互动数据覆盖率（§16 D1：X 对部分文章不返回互动栏，远小于已发布数属正常）
+SELECT COUNT(DISTINCT article_id) FROM article_metrics WHERE views IS NOT NULL;
 
 -- 分类全在 editor 侧（D 的确认）
 SELECT COUNT(*) FROM articles WHERE category_id IS NOT NULL;      -- 0 = AI 层未接线
@@ -993,7 +1018,7 @@ SELECT content_type, COUNT(*) FROM media_objects GROUP BY content_type;
 | 设计文档说 | 实际 |
 |---|---|
 | §13 AI 分类建议 | `ai` job 类型 `notImplemented`，`category_id` 全 NULL |
-| §14 Ranking | `applyRankingScores` 零调用，全部分数 NULL |
+| §14 Ranking | 已由 `refreshRanking` + `*/30` cron 接管 |
 | §21 Cron Triggers | `triggers` 为空 |
 | §10 媒体含视频 | 三层无视频概念 |
 | §16 Admin 摘要编辑 | `overrideSummary` 无界面 |
