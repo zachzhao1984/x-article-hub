@@ -33,13 +33,39 @@ export interface ArticleDocument {
 }
 
 export type ArticleBlock =
-  | { type: 'paragraph'; text: string }
-  | { type: 'heading'; level: 1 | 2 | 3; text: string }
-  | { type: 'quote'; text: string }
-  | { type: 'list'; ordered: boolean; items: string[] }
+  | { type: 'paragraph'; spans: InlineSpan[] }
+  | { type: 'heading'; level: 1 | 2 | 3; spans: InlineSpan[] }
+  | { type: 'quote'; spans: InlineSpan[] }
+  | { type: 'list'; ordered: boolean; items: InlineSpan[][] }
   | { type: 'image'; imageId: string }
   | { type: 'code'; language?: string; code: string }
   | { type: 'embed'; postId: string };
+
+/**
+ * A run of inline content within a block.
+ *
+ * ## Why spans and not a Markdown string
+ *
+ * The capture is Markdown, and the reading page renders the document — not the Markdown. So a
+ * block's text has to be *interpreted*, not passed through, or the reader sees the author's
+ * `**bold**` markers as literal asterisks. That was a real bug: every sampled article carried
+ * between 11 and 45 literal `**` pairs on the page.
+ *
+ * The alternative — stripping the markers — loses the emphasis the author chose. Keeping the
+ * emphasis means the block text has to be a sequence of runs rather than one string, which is
+ * what this is: `strong` and `em` carry the emphasis, `link` carries the target so the phrase
+ * stays clickable (the old `inline()` dropped the href entirely, leaving linked text that
+ * looked like ordinary words), and `code` keeps an inline code span visually distinct.
+ *
+ * `text` is the run's words and is never empty; adjacent plain runs are merged by the parser so
+ * a paragraph does not arrive as dozens of one-word spans.
+ */
+export type InlineSpan =
+  | { type: 'text'; text: string }
+  | { type: 'strong'; text: string }
+  | { type: 'em'; text: string }
+  | { type: 'code'; text: string }
+  | { type: 'link'; text: string; href: string };
 
 export interface ArticleLink {
   href: string;
@@ -109,6 +135,19 @@ export const R2_PATHS = {
   cover: (articleId: string, extension: string) => `articles/${articleId}/media/cover.${extension}`,
 } as const;
 
+/**
+ * The words of a span run, with no markup.
+ *
+ * The inverse of `parseInline`, and the only thing that should ever read a span's text: FTS
+ * indexes it, the word count counts it, and the reading page renders the spans themselves. A
+ * caller that wants the plain string of a block goes through here rather than reaching into
+ * each span, so the `type` discriminator is handled in one place — which is what broke when the
+ * document moved from `text: string` to spans.
+ */
+export function inlineToText(spans: InlineSpan[]): string {
+  return spans.map((s) => s.text).join('');
+}
+
 /** SPEC §13.4 / §12 — derive indexable plain text. Never hand raw HTML to a model or FTS. */
 export function documentToPlainText(doc: ArticleDocument): string {
   const parts: string[] = [doc.title];
@@ -118,10 +157,10 @@ export function documentToPlainText(doc: ArticleDocument): string {
       case 'paragraph':
       case 'heading':
       case 'quote':
-        parts.push(block.text);
+        parts.push(inlineToText(block.spans));
         break;
       case 'list':
-        parts.push(block.items.join('\n'));
+        parts.push(block.items.map(inlineToText).join('\n'));
         break;
       case 'code':
         parts.push(block.code);

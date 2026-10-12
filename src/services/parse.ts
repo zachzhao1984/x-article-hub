@@ -16,7 +16,7 @@
 
 import { R2_PATHS } from '../types/article-document';
 import type { ArticleDocument } from '../types/article-document';
-import { countWords, documentToPlainText } from '../types/article-document';
+import { countWords, documentToPlainText, inlineToText } from '../types/article-document';
 import { parseMarkdownToDocument } from '../parser/markdown';
 import { segmentCjk } from '../lib/cjk';
 import { detectLanguage, languageSample } from '../lib/language';
@@ -51,8 +51,14 @@ import { readRawArchive } from './crawl';
  *     documents keep rendering the failed-image figure that claims a video "still loads
  *     from x.com". The archive holds no videos today, so nothing is actually stale — the
  *     bump is what makes that a fact rather than a coincidence.
+ *
+ *   v7 - blocks carry typed inline spans instead of a plain text string. This one *does*
+ *     invalidate every stored document: a v6 block holds "the **bold** word" as a string
+ *     and the reading page no longer has a text field to render, so a v6 document would
+ *     not render at all. The idempotence check keys on this version, so the bump is what
+ *     makes the archive re-parse rather than serving documents the page cannot read.
  */
-export const PARSER_VERSION = 6;
+export const PARSER_VERSION = 7;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 
@@ -335,20 +341,20 @@ function stripFrontmatterForMirror(doc: ArticleDocument): string {
   for (const block of doc.blocks) {
     switch (block.type) {
       case 'heading':
-        lines.push(`${'#'.repeat(block.level + 1)} ${block.text}`, '');
+        lines.push(`${'#'.repeat(block.level + 1)} ${inlineToText(block.spans)}`, '');
         break;
       case 'quote':
-        lines.push(`> ${block.text}`, '');
+        lines.push(`> ${inlineToText(block.spans)}`, '');
         break;
       case 'list':
-        block.items.forEach((item, i) => lines.push(`${block.ordered ? `${i + 1}.` : '-'} ${item}`));
+        block.items.forEach((item, i) => lines.push(`${block.ordered ? `${i + 1}.` : '-'} ${inlineToText(item)}`));
         lines.push('');
         break;
       case 'code':
         lines.push('```', block.code, '```', '');
         break;
       case 'paragraph':
-        lines.push(block.text, '');
+        lines.push(inlineToText(block.spans), '');
         break;
       default:
         break;
