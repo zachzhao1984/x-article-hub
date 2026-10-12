@@ -57,6 +57,8 @@ import { readRawArchive } from './crawl';
  *     and the reading page no longer has a text field to render, so a v6 document would
  *     not render at all. The idempotence check keys on this version, so the bump is what
  *     makes the archive re-parse rather than serving documents the page cannot read.
+ *   v8 - normalize duplicated bold delimiters and escaped punctuation from X captures,
+ *     and rebuild stored link labels with emphasis markers removed.
  */
 export const PARSER_VERSION = 8;
 
