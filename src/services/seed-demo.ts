@@ -10,8 +10,8 @@
  * SPEC §4.7 — the human decides what is published. Here that human is this script.
  */
 
-import { R2_PATHS, countWords, documentToPlainText } from '../types/article-document';
-import type { ArticleDocument } from '../types/article-document';
+import { R2_PATHS, countWords, documentToPlainText, inlineToText } from '../types/article-document';
+import type { ArticleDocument, InlineSpan } from '../types/article-document';
 import { newId } from '../lib/ids';
 import { sha256Hex } from '../lib/hash';
 import { segmentCjk } from '../lib/cjk';
@@ -427,15 +427,17 @@ function slugifyTag(name: string): string {
 function buildDocument(a: SeedArticle, url: string, publishedAt: number): ArticleDocument {
   const blocks: ArticleDocument['blocks'] = [];
 
+  const asText = (t: string): InlineSpan[] => [{ type: 'text', text: t }];
+
   for (const raw of a.body) {
     if (raw.startsWith('## ')) {
-      blocks.push({ type: 'heading', level: 2, text: raw.slice(3) });
+      blocks.push({ type: 'heading', level: 2, spans: asText(raw.slice(3)) });
     } else if (raw.startsWith('> ')) {
-      blocks.push({ type: 'quote', text: raw.slice(2) });
+      blocks.push({ type: 'quote', spans: asText(raw.slice(2)) });
     } else if (raw.endsWith(':')) {
-      blocks.push({ type: 'paragraph', text: raw });
+      blocks.push({ type: 'paragraph', spans: asText(raw) });
     } else {
-      blocks.push({ type: 'paragraph', text: raw });
+      blocks.push({ type: 'paragraph', spans: asText(raw) });
     }
   }
 
@@ -457,20 +459,20 @@ function documentToMarkdown(doc: ArticleDocument): string {
   for (const block of doc.blocks) {
     switch (block.type) {
       case 'heading':
-        lines.push(`${'#'.repeat(block.level + 1)} ${block.text}`, '');
+        lines.push(`${'#'.repeat(block.level + 1)} ${inlineToText(block.spans)}`, '');
         break;
       case 'quote':
-        lines.push(`> ${block.text}`, '');
+        lines.push(`> ${inlineToText(block.spans)}`, '');
         break;
       case 'list':
-        block.items.forEach((item, i) => lines.push(`${block.ordered ? `${i + 1}.` : '-'} ${item}`));
+        block.items.forEach((item, i) => lines.push(`${block.ordered ? `${i + 1}.` : '-'} ${inlineToText(item)}`));
         lines.push('');
         break;
       case 'code':
         lines.push('```', block.code, '```', '');
         break;
       case 'paragraph':
-        lines.push(block.text, '');
+        lines.push(inlineToText(block.spans), '');
         break;
       default:
         break;

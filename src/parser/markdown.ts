@@ -23,7 +23,7 @@
  * no LLM anywhere in this file.
  */
 
-import type { ArticleBlock, ArticleDocument, ArticleImage, ArticleLink } from '../types/article-document';
+import type { ArticleBlock, ArticleDocument, ArticleImage, ArticleLink, InlineSpan } from '../types/article-document';
 import { parseFrontmatter, splitXTitle, stripXTitleSuffix } from '../jobs/x-selectors';
 
 /** SPEC §9.2 only defines heading levels 1–3. Deeper levels clamp rather than drop. */
@@ -34,12 +34,99 @@ const LINKED_IMAGE_RE = /^\[!\[[^\]]*\]\(([^)\s]+)\)([^\]]*)\]\(([^)\s]+)\)\s*$/
 /** `![alt](src)` */
 const IMAGE_RE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/;
 /** Inline `[text](href)`, and reference-free bare autolinks. */
-const INLINE_LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/g;
-const BARE_URL_RE = /(?:^|\s)(https?:\/\/[^\s<>()]+)/g;
+const INLINE_LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/;
+const BARE_URL_RE = /(?:^|\s)(https?:\/\/[^\s<>()]+)/;
 const ORDERED_ITEM_RE = /^(\d+)[.)]\s+(.*)$/;
 const UNORDERED_ITEM_RE = /^[-*+]\s+(.*)$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const FENCE_RE = /^(?:```|~~~)\s*([A-Za-z0-9+#._-]*)\s*$/;
+
+/**
+ * SPEC §9.3 — the inline constructs the author's Markdown can contain.
+ *
+ * Ordered alternation: `code` first, because a backtick span is literal and must not have its
+ * contents interpreted (`` **not bold** `` inside backticks is text). Then links, then
+ * emphasis. `**` before `*` so a strong run is not read as two nested emphasis runs.
+ *
+ * Emphasis requires a non-space character immediately inside the markers, so `2 * 3 * 4` and a
+ * stray `*` are left as text rather than swallowing the words between them. X's own prose
+ * contains both.
+ */
+const INLINE_TOKEN_RE =
+  /(`[^`\n]+`)|(\[[^\]\n]+\]\([^)\s]+\))|(\*\*[^\s*][^*]*?\*\*)|(__[^\s_][^_]*?__)|(\*[^\s*][^*\n]*?\*)|(_[^\s_][^_\n]*?_)/;
+
+/**
+ * SPEC §9.3 — Markdown inline → spans.
+ *
+ * ## Why this exists
+ *
+ * The capture is Markdown and the reading page renders the document, so a block's text has to
+ * be interpreted rather than passed through. It was not: only links and bare URLs were handled,
+ * so `**bold**` reached the page as literal asterisks — measured on production, every sampled
+ * article carried between 11 and 45 literal `**` pairs.
+ *
+ * The fix is not to strip the markers, because discarding them loses the author's emphasis and
+ * SPEC §9.3's rule is to preserve the author's structure. The markers become typed runs, and
+ * the reading page renders those.
+ *
+ * ## What it deliberately does not do
+ *
+ * No nesting (`**bold with *italic* inside**` keeps the inner markers as text) and no
+ * reference-style links. Both are rare in X's Markdown, and a partial implementation that tried
+ * would be a second Markdown parser to keep correct — the opposite of why the capture is trusted
+ * as the structural source in the first place. Bare URLs are still recorded as links in
+ * `document.links` by the caller, but are not turned into anchors here: X's own prose is full of
+ * them and the reading page already links the original separately.
+ */
+function parseInline(text: string): InlineSpan[] {
+  const spans: InlineSpan[] = [];
+  let rest = text;
+
+  const push = (span: InlineSpan): void => {
+    const last = spans[spans.length - 1];
+    // Merge adjacent plain runs, so a paragraph arrives as a few spans rather than one per
+    // word — the page renders one text node per span and a hundred of them is a real cost.
+    if (span.type === 'text' && last && last.type === 'text') {
+      last.text += span.text;
+      return;
+    }
+    spans.push(span);
+  };
+
+  for (;;) {
+    const match = INLINE_TOKEN_RE.exec(rest);
+    if (!match || match.index === undefined) break;
+
+    if (match.index > 0) push({ type: 'text', text: rest.slice(0, match.index) });
+    const token = match[0];
+    rest = rest.slice(match.index + token.length);
+
+    if (match[1]) {
+      push({ type: 'code', text: token.slice(1, -1) });
+    } else if (match[2]) {
+      const inner = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(token);
+      if (inner) push({ type: 'link', text: inner[1] ?? '', href: inner[2] ?? '' });
+    } else if (match[3]) {
+      push({ type: 'strong', text: token.slice(2, -2) });
+    } else if (match[4]) {
+      push({ type: 'strong', text: token.slice(2, -2) });
+    } else if (match[5]) {
+      push({ type: 'em', text: token.slice(1, -1) });
+    } else if (match[6]) {
+      push({ type: 'em', text: token.slice(1, -1) });
+    }
+  }
+
+  if (rest) push({ type: 'text', text: rest });
+
+  // A run that is only whitespace at either edge is trimmed off, so the block does not render
+  // leading or trailing space the author did not put inside the markup.
+  const first = spans[0];
+  const lastSpan = spans[spans.length - 1];
+  if (first && first.type === 'text') first.text = first.text.replace(/^\s+/, '');
+  if (lastSpan && lastSpan.type === 'text') lastSpan.text = lastSpan.text.replace(/\s+$/, '');
+  return spans.filter((s) => s.text !== '');
+}
 
 /**
  * SPEC §7.2 — "/markdown 的元数据和媒体映射需要额外处理".
@@ -238,23 +325,31 @@ function parseBlocks(
     return imageId;
   };
 
-  /** Inline `[text](href)` / bare URLs: keep the text, record the target. */
-  const inline = (text: string): string => {
-    let out = text.replace(INLINE_LINK_RE, (_m, label: string, href: string) => {
-      addLink(href, label);
-      return label;
-    });
-    out = out.replace(BARE_URL_RE, (_m, href: string) => {
-      addLink(href, href);
-      return href;
-    });
-    return out.trim();
+  /**
+   * Inline text -> spans, recording the link targets on the way.
+   *
+   * `addLink` still runs for every Markdown link and every bare URL the author wrote, so
+   * `document.links` remains the complete list of where the piece points. What changed is that
+   * the *rendered* text keeps its structure: a `**bold**` run reaches the page as a `strong`
+   * span instead of literal asterisks, and a `[label](href)` keeps its target as a `link` span
+   * rather than being flattened into words that look like ordinary prose.
+   */
+  const inline = (text: string): InlineSpan[] => {
+    const spans = parseInline(text);
+    for (const span of spans) {
+      if (span.type === 'link') addLink(span.href, span.text);
+    }
+    // A bare URL stays plain text, but it is still a target the article points at.
+    for (const bare of text.matchAll(new RegExp(BARE_URL_RE.source, 'g'))) {
+      if (bare[1]) addLink(bare[1], bare[1]);
+    }
+    return spans;
   };
 
   let index = 0;
   let sawProse = false;
   /** Consecutive items of the same kind collapse into one list block (SPEC §9.2). */
-  let listBuffer: { ordered: boolean; items: string[] } | null = null;
+  let listBuffer: { ordered: boolean; items: InlineSpan[][] } | null = null;
 
   const flushList = () => {
     if (!listBuffer) return;
@@ -263,10 +358,10 @@ function parseBlocks(
   };
 
   const pushParagraph = (raw: string) => {
-    const text = inline(raw);
-    if (text) {
+    const spans = inline(raw);
+    if (spans.length > 0) {
       sawProse = true;
-      blocks.push({ type: 'paragraph', text });
+      blocks.push({ type: 'paragraph', spans });
     }
   };
 
@@ -336,7 +431,10 @@ function parseBlocks(
     if (heading) {
       flushList();
       const rawLevel = (heading[1] ?? '#').length;
-      const text = inline(heading[2] ?? '');
+      const spans = inline(heading[2] ?? '');
+      // The plain form, for the duplicate-title check below: it compares words, and
+      // spans have no single string to compare.
+      const headingText = spans.map((sp) => sp.text).join('');
 
       // The capture's own `# Title` duplicates `document.title`. SPEC §9.1 keeps
       // the title in one place, so a leading h1 that repeats it is dropped rather
@@ -345,17 +443,17 @@ function parseBlocks(
       // NB: advance first. An earlier version `continue`d without moving `index`,
       // which was harmless while the condition never matched and hung the worker
       // the moment it did.
-      if (rawLevel === 1 && !sawProse && text === documentTitle) {
+      if (rawLevel === 1 && !sawProse && headingText === documentTitle) {
         index += 1;
         continue;
       }
 
-      if (text) {
+      if (spans.length > 0) {
         sawProse = true;
         blocks.push({
           type: 'heading',
           level: Math.min(rawLevel, MAX_HEADING_LEVEL) as 1 | 2 | 3,
-          text,
+          spans,
         });
       }
       index += 1;
@@ -370,10 +468,10 @@ function parseBlocks(
         quoted.push((lines[index] ?? '').replace(/^>\s?/, ''));
         index += 1;
       }
-      const text = inline(quoted.join(' ').trim());
-      if (text) {
+      const spans = inline(quoted.join(' ').trim());
+      if (spans.length > 0) {
         sawProse = true;
-        blocks.push({ type: 'quote', text });
+        blocks.push({ type: 'quote', spans });
       }
       continue;
     }

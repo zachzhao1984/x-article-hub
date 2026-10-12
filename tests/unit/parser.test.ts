@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseMarkdownToDocument, stripFrontmatter } from '../../src/parser/markdown';
-import { countWords, documentToPlainText } from '../../src/types/article-document';
+import { countWords, documentToPlainText, inlineToText } from '../../src/types/article-document';
+import type { InlineSpan } from '../../src/types/article-document';
 
 /**
  * SPEC §39 Parser acceptance, run against a real capture rather than an invented
@@ -45,7 +46,7 @@ describe('parseMarkdownToDocument — the real capture (SPEC §39)', () => {
     const firstHeading = document.blocks.find((b) => b.type === 'heading');
     expect(firstHeading?.type).toBe('heading');
     // The document's own `# Title` is the title field, not a body block.
-    expect(firstHeading && firstHeading.type === 'heading' ? firstHeading.text : '').not.toBe(document.title);
+    expect(firstHeading && firstHeading.type === 'heading' ? inlineToText(firstHeading.spans) : '').not.toBe(document.title);
   });
 
   it('extracts paragraphs (SPEC §39)', () => {
@@ -159,7 +160,7 @@ describe('structure preservation (SPEC §9.3)', () => {
     const source = stripFrontmatter(FIXTURE);
     // Spot-check a distinctive sentence survives verbatim.
     const paragraph = document.blocks.find(
-      (b) => b.type === 'paragraph' && b.text.includes('换了一个软件下注'),
+      (b) => b.type === 'paragraph' && inlineToText(b.spans).includes('换了一个软件下注'),
     );
     expect(paragraph).toBeDefined();
     expect(source).toContain('换了一个软件下注');
@@ -181,7 +182,9 @@ describe('synthetic edge cases', () => {
     const { document } = parseMarkdownToDocument(md, { ...OPTS, url: 'https://x.com/u/article/1' });
     const paragraphs = document.blocks.filter((b) => b.type === 'paragraph');
     expect(paragraphs).toHaveLength(1);
-    expect(paragraphs[0]).toMatchObject({ text: 'This is one paragraph wrapped across lines.' });
+      expect(inlineToText((paragraphs[0] as { spans: InlineSpan[] }).spans)).toBe(
+        'This is one paragraph wrapped across lines.',
+      );
   });
 
   it('falls back to the username when the capture has no author', () => {

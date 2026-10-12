@@ -1,0 +1,55 @@
+---
+/**
+ * SPEC §9.3 — render a block's inline spans.
+ *
+ * ## Why this is a component and not inline JSX
+ *
+ * Every text-bearing block needs it — paragraph, heading, quote and each list item — and the
+ * first attempt at this bug was a page that rendered `{block.text}` directly, which printed the
+ * author's Markdown markers as literal asterisks. A single renderer is also the one place the
+ * span vocabulary is consumed, so adding a span type later is a change here rather than in five
+ * places on the page.
+ *
+ * ## Why Astro escapes this for us
+ *
+ * The text is untrusted, and the whole point of the feature is that it reaches the DOM as
+ * *markup-shaped content* rather than as a string that markup is parsed from. Astro's `{…}`
+ * interpolations escape by default, so `<strong>` here is a real element built by the template
+ * and the author's own text can never become one — a `<script>` in an article's prose renders
+ * as the words `<script>`.
+ *
+ * That is why the spans are typed runs rather than a stored HTML string: the structure is data,
+ * so there is nothing to sanitise at render time.
+ */
+import type { InlineSpan } from '../types/article-document';
+
+export interface Props {
+  spans: InlineSpan[];
+}
+
+const { spans } = Astro.props;
+---
+
+{
+  spans.map((span) => {
+    switch (span.type) {
+      case 'strong':
+        return <strong>{span.text}</strong>;
+      case 'em':
+        return <em>{span.text}</em>;
+      case 'code':
+        return <code>{span.text}</code>;
+      case 'link':
+        // `nofollow` because these point at whatever the author linked, not at anything this
+        // archive vouches for — the same reasoning the original-source link already follows.
+        return (
+          <a href={span.href} target="_blank" rel="noopener noreferrer nofollow">
+            {span.text}
+          </a>
+        );
+      case 'text':
+      default:
+        return <>{span.text}</>;
+    }
+  })
+}

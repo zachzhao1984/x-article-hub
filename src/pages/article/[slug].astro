@@ -40,9 +40,15 @@ const [tags, document, related] = await Promise.all([
 
 const related_ = related.filter((r) => r.id !== article.id).slice(0, 3);
 
+/** The first paragraph's words with its inline markup stripped, for the meta description. */
+const firstParagraphText = (doc: typeof document): string | null => {
+  const first = doc?.blocks.find((b) => b.type === 'paragraph');
+  return first && first.type === 'paragraph' ? inlineToText(first.spans) : null;
+};
+
 const description =
   article.excerpt ||
-  (document ? document.blocks.find((b) => b.type === 'paragraph')?.text.slice(0, 200) : null) ||
+    (firstParagraphText(document)?.slice(0, 200) ?? null) ||
   article.title;
 
 const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
@@ -190,14 +196,22 @@ const jsonLd = isTakedown
                       switch (block.type) {
                         case 'heading':
                           const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3';
-                          return <Tag>{block.text}</Tag>;
+                          return (
+                            <Tag>
+                              <InlineText spans={block.spans} />
+                            </Tag>
+                          );
                         case 'quote':
-                          return <blockquote>{block.text}</blockquote>;
+                          return (
+                            <blockquote>
+                              <InlineText spans={block.spans} />
+                            </blockquote>
+                          );
                         case 'list':
                           return block.ordered ? (
-                            <ol>{block.items.map((i) => <li>{i}</li>)}</ol>
+                            <ol>{block.items.map((i) => <li><InlineText spans={i} /></li>)}</ol>
                           ) : (
-                            <ul>{block.items.map((i) => <li>{i}</li>)}</ul>
+                            <ul>{block.items.map((i) => <li><InlineText spans={i} /></li>)}</ul>
                           );
                         case 'code':
                           return <pre><code>{block.code}</code></pre>;
@@ -277,7 +291,11 @@ const jsonLd = isTakedown
                           );
                         }
                         case 'paragraph':
-                          return <p>{block.text}</p>;
+                          return (
+                            <p>
+                              <InlineText spans={block.spans} />
+                            </p>
+                          );
                         case 'embed':
                           return (
                             <p class="muted" {...i18nSpread('article.embed')}>
