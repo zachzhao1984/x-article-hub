@@ -78,6 +78,17 @@ const INLINE_TOKEN_RE =
  * `document.links` by the caller, but are not turned into anchors here: X's own prose is full of
  * them and the reading page already links the original separately.
  */
+/**
+ * Emphasis markers removed from a string, for the one place spans cannot nest.
+ *
+ * A link label is a single string, so `[**Text**](url)` cannot carry a `strong` inside it. The
+ * markers are dropped rather than kept: inside a link they are redundant, because the anchor
+ * already sets the phrase apart, and keeping them showed the reader literal asterisks.
+ */
+function stripEmphasis(s: string): string {
+  return s.replace(/\*\*|__/g, '').replace(/(^|[^\w])\*([^*]+)\*(?=[^\w]|$)/g, '$1$2');
+}
+
 function parseInline(text: string): InlineSpan[] {
   const spans: InlineSpan[] = [];
   let rest = text;
@@ -105,7 +116,14 @@ function parseInline(text: string): InlineSpan[] {
       push({ type: 'code', text: token.slice(1, -1) });
     } else if (match[2]) {
       const inner = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(token);
-      if (inner) push({ type: 'link', text: inner[1] ?? '', href: inner[2] ?? '' });
+      if (inner) {
+        // A link label may itself carry emphasis — `[**Mafia**](url)` — and `link` has no
+        // nested spans, so the markers are dropped rather than rendered. They are redundant
+        // inside a link anyway: the anchor already distinguishes the phrase from the prose
+        // around it, which is what the emphasis was doing. Keeping them was a visible bug —
+        // the literal `**` appeared in the link text.
+        push({ type: 'link', text: stripEmphasis(inner[1] ?? ''), href: inner[2] ?? '' });
+      }
     } else if (match[3]) {
       push({ type: 'strong', text: token.slice(2, -2) });
     } else if (match[4]) {

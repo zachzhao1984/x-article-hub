@@ -70,6 +70,17 @@ describe('inline spans', () => {
     ]);
   });
 
+  it('drops emphasis markers inside a link label', () => {
+    // `link` has no nested spans, so `[**Text**](url)` cannot carry a `strong`. The markers are
+    // dropped rather than kept: inside a link they are redundant, and keeping them showed the
+    // reader literal asterisks — which is the reported bug, in the one place it survived.
+    expect(firstParagraph('See [**Mafia: The Collection**](https://example.com) today.')).toEqual([
+      { type: 'text', text: 'See ' },
+      { type: 'link', text: 'Mafia: The Collection', href: 'https://example.com' },
+      { type: 'text', text: ' today.' },
+    ]);
+  });
+
   it('turns `code` into a code span and leaves its contents alone', () => {
     // A backtick span is literal: an author writing `**not bold**` inside backticks means the
     // asterisks as characters.
