@@ -198,7 +198,7 @@ const jsonLd = isTakedown
                   ? document.blocks.map((block: ArticleBlock) => {
                       switch (block.type) {
                         case 'heading':
-                          const Tag = `h${block.level}` as 'h1' | 'h2' | 'h3';
+                          const Tag = `h${Math.max(1, block.level - 1)}` as 'h1' | 'h2';
                           return (
                             <Tag>
                               <InlineText spans={block.spans} />
