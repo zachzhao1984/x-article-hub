@@ -309,9 +309,11 @@ const jsonLd = isTakedown
                           );
                         case 'embed':
                           return (
-                            <p class="muted" {...i18nSpread('article.embed')}>
-                              [Embedded X post <code>{block.postId}</code>]
-                            </p>
+                            <blockquote class="embedded-post">
+                              {block.author && <strong>{block.author}</strong>}
+                              {block.text && <p>{block.text}</p>}
+                              <a href={block.url || `https://x.com/i/web/status/${block.postId}`} target="_blank" rel="noopener noreferrer nofollow">X ↗</a>
+                            </blockquote>
                           );
                         default:
                           return null;

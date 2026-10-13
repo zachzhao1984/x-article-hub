@@ -1259,6 +1259,8 @@ pre {
 
 /* Video streams from the original host; the link remains available as a fallback. */
 .fig-video { margin: 20px 0; }
+.article-body .embedded-post { border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin: 24px 0; }
+.embedded-post p { white-space: pre-wrap; }
 .fig-video video { display: block; width: 100%; max-height: 80vh; background: var(--bg); border-radius: 8px; margin-bottom: 10px; }
 .fig-video span { display: block; font-size: 12px; line-height: 1.5; color: var(--faint); }
 

@@ -39,7 +39,7 @@ export type ArticleBlock =
   | { type: 'list'; ordered: boolean; items: InlineSpan[][] }
   | { type: 'image'; imageId: string }
   | { type: 'code'; language?: string; code: string }
-  | { type: 'embed'; postId: string };
+  | { type: 'embed'; postId: string; url?: string; author?: string; text?: string };
 
 /**
  * A run of inline content within a block.
@@ -166,7 +166,9 @@ export function documentToPlainText(doc: ArticleDocument): string {
         parts.push(block.code);
         break;
       case 'image':
+        break;
       case 'embed':
+        if (block.text) parts.push(block.text);
         break;
     }
   }

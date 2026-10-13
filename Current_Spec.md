@@ -468,6 +468,8 @@ type ArticleBlock =
 
 ### 7.2 两条容易被忽略的行为
 
+解析器版本现为 **12**。对原始 HTML 中 `data-href="/i/web/status/..."` 证实的嵌入帖文，恢复匹配的 Markdown 帖文片段为 `embed` block，保存作者、正文和原帖 URL，去除视频时长及互动数字。阅读页显示静态帖文卡片和源站链接；不加载 X 第三方组件，也不声称已归档嵌入帖文的视频。
+
 **视频播放。** 阅读页使用带 `controls`、`playsinline` 和 `preload="metadata"` 的原生播放器，直接请求视频源站 URL；保留源站观看链接和标题，不将视频下载到 R2，不自动播放。
 
 **头像不是图。** `LINKED_IMAGE_RE` 匹配到的行，如果 href 是 profile 或 src 命中头像 CDN 模式，就被提取成 `authorChip` 而不是一张图。SPEC §9.3 说"保留作者结构"，没说要把别人的脸作为插图发在文章中间。
