@@ -253,7 +253,7 @@ ai_summary  ai_category  ai_confidence
 ```
 category_id  editor_category_id
 ```
-`category_id` 是设计给 AI 的那半，98 篇**全部有值**，但值是一次性直接写进 D1 的，不是流水线填的（`ai` job 类型仍无消费者，见 §12）。`editor_category_id` 目前 0 篇，所以 COALESCE 走的全是右半；你在 admin 里改任何一篇，左半就会开始生效。
+`category_id` 是设计给 AI 的那半，98 篇**全部有值**。值本身是一次性直接写进 D1 的，但 `ai` job 现在有消费者了（`src/jobs/ai.ts`，见 §12），新导入的文章会由流水线自动归类；这 98 篇的既有值不会被它改写，因为 cron 只挑 `category_id` 为 NULL 的。`editor_category_id` 目前 0 篇，所以 COALESCE 走的全是右半；你在 admin 里改任何一篇，左半就会开始生效。
 
 **人工覆盖**
 ```
@@ -659,19 +659,31 @@ grep "INSERT INTO categories|UPDATE categories|DELETE FROM categories" src/
 
 **加一个分类 = 写一条迁移 + 部署 + 同步改 `teardown.ts` 里那份硬编码副本。** 漏掉第三步的话，下一次 admin reset 会把你新加的分类抹掉，文章的 `category_id` 指向不存在的行，分类页 404。（本文档早先那条「`grep` → 0 hits」的说法是错的：teardown 一直在写这张表。）
 
-### ⚠️ AI 分类层仍未接线
+### AI 分类层已接线（`bc6e82f5`），但模型调用尚未验证
 
 `src/jobs/dispatch.ts`：
 
 ```ts
-ai:       notImplemented('ai'),
+ai:       handleAi,        // SPEC §13 — 消费者在 src/jobs/ai.ts
 metrics:  notImplemented('metrics'),
 reindex:  notImplemented('reindex'),
 ```
 
-有类型声明、有队列、**没有消费者**。`ArticleStatus` 的 `AI` 阶段和 SPEC §13 的 prompt 形状都在，但 `ai` job 永远不会给任何文章写分类。
+`ai` 曾经和 `metrics` / `reindex` 一样只有类型和队列、没有消费者。现在它有消费者了：分类在 `article-process` 队列里跑，由 `handleParse` 和 media job 一起入队（`enqueueProcessJob(env, id, 'ai')`）。**放在 parse 而不是 import 里，是因为这样才不存在「产出了文档却没问过分类」的路径** —— admin 的直接 re-parse 端点也走这条。cron 每 30 分钟再补一次 `classifyUncategorized(env, 3)`，兜住这条变更之前导入的存量和丢掉的队列消息。
 
-**所以 `category_id` 是一次性直接写进 D1 的，不是被这条流水线填的。** 98 篇逐篇读标题 + 正文开头判断后写进 `category_id`（机器那一列）而不是 `editor_category_id` —— 5 处查询读的都是 `COALESCE(a.editor_category_id, a.category_id)`，所以你在 admin 里改任何一篇仍然会赢。代价是**新抓到的文章不会自动归类**：`category_id` 会停在这 98 篇，除非有人再写一次，或者把 §13 的 job 真正接上。
+**写 `category_id`，不写 `editor_category_id`。** 5 处查询读的都是 `COALESCE(a.editor_category_id, a.category_id)`，所以你在 admin 里改任何一篇仍然会赢；而且 `editor_category_id` 有值时**连模型调用都跳过** —— 跟编辑争一个已经有人拍板的分类，花的是配额，赢不了。
+
+**prompt 里的分类列表来自 `categories` 表，不是常量。** 加分类只要迁移，下一次调用就认识它。返回值先按已知 slug 解析、再对着表校验 —— `category_id` 没有外键，写错值不会报错，只会让文章在所有分类页上消失，所以必须在这里拦住。
+
+模型是 `@cf/qwen/qwen3-30b-a3b-fp8`。选 Qwen 不选 Llama 是因为这批语料约一半是中文或日文，读不懂正文的分类器只能靠标题猜；它是 30B MoE、约 3B 激活，单次成本接近小稠密模型。输入按 SPEC §13.4 截到 `fts_content` 前 1500 字符，绝不给 HTML 或 block 结构。
+
+**失败按「重试有没有用」分成两类。** 模型不肯给出 slug 是终态 —— 它下次还是不肯，而每次尝试都烧配额，所以记 `failed` / `skipped` 后返回，不让队列重试。模型调用抛异常（网络、配额）是暂态，handler 放行让队列按自己的阶梯重试。
+
+> ⚠️ **这里踩过一个坑，值得写下来**：`handleBatch` 重试的方式是 re-throw，而它**不会写 job 行**，所以队列最终放弃的那条消息会把行永久留在 `queued`。cron 的 `NOT EXISTS` 守卫本来看到「有 open job」就跳过，于是**因为配额用完而失败的文章会被永久排除，再也不会有分类** —— 而最需要重试的恰恰就是配额用完。修法是给守卫加一个 2 小时的回收窗口（`CLASSIFY_RECLAIM_MS`）：`success` / `skipped` 是做完的工作绝不重做，2 小时内更新过的视为还在跑，超过的才由 cron 抢回来。2 小时远长于队列的五次退避投递，所以 cron 不会从正在干活的消费者手里抢文章。
+
+**当前 98 篇仍然是那次一次性 D1 写入的结果，不是流水线填的。** cron 实测对这批返回 0 行（SQL 已在远端 D1 上单独跑过验证），所以配额是安全的：它不会去动已经归好类的文章。
+
+> ⚠️ **尚未验证的部分**：模型调用本身。写这段时 Workers AI 的每日 10,000 neuron 免费额度已用尽（HTTP 429 / code 4006），无法对真实文章做影子比对。代码路径靠 569 个单测覆盖（prompt 构造、slug 解析、列的写入、回收窗口、入队与调度），但「模型是否按预期返回 slug」还没测过。额度在 00:00 UTC 重置；验证方式是把若干篇的 `category_id` 置 NULL，等下一次 cron，再对照原分类。
 
 ### 关于空分类
 
@@ -950,12 +962,13 @@ note LIKE 'crawled v%'   17 条   ← 全部是误记的抓取事件
 
 ```ts
 // src/jobs/dispatch.ts
-ai:      notImplemented('ai'),
 metrics: notImplemented('metrics'),
 reindex: notImplemented('reindex'),
 ```
 
-`AI` binding 已配置但从未调用。
+`ai` 曾在这份清单里，现在已经接上（`src/jobs/ai.ts`，见 §12），从这里删掉了。
+
+`AI` binding 有两处真实调用：封面图（`services/cover.ts`，flux-1-schnell）和分类（`services/classify.ts`，qwen3-30b-a3b-fp8）。两者共用每日 10,000 neuron 免费额度 —— 额度用尽时两个功能一起停，都靠 cron 重试。
 
 ### 未实现的 API 面
 
@@ -969,6 +982,7 @@ reindex: notImplemented('reindex'),
 - **用户功能**：账号体系存在但**不挂任何功能**（无收藏、无评论、无付费墙）。这是有意的 —— 见 SPEC §43.1
 - **视频**：见 §9
 - **Science 空分类**（语料里没有自然科学文章）：见 §12
+- **AI 只做分类**：SPEC §13.3 的 `summary` / `topics` / `tags` / `quality` 四项**一项都没接**。每一项都是每篇文章一次额外的模型调用，和封面图共用同一个每日 10,000 neuron 额度，而它们在站点上都还没有读者。分类是唯一一个「缺了文章就找不着」的，所以只接了它。
 
 ---
 
