@@ -117,10 +117,11 @@ describe('the homepage', () => {
     // articles on the page twice, which is what a reader would have seen — nothing about
     // either section is invalid on its own.
     const board = code(template());
-    // Counted on the map, not on the title. The string appears twice by design: the hero
-    // subtitle and the board heading, which is how "Today's Selection" was arranged before
-    // this change. An earlier version of this assertion counted the title and reported two
-    // as a duplication, when it is the layout.
+    // Counted on the map, not on a title. An earlier version of this assertion counted the
+    // picks' heading string and reported two as a duplication, when two was the layout —
+    // the hero subtitle and the board heading both carried it. The hero is gone now, so
+    // that ambiguity is gone with it, but counting the map is the assertion that still
+    // means what it says.
     expect(board.match(/featured\.map\(/g)?.length ?? 0, 'the picks are rendered once').toBe(1);
     // The plural, emoji-decorated heading is the one that went.
     expect(board).not.toContain("Editor's Picks");

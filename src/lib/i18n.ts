@@ -95,8 +95,6 @@ export interface Translations {
 
   // --- home
   'home.eyebrow': string;
-  'home.pickSub': string;
-  'home.countSuffix': string;
   'home.noArticles': string;
   'home.noArticlesBody': string;
   'home.importer': string;
@@ -110,9 +108,6 @@ export interface Translations {
   'home.popularTags': string;
 
   // --- board pages
-  'trending.lede': string;
-  'featured.lede': string;
-  'latest.lede': string;
 
   // --- search
   'search.title': string;
@@ -295,8 +290,6 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'board.page': 'Page {page}',
 
     'home.eyebrow': 'X Article',
-    'home.pickSub': "Editor's Pick",
-    'home.countSuffix': '· curated by hand, archived and ranked by machine',
     'home.noArticles': 'No published articles yet',
     'home.noArticlesBody': 'Articles appear here after an editor publishes them. Paste X Article URLs in the',
     'home.importer': 'admin importer',
@@ -309,9 +302,6 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'home.allLatest': 'All latest →',
     'home.popularTags': 'Popular tags',
 
-    'trending.lede': 'What the archive is reading right now.',
-    'featured.lede': 'What an editor flagged, newest first.',
-    'latest.lede': 'Everything published, newest first.',
 
     'search.title': 'Search',
     'search.heroSub': 'Find anything in the archive.',
@@ -482,8 +472,6 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'board.page': '第 {page} 页',
 
     'home.eyebrow': 'X 长文',
-    'home.pickSub': '编辑精选',
-    'home.countSuffix': '· 人工挑选，机器归档并排序',
     'home.noArticles': '还没有已发布的文章',
     'home.noArticlesBody': '文章会在编辑发布后出现在这里。将 X 长文链接粘贴到',
     'home.importer': '管理后台的导入器',
@@ -496,9 +484,6 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'home.allLatest': '全部最新 →',
     'home.popularTags': '热门标签',
 
-    'trending.lede': '此刻归档库中正在被阅读的内容。',
-    'featured.lede': '编辑标记过的文章，最新在前。',
-    'latest.lede': '所有已发布的文章，最新在前。',
 
     'search.title': '搜索',
     'search.heroSub': '在归档库中查找任何内容。',
@@ -668,8 +653,6 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'board.page': '{page} ページ目',
 
     'home.eyebrow': 'X の長文記事',
-    'home.pickSub': '編集部の選定',
-    'home.countSuffix': '· 人が選び、機械がアーカイブして順位づけ',
     'home.noArticles': '公開された記事はまだありません',
     'home.noArticlesBody': '編集部が公開すると、ここに記事が表示されます。X の記事 URL を',
     'home.importer': '管理画面のインポーター',
@@ -682,9 +665,6 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'home.allLatest': '新着をすべて見る →',
     'home.popularTags': '人気のタグ',
 
-    'trending.lede': 'いまアーカイブで読まれているもの。',
-    'featured.lede': '編集部が選んだ記事を、新しい順に。',
-    'latest.lede': '公開されたすべての記事を、新しい順に。',
 
     'search.title': '検索',
     'search.heroSub': 'アーカイブの中から何でも探せます。',

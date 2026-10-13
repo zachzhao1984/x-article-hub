@@ -11,12 +11,11 @@ import { i18nSpread } from '../lib/i18n';
 export interface Props {
   sort: PublicSort;
   heading: string;
-  lede: string;
   path: string;
   description: string;
 }
 
-const { sort, heading, lede, path, description } = Astro.props;
+const { sort, heading, path, description } = Astro.props;
 const db = env.DB as unknown as D1Database;
 
 const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
@@ -32,10 +31,14 @@ const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
 
 <Base title={heading} description={description} path={path}>
   <SiteHeader>
-    <header class="hero">
-      <h1>{heading}</h1>
-      <p class="hero-sub">{lede}</p>
-    </header>
+    {/*
+      No hero on the boards either, for the same reason as the homepage: the heading
+      restated what the nav already says and cost a screen of scrolling before the first
+      card. `heading` still drives the document title and the `h1` below, which is
+      visually hidden rather than removed — a board with no `h1` is a page a screen reader
+      announces as untitled.
+    */}
+    <h1 class="sr-only">{heading}</h1>
 
     {
       articles.length === 0 ? (

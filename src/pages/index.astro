@@ -6,7 +6,6 @@ import SiteHeader from '../components/SiteHeader.astro';
 import ArticleCard from '../components/ArticleCard.astro';
 import Icon from '../components/Icon.astro';
 import {
-  homepageCounts,
   listPublishedArticles,
   listTagsWithCounts,
 } from '../db/public';
@@ -23,8 +22,7 @@ const db = env.DB as unknown as D1Database;
 // Categories stay reachable — the header lists them as chips, and each card, search hit
 // and article links into `/category/:slug` — so this removes one entrance to a page
 // that is still on the sitemap, not a section of the site.
-const [counts, trending, latest, featured, tags] = await Promise.all([
-  homepageCounts(db),
+const [trending, latest, featured, tags] = await Promise.all([
   listPublishedArticles(db, { sort: 'trending', limit: 5 }),
   listPublishedArticles(db, { sort: 'latest', limit: 5 }),
   listPublishedArticles(db, { sort: 'featured', limit: 3 }),
@@ -42,7 +40,12 @@ const [counts, trending, latest, featured, tags] = await Promise.all([
 // The row and the old "⭐ Editor's Picks" section were the same `featured` array, so the
 // lower section went when the title moved up rather than the page printing the same
 // three articles twice.
-const empty = counts.total === 0;
+// `latest` answers the empty-state question for nothing: `listPublishedArticles` filters
+// on the same `status = 'published' AND display_mode != 'takedown'` that `homepageCounts`
+// counts, so an empty result means an empty archive exactly, not approximately. The
+// hero's count line was this query's only other reader, and it went with the hero — so
+// the query went too, which is the same rule the paragraph above is about.
+const empty = latest.length === 0;
 ---
 
 <Base
@@ -51,13 +54,14 @@ const empty = counts.total === 0;
   path="/"
 >
   <SiteHeader>
-    <section class="hero">
-      <h1 {...i18nSpread('home.eyebrow')}>X Article</h1>
-      <p class="hero-sub" {...i18nSpread('home.pickSub')}>Editor's Pick</p>
-      <p class="hero-meta">
-        {counts.total} <span {...i18nSpread('home.countSuffix')}>· curated by hand, archived and ranked by machine</span>
-      </p>
-    </section>
+    {/*
+      No hero. This block used to open with an eyebrow, a title and a count line, which
+      put the first row of cards below the fold in exchange for restating what the header
+      already says. The heading is kept rather than dropped, and kept localized, because a
+      page with no `h1` is one a screen reader announces as untitled — the same `sr-only`
+      treatment the site name already gets in the header.
+    */}
+    <h1 class="sr-only" {...i18nSpread('home.eyebrow')}>X Article</h1>
 
     {
       empty ? (
