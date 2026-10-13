@@ -21,6 +21,7 @@ import { cf } from '@astrojs/cloudflare/hono';
 import { app as apiApp } from './app';
 import { handleBatch } from './jobs/dispatch';
 import { refreshRanking } from './services/ranking-refresh';
+import { generateMissingCovers } from './services/cover';
 import { log } from './lib/logger';
 import type { JobMessage } from './jobs/types';
 
@@ -69,6 +70,12 @@ export default {
    * ran — the log line carries the counts that matter.
    */
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    ctx.waitUntil(generateMissingCovers(env, 1).catch((err: unknown) => {
+      log.error('ai_failed', {
+        error_code: 'COVER_RETRY_FAILED',
+        error_message: err instanceof Error ? err.message : String(err),
+      });
+    }));
     log.info('ranking_refresh_start', {
       cron: controller.cron,
       environment: env.ENVIRONMENT ?? 'production',

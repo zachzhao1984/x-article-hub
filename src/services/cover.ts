@@ -46,6 +46,16 @@ import { sniffImageType } from './media';
  */
 export const COVER_MODEL = '@cf/black-forest-labs/flux-1-schnell';
 
+/** After media processing, generate a fallback only when no card image exists. */
+export async function ensureArticleCover(env: Env, articleId: string): Promise<CoverOutcome | null> {
+  const existing = await env.DB.prepare(
+    `SELECT id FROM media_objects WHERE article_id = ? AND kind IN ('body', 'cover')
+      AND status = 'ready' AND r2_key IS NOT NULL LIMIT 1`,
+  ).bind(articleId).first<{ id: string }>();
+  if (existing) return null;
+  return generateCover(env, articleId);
+}
+
 export type CoverErrorCode = 'MODEL_UNAVAILABLE' | 'EMPTY_IMAGE' | 'INVALID_IMAGE' | 'NOT_FOUND';
 
 /**
@@ -359,7 +369,7 @@ export async function generateMissingCovers(
   const missing = await env.DB.prepare(
     `SELECT a.id
        FROM articles a
-      WHERE NOT EXISTS (
+       WHERE a.status IN ('published', 'review', 'archived') AND NOT EXISTS (
         SELECT 1 FROM media_objects m
          WHERE m.article_id = a.id AND m.r2_key IS NOT NULL
            AND m.kind IN ('body', 'cover'))

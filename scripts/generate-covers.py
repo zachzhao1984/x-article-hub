@@ -24,6 +24,7 @@ have a cover, so re-running after an interruption continues rather than repeatin
 
 import argparse
 import json
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -73,18 +74,19 @@ def main() -> int:
         )
         return _retry(lambda: urllib.request.urlopen(req, timeout=180))
 
-    # Find the articles that need one. The admin list reports `cover_image_id` already
-    # resolved against body-then-cover, so a null there is exactly the set to work on.
-    targets, offset, page = [], 0, 100
-    while True:
-        d = get(f"/api/admin/articles?limit={page}&offset={offset}")
-        arts = d.get("articles") or []
-        for a in arts:
-            if not a.get("cover_image_id") and a.get("status") in ("review", "published", "archived"):
-                targets.append(a)
-        if len(arts) < page:
-            break
-        offset += page
+    # Neither HTTP listing exposes the resolved card cover. Query the same
+    # media predicate used by card selection, instead of treating an absent
+    # response field as proof that every article lacks a cover.
+    query = """SELECT a.id, a.title, a.slug FROM articles a
+      WHERE a.status IN ('published','review','archived') AND NOT EXISTS (
+        SELECT 1 FROM media_objects m WHERE m.article_id=a.id
+          AND m.kind IN ('body','cover') AND m.r2_key IS NOT NULL)
+      ORDER BY a.imported_at DESC"""
+    result = subprocess.run(
+        ['npx', 'wrangler', 'd1', 'execute', 'x-article-hub', '--remote', '--json', '--command', query],
+        check=True, capture_output=True, text=True,
+    )
+    targets = json.loads(result.stdout)[0]['results']
 
     if args.limit:
         targets = targets[: args.limit]

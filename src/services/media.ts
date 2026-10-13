@@ -14,6 +14,7 @@ import type { ArticleDocument, ArticleImage } from '../types/article-document';
 import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { readArticleDocument, writeArticleDocument } from './archive';
+import { ensureArticleCover } from './cover';
 import { imageDimensions } from '../lib/image-size';
 
 export type MediaErrorCode = 'IMAGE_FETCH_FAILED' | 'INVALID_CONTENT_TYPE' | 'IMAGE_TOO_LARGE';
@@ -179,6 +180,8 @@ export async function downloadArticleMedia(env: Env, articleId: string): Promise
   if (avatar) {
     await refreshAvatar(env, articleId, avatar);
   }
+
+  await ensureArticleCover(env, articleId);
 
   log.info(failures.length === 0 ? 'media_success' : 'media_failed', {
     article_id: articleId,

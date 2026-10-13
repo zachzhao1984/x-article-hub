@@ -478,6 +478,8 @@ type ArticleBlock =
 
 ## 8. 媒体管线
 
+媒体处理结束后，如果没有已归档正文图或生成封面，会调用 `ensureArticleCover` 生成兜底封面。现有每 30 分钟定时任务另补一篇缺图文章，供 AI 额度或临时失败后的重试。批量脚本直接查询 D1 的缺图条件，HTTP 文章列表不提供 `cover_image_id` 字段，不能据此筛选。
+
 `src/services/media.ts`（729 行）。
 
 ```ts
