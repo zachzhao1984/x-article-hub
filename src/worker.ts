@@ -22,6 +22,7 @@ import { app as apiApp } from './app';
 import { handleBatch } from './jobs/dispatch';
 import { refreshRanking } from './services/ranking-refresh';
 import { generateMissingCovers } from './services/cover';
+import { classifyUncategorized } from './services/classify';
 import { log } from './lib/logger';
 import type { JobMessage } from './jobs/types';
 
@@ -73,6 +74,20 @@ export default {
     ctx.waitUntil(generateMissingCovers(env, 1).catch((err: unknown) => {
       log.error('ai_failed', {
         error_code: 'COVER_RETRY_FAILED',
+        error_message: err instanceof Error ? err.message : String(err),
+      });
+    }));
+    // SPEC §13 — the classifier's backstop. `handleParse` schedules a classification for
+    // every article it parses, so this is not how articles normally get a category; it
+    // covers the ones that arrived before the classifier existed and the queue messages
+    // that go missing.
+    //
+    // Bounded low, and sequential, because it shares the free-tier daily allocation with
+    // the cover generator above. An unbounded run would spend the quota on categorisation
+    // and stop covers being made at all, so the bound is the point rather than a detail.
+    ctx.waitUntil(classifyUncategorized(env, 3).catch((err: unknown) => {
+      log.error('ai_failed', {
+        error_code: 'CLASSIFY_RETRY_FAILED',
         error_message: err instanceof Error ? err.message : String(err),
       });
     }));

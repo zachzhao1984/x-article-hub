@@ -5,7 +5,7 @@
  * version and the archive are unchanged, so redelivery is safe.
  */
 
-import type { JobMessage } from './types';
+import type { JobMessage, JobType } from './types';
 import { log } from '../lib/logger';
 import { getArticleById } from '../db/articles';
 import { getCrawlJob, updateJobStatus } from '../db/jobs';
@@ -55,7 +55,14 @@ export async function handleParse(message: JobMessage, env: Env): Promise<void> 
   // once the Parser has written one. Enqueuing from here rather than from the
   // crawl keeps the ordering guarantee in one place: there is no path that
   // produces a document without also scheduling the download.
-  await enqueueMediaJob(env, message.articleId);
+  await enqueueProcessJob(env, message.articleId, 'media');
+
+  // SPEC §13 — the classifier reads the plain text the parser just wrote, so it has the
+  // same ordering constraint as media and is scheduled from the same place. Enqueuing
+  // from here means there is no path that produces a document without also asking for a
+  // category, which is what makes "every article gets classified" true by construction
+  // rather than by remembering to call it.
+  await enqueueProcessJob(env, message.articleId, 'ai');
 
   log.info('parse_success', {
     article_id: message.articleId,
@@ -68,26 +75,31 @@ export async function handleParse(message: JobMessage, env: Env): Promise<void> 
 }
 
 /**
- * SPEC §19 — one open media job per article, so a redelivered parse cannot stack
- * duplicate downloads. The partial unique index on (article_id, job_type) makes
- * the duplicate enqueue impossible.
+ * SPEC §19 — one open job of each type per article, so a redelivered parse cannot stack
+ * duplicate downloads or duplicate classifier runs. The partial unique index on
+ * (article_id, job_type) makes the duplicate enqueue impossible rather than merely
+ * unlikely, which is why this is an `INSERT OR IGNORE` and a zero-row result is an
+ * expected outcome rather than an error.
+ *
+ * One function for both because the two differ only in their type: the idempotency
+ * argument is the same, and a second copy would drift the first time one was edited.
  */
-async function enqueueMediaJob(env: Env, articleId: string): Promise<void> {
+async function enqueueProcessJob(env: Env, articleId: string, type: JobType): Promise<void> {
   const now = Date.now();
   const jobId = newId('job');
 
   const inserted = await env.DB.prepare(
     `INSERT OR IGNORE INTO crawl_jobs (id, article_id, job_type, status, attempt_count, deliveries, created_at, updated_at)
-     VALUES (?1, ?2, 'media', 'queued', 0, 0, ?3, ?3)`,
+     VALUES (?1, ?2, ?4, 'queued', 0, 0, ?3, ?3)`,
   )
-    .bind(jobId, articleId, now)
+    .bind(jobId, articleId, now, type)
     .run();
 
   if ((inserted.meta.changes ?? 0) === 0) {
     log.info('ingest_deferred', {
       article_id: articleId,
-      job_type: 'media',
-      error_message: 'A media job is already open for this article.',
+      job_type: type,
+      error_message: `A ${type} job is already open for this article.`,
     });
     return;
   }
@@ -95,9 +107,9 @@ async function enqueueMediaJob(env: Env, articleId: string): Promise<void> {
   await env.ARTICLE_PROCESS_QUEUE.send({
     jobId,
     articleId,
-    type: 'media',
+    type,
     attempt: 1,
     createdAt: now,
   });
-  log.info('queue_published', { queue: 'article-process', article_id: articleId, job_id: jobId, job_type: 'media' });
+  log.info('queue_published', { queue: 'article-process', article_id: articleId, job_id: jobId, job_type: type });
 }

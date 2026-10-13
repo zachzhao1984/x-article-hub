@@ -23,6 +23,7 @@ export type LogEvent =
   | 'parse_failed'
   | 'ai_success'
   | 'ai_failed'
+  | 'ai_skipped'
   | 'media_success'
   | 'media_failed'
   | 'publish'
