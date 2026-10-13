@@ -346,12 +346,14 @@ const jsonLd = isTakedown
               }
 
               <!-- SPEC §33 — the X link is explicit and separate from our canonical. -->
+              <div class="article-footer-actions">
               <a class="original-link" href={article.canonical_url} target="_blank" rel="noopener noreferrer nofollow" {...i18nSpread('article.viewOriginal')}>
                 ↗ View original on X
               </a>
 
               {/* SPEC §43 — the same control again, for someone who decided at the end. */}
               <span class="save-slot" data-save-slot data-article-id={article.id}></span>
+              </div>
             </footer>
           </>
         )

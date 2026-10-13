@@ -882,6 +882,7 @@ a:hover { color: var(--accent); }
 .article-body img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--border); }
 
 .article-footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border-soft); }
+.article-footer-actions { display: flex; align-items: center; gap: 16px; }
 .tag-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 24px; }
 .original-link {
   display: inline-flex;
