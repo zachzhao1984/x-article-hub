@@ -17,6 +17,7 @@
 import { R2_PATHS } from '../types/article-document';
 import { recoverVideoLinks } from '../parser/video';
 import { recoverEmbeddedPosts } from '../parser/embedded-post';
+import { enrichEmbeddedMedia } from '../parser/embedded-media';
 import { restoreArchivedMedia, type ArchivedMedia } from '../parser/archived-media';
 import type { ArticleDocument } from '../types/article-document';
 import { countWords, documentToPlainText, inlineToText } from '../types/article-document';
@@ -66,7 +67,7 @@ import { readRawArchive } from './crawl';
  *   v10 - restore ready image rows before writing rebuilt documents; a re-parse
  *     must not reset archived images to external fallbacks.
  */
-export const PARSER_VERSION = 12;
+export const PARSER_VERSION = 15;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 
@@ -147,6 +148,7 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     const post = embedded.posts.find((p) => marker === `XEMBEDPOST${p.postId}`);
     return post ? { type: 'embed' as const, ...post } : block;
   });
+  await enrichEmbeddedMedia(document, env.ARCHIVE);
   // Re-parsing bypasses the media job, so hydrate the rebuilt document before
   // writing it. Otherwise ready R2 images become unarchived placeholders.
   const { results: archivedMedia } = await env.DB.prepare(

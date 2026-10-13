@@ -312,6 +312,9 @@ const jsonLd = isTakedown
                             <blockquote class="embedded-post">
                               {block.author && <strong>{block.author}</strong>}
                               {block.text && <p>{block.text}</p>}
+                              {block.videoUrl && (
+                                <video src={block.videoUrl} poster={block.poster} controls playsinline preload="metadata" aria-label={block.author || 'X video'} />
+                              )}
                               <a href={block.url || `https://x.com/i/web/status/${block.postId}`} target="_blank" rel="noopener noreferrer nofollow">X ↗</a>
                             </blockquote>
                           );

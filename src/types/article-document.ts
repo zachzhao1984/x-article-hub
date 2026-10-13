@@ -39,7 +39,7 @@ export type ArticleBlock =
   | { type: 'list'; ordered: boolean; items: InlineSpan[][] }
   | { type: 'image'; imageId: string }
   | { type: 'code'; language?: string; code: string }
-  | { type: 'embed'; postId: string; url?: string; author?: string; text?: string };
+  | { type: 'embed'; postId: string; url?: string; author?: string; text?: string; videoUrl?: string; poster?: string };
 
 /**
  * A run of inline content within a block.
