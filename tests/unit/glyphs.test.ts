@@ -145,8 +145,10 @@ describe('the glyph set', () => {
     const header = readFileSync(resolve('src/components/SiteHeader.astro'), 'utf8');
     // The search box submits here. Its own visibility is a layout decision
     // (`.search-mini` hides below 1100px), which is a separate concern from whether the
-    // destination is linked at all.
-    expect(header).toMatch(/<form class="search-mini" action="\/search"/);
+    // destination is linked at all. The form no longer carries the `search-mini` class —
+    // that moved to the wrapper that also holds the category filter — so the assertion is
+    // on the action.
+    expect(header).toMatch(/<form action="\/search"/);
     // About is in the footer, which is on every page.
       // About is in the footer, which is on every page. The link carries i18n attributes
       // now (SPEC §17.4), so the assertion is on the href and the English text rather than

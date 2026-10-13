@@ -18,8 +18,8 @@ import { resolve } from 'node:path';
  *
  * The thresholds below are those measurements. What is asserted here is the *order* they
  * give things up in, which is the part that is a decision rather than a number: primary
- * navigation before the site name, the site name before the search box, the search box
- * before the nav glyphs.
+ * navigation before the search box, the search box before the nav glyphs. The site name
+ * used to be the first entry in that order; it is now drawn at no width at all.
  */
 
 const css = readFileSync(resolve('public/site.css'), 'utf8');
@@ -58,17 +58,23 @@ describe('the header nav', () => {
   it('gives things up in the order the row is worth more', () => {
     // Ascending thresholds mean ascending sacrifice. Primary navigation is never on the
     // list — losing a nav item to a silent horizontal scroll loses the site, whereas the
-    // site name is carried by the mark and the document title and the search box is a
-    // shortcut to a page the nav links to directly.
-    const siteName = hidesAt('.logo-text');
+    // search box is a shortcut to a page the nav links to directly.
+    //
+    // The site name used to be the first entry here, hiding at 1300px. It is not on the
+    // ladder any more because it is now hidden at *every* width: the category filter moved
+    // into this row, and the column is `--wrap`-capped at all widths above 1300px, so there
+    // is no band where the name fits. See `.logo-text` for the measurement.
     const searchBox = hidesAt('.search-mini');
     const glyphs = hidesAt('.nav-icon');
 
-    expect(siteName).toBeGreaterThan(searchBox);
     expect(searchBox).toBeGreaterThan(glyphs);
     // And the glyphs are the last thing to go, because a nav that is labels-only still
     // reads; a nav whose labels are clipped does not.
     expect(glyphs).toBeGreaterThan(700);
+    // The name is hidden by the base rule, not by a breakpoint — `display: none` would
+    // also remove the logo link's accessible name, which only this text carries.
+    expect(css).toMatch(/\.logo-text \{[^}]*clip: rect\(0 0 0 0\)/);
+    expect(css).not.toMatch(/\.logo-text \{[^}]*display: none/);
   });
 
   it('degrades by scrolling rather than by clipping', () => {
@@ -82,34 +88,37 @@ describe('the header nav', () => {
   });
 
   it('keeps the search box on a desktop', () => {
-    // The threshold that gives the search box up is 1100px, so a 1280px laptop and a
+    // The threshold that gives the search box up is 1200px, so a 1280px laptop and a
     // 1440px desktop keep it. Worth asserting because the alternative — hiding it earlier
     // to make the numbers comfortable — is the change that would have cost a feature
     // rather than a few pixels of padding.
     expect(hidesAt('.search-mini')).toBeGreaterThan(1024);
-    // …and the site name survives even that.
-    expect(hidesAt('.logo-text')).toBeGreaterThan(1100);
+    // …and the mark survives even that. It is what still names the site once the wordmark
+    // stops being drawn.
+    expect(css).toContain('.logo-mark');
   });
 
   it('gives up exactly as much as the measurements call for', () => {
-    // The three thresholds, asserted outright. The test above pins the order and would
-    // happily accept a site name hidden from 1300px, which costs a laptop its wordmark for
-    // nothing — the row already fits at 1200px. So these are the measured values, and a
-    // change to any of them means re-running the measurement rather than nudging a number
-    // until the suite is green.
+    // The two remaining thresholds, asserted outright. The test above pins the order and
+    // would happily accept the search box being hidden from 1400px, which costs a laptop
+    // its search field for nothing. So these are the measured values, and a change to any
+    // of them means re-running the measurement rather than nudging a number until the suite
+    // is green.
     //
-    // Re-measured when the sixth nav item (`/authors`) went in, because the row is what
-    // decides them:
+    // Re-measured when the category filter moved into the header row. That is also when the
+    // site name left the ladder — it used to be a third entry here, at 1300:
     //
-    //   1300  where the row stops fitting six items with the wordmark. It was 1180 with
-    //         five; with six, 1181–1280+ had 553px for a nav needing 558px — 5px short at
-    //         every width above the old threshold, because the wordmark keeps its width and
-    //         the rest of the row is fixed.
-    //   1200  where it stops fitting them with the search box. Was 1100; with six items the
-    //         1101–1300 band was inside the line only just.
-    //    900  where it stops fitting the glyphs. Unchanged — the two above absorbed the
-    //         sixth item before this one had to.
-    expect(hidesAt('.logo-text')).toBe(1300);
+    //   the row gained a ~152px <select>, and the column is --wrap-capped at 1180px of
+    //   content at every viewport from 1301px up, so a wider monitor buys nothing. With the
+    //   Chinese labels — the widest of the three — the nav needs 372px and the row gave it
+    //   288px. Every combination that kept the wordmark (shrinking the search box, the
+    //   select, or the header gap) landed within ±10px of that line, which is no margin.
+    //
+    //   1200  where it stops fitting the search box *and* the filter with it. Was 1100;
+    //         the pair is ~350px rather than the box's ~190px, so the band that used to
+    //         just fit no longer does.
+    //    900  where it stops fitting the glyphs. Unchanged — it absorbed the filter before
+    //         this one had to.
     expect(hidesAt('.search-mini')).toBe(1200);
     expect(hidesAt('.nav-icon')).toBe(900);
   });

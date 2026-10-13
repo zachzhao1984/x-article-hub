@@ -87,6 +87,25 @@ const nav: Array<{ href: string; label: string; icon: IconName; key: Translation
 
 const categories = await listCategoriesWithCounts(env.DB as unknown as D1Database);
 const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+
+/**
+ * The category the reader is currently inside, so the filter holds its value.
+ *
+ * Read from the path rather than from a `?category=` parameter because the destination *is* a
+ * category page: selecting a category navigates to `/category/<slug>`, which is the URL a
+ * reader can bookmark, share and reach with the back button. Mirroring the path also means the
+ * control is correct on a category page without any query string at all, and stays correct
+ * after a server-side render with no JavaScript.
+ *
+ * Validated against the loaded list before use — the path segment is client-supplied in the
+ * sense that anything can be requested, and it is compared for equality against known slugs
+ * rather than concatenated into markup.
+ */
+const activeCategory = (() => {
+  const match = /^\/category\/([^/]+)\/?$/.exec(path);
+  const slug = match?.[1] ? decodeURIComponent(match[1]) : '';
+  return categories.some((c) => c.slug === slug) ? slug : '';
+})();
 ---
 
 <header class="site-header">
@@ -129,20 +148,62 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
       }
     </nav>
 
-    <form class="search-mini" action="/search" method="get" role="search">
-      <input
-        type="search"
-        name="q"
-        placeholder="Search articles"
-        aria-label="Search articles"
-        data-i18n-placeholder-key="header.search.placeholder"
-        data-i18n-placeholder-zh={TRANSLATIONS.zh['header.search.placeholder']}
-        data-i18n-placeholder-ja={TRANSLATIONS.ja['header.search.placeholder']}
-        data-i18n-aria-key="header.search.label"
-        data-i18n-aria-zh={TRANSLATIONS.zh['header.search.label']}
-        data-i18n-aria-ja={TRANSLATIONS.ja['header.search.label']}
-      />
-    </form>
+    {/*
+      SPEC §15 — categories as a filter, not a row.
+
+      The five chips used to occupy their own full-width line under the header. That line was
+      the first thing to make the header tall on a laptop, and it separated the search box from
+      the navigation by a rule, so the two things a reader uses to *narrow* the archive sat far
+      apart. A `<select>` puts the filter next to the search it composes with, costs a fixed
+      width instead of the sum of five chips, and is a single control a keyboard reaches in one
+      stop.
+
+      A native `<select>` rather than a custom listbox on purpose: it is focusable and
+      arrow-key operable everywhere with no JavaScript, and it collapses to the platform control
+      on mobile.
+
+      It carries no `name`, so it is never submitted with the search form beside it: choosing a
+      category *navigates* to `/category/<slug>`, which is the archive's own, sortable,
+      bookmarkable view of it. Submitting `?category=…&q=…` to `/search` instead would ship a
+      parameter the results page has no way to honour — the reader would see a search that
+      silently ignored half of what they asked for.
+    */}
+    <div class="search-mini">
+      <select
+        class="category-select"
+        aria-label="Filter by category"
+        data-i18n-aria-key="nav.categories"
+        data-i18n-aria-zh={TRANSLATIONS.zh['nav.categories']}
+        data-i18n-aria-ja={TRANSLATIONS.ja['nav.categories']}
+        onchange="location.href = this.value ? '/category/' + this.value : '/'"
+      >
+        <option value="" selected={!activeCategory} {...i18nSpread('nav.allTopics')}>All topics</option>
+        {
+          categories.map(
+            (c) => (
+              <option value={c.slug} selected={activeCategory === c.slug}>
+                {c.name}
+              </option>
+            ),
+          )
+        }
+      </select>
+
+      <form action="/search" method="get" role="search">
+        <input
+          type="search"
+          name="q"
+          placeholder="Search articles"
+          aria-label="Search articles"
+          data-i18n-placeholder-key="header.search.placeholder"
+          data-i18n-placeholder-zh={TRANSLATIONS.zh['header.search.placeholder']}
+          data-i18n-placeholder-ja={TRANSLATIONS.ja['header.search.placeholder']}
+          data-i18n-aria-key="header.search.label"
+          data-i18n-aria-zh={TRANSLATIONS.zh['header.search.label']}
+          data-i18n-aria-ja={TRANSLATIONS.ja['header.search.label']}
+        />
+      </form>
+    </div>
 
     <LangSwitch current={lang} />
 
@@ -342,18 +403,6 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     })();
   </script>
 
-  <div class="wrap category-bar" {...i18nAttrSpread('aria-label', 'nav.categories')}>
-    {
-      categories.map(
-        (c) => (
-          <a href={`/category/${c.slug}`} class:list={['cat-chip', { active: path === `/category/${c.slug}` }]}>
-            {c.name}
-            <span class="cat-count">{c.count}</span>
-          </a>
-        ),
-      )
-    }
-  </div>
 </header>
 
 <main class="wrap main">

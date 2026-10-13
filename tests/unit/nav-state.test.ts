@@ -138,9 +138,9 @@ describe('the nav current state', () => {
   });
 
   it('does not spend the nav\'s horizontal slack on a bolder current label', () => {
-    // `cat-chip.active` sets `font-weight: 600` and can afford it; the nav cannot. Measured:
-    // seven items at 10px padding need exactly the 642px the row has from 1200px up, so a
-    // wider current item would clip the last one — and only on the pages where it is bold,
+    // The category page's sort chips set `font-weight: 600` and can afford it; the nav cannot.
+    // Measured: seven items at 10px padding need exactly the 642px the row has from 1200px up,
+    // so a wider current item would clip the last one — and only on the pages where it is bold,
     // making the row change width on every navigation.
     expect(ruleFor('.nav-item.active')).not.toContain('font-weight');
   });
@@ -154,20 +154,25 @@ describe('the nav current state', () => {
   });
 
   it('never puts two different current treatments in one header', () => {
-    // The nav has no `/category/*` entry and `isActive` matches on a path prefix, so a
-    // category page activates no nav item and a board page activates no chip. The
-    // `.cat-chip.active` text fill and the `.nav-item.active` accent fill are therefore never
-    // on screen together. Asserted so that adding a category entry to the nav — which would
-    // put a near-black pill 60px below an accent one — breaks a test instead of a reviewer's
-    // eye.
+    // The category filter is a `<select>` inside the search form, so the header now owns
+    // exactly one "you are here" treatment: the nav's accent fill. The earlier version of
+    // this assertion compared that fill against `.cat-chip.active`'s `--text` fill — the
+    // category chips used to be a second row in the header, and the two treatments were 60px
+    // apart. Now that the chips are gone, the honest form of the invariant is that no other
+    // header control paints a selected state at all, which a returning "All topics" option or
+    // a tinted `.category-select` would both break.
     const header = readFileSync(resolve('src/components/SiteHeader.astro'), 'utf8');
     const navHrefs = [...header.matchAll(/href: '([^']+)'/g)].map((m) => m[1] ?? '');
     expect(navHrefs.some((href) => href.startsWith('/category'))).toBe(false);
     expect(navHrefs).not.toContain('/category/:slug');
+    expect(header).not.toContain('cat-chip');
 
-    // And the two rules are genuinely different, which is what makes the non-co-occurrence
-    // load-bearing rather than a coincidence.
-    expect(ruleFor('.cat-chip.active')).toContain('background: var(--text)');
+    // The filter stays neutral: no fill of its own, so the accent fill is the only one on
+    // screen. `ruleFor` throws rather than returning undefined, so a rule that is deleted
+    // outright fails here too instead of silently passing.
+    const select = ruleFor('.category-select');
+    expect(select).not.toContain('background: var(--text)');
+    expect(select).not.toContain('--accent');
     expect(ruleFor('.nav-item.active')).toContain('background: var(--accent)');
   });
 });

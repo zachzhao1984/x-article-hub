@@ -77,11 +77,20 @@ describe('the homepage', () => {
 
   it('keeps categories reachable from the header', () => {
     // The removal is one entrance to a section that is still on the sitemap, not the
-    // section itself. This holds the difference: the header still lists every category
-    // with its count, and `/category/:slug` is still in the sitemap.
+    // section itself. The header now reaches every category through the filter `<select>`
+    // beside the search box rather than a row of chips: each slug is still an option and
+    // still navigates to `/category/<slug>`. `/category/:slug` is still in the sitemap.
+    //
+    // The counts are gone with the chips. They are all zero — no published article carries
+    // a category — so `AI (0)` was not information, and the option is 108px wide with 71px
+    // of text room, where "Technology (0)" (86px) would truncate while "Technology" (66px)
+    // fits. The count returns with the first article that is actually categorised, and it
+    // belongs on the category page, not in a control too narrow to show it.
     const header = readFileSync(resolve('src/components/SiteHeader.astro'), 'utf8');
     expect(header).toContain('listCategoriesWithCounts');
-    expect(header).toContain('/category/${c.slug}');
+    expect(header).toContain('value={c.slug}');
+    expect(header).not.toContain('{c.count}');
+    expect(header).toMatch(/this\.value \? '\/category\/' \+ this\.value/);
     expect(readFileSync(resolve('src/pages/sitemap.xml.ts'), 'utf8')).toContain('/category/${c.slug}');
   });
 

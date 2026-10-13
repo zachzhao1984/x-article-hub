@@ -49,6 +49,7 @@ export interface Translations {
   'nav.authors': string;
   'nav.primary': string;
   'nav.categories': string;
+  'nav.allTopics': string;
   'header.search.placeholder': string;
   'header.search.label': string;
   'header.signIn': string;
@@ -253,6 +254,7 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'nav.authors': 'Authors',
     'nav.primary': 'Primary',
     'nav.categories': 'Categories',
+    'nav.allTopics': 'All topics',
     'header.search.placeholder': 'Search articles',
     'header.search.label': 'Search articles',
     'header.signIn': 'Sign in',
@@ -439,6 +441,7 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'nav.authors': '作者',
     'nav.primary': '主导航',
     'nav.categories': '分类',
+    'nav.allTopics': '全部分类',
     'header.search.placeholder': '搜索文章',
     'header.search.label': '搜索文章',
     'header.signIn': '登录',
@@ -624,6 +627,7 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'nav.authors': '著者',
     'nav.primary': 'メインナビゲーション',
     'nav.categories': 'カテゴリ',
+    'nav.allTopics': 'すべて',
     'header.search.placeholder': '記事を検索',
     'header.search.label': '記事を検索',
     'header.signIn': 'ログイン',

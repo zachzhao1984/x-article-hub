@@ -213,7 +213,7 @@ body {
  */
 .hero-sub, .board-title, .board-more,
 .card-meta, .card-foot, .badge, .cat-chip, .cat-count,
-.tag, .nav-item, .search-mini input,
+.tag, .nav-item, .search-mini input, .category-select,
 .search-form input, .search-form button, .result-snippet, .article-crumbs,
 .original-link, .byline, .hero-meta, .footer-inner, .fig-missing, .empty-state,
 pre, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
@@ -256,7 +256,10 @@ a:hover { color: var(--accent); }
 .header-inner {
   display: flex;
   align-items: center;
-  gap: 24px;
+  /* 18px, down from 24px. The site name is no longer drawn at any width, so this row's
+   * spacing is set once rather than changed at a breakpoint — and every pixel here is
+   * taken from the nav, which is the one thing that must never scroll. */
+  gap: 18px;
   height: 58px;
 }
 
@@ -296,7 +299,37 @@ a:hover { color: var(--accent); }
   :root:not([data-theme='light']) .logo-mark { display: none; }
   :root:not([data-theme='light']) .logo-mark-inverse { display: block; }
 }
-.logo-text { white-space: nowrap; }
+/*
+ * The site name is announced but no longer drawn.
+ *
+ * It used to be visible above 1300px and hidden below it. Moving the category filter into
+ * the header row is what ended that: the row gained a ~152px `<select>`, and the column is
+ * `--wrap` wide — 1180px of content at *every* viewport from 1301px up, so a wider monitor
+ * buys nothing. Measured in headless Chrome against the deployed header, with the Chinese
+ * labels (the widest of the three): the nav needs 372px and the row gave it 288px. Every
+ * combination that kept the wordmark — shrinking the search box, the select, or the header
+ * gap — landed within ±10px of that line, which is no margin at all.
+ *
+ * So the name gives way, per the ladder this row has always followed: primary navigation
+ * never gives way, and the site name is the first thing to go because the mark beside it
+ * and the document title already carry it.
+ *
+ * `visually-hidden` and not `display: none`, because both marks are `alt=""` — deliberate,
+ * so a screen reader does not hear the name twice — which makes this text the logo link's
+ * only accessible name. Removing it would announce the link as empty on every page.
+ */
+.logo-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
 .nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
 .nav-item {
@@ -324,17 +357,15 @@ a:hover { color: var(--accent); }
  * not tell which board they were on. The accent fill measures 5.9:1 against the header in
  * light and 9.0:1 in dark, with 6.2:1 and 10.7:1 between its own fill and its lettering.
  *
- * `.cat-chip.active` in the category row answers the same question with a `--text` fill and
- * does carry a `font-weight` change. Neither is copied here, and the reason is not that they
- * are wrong. The text fill is louder, and louder is not the goal. The weight is left out for
- * a measured reason: it widens the label, and the nav has no slack, so the row would change
- * width on every navigation.
+ * The category page's sort chips answer the same question with a `--text` fill and do carry a
+ * `font-weight` change. Neither is copied here, and the reason is not that they are wrong. The
+ * text fill is louder, and louder is not the goal. The weight is left out for a measured reason:
+ * it widens the label, and the nav has no slack, so the row would change width on every
+ * navigation.
  *
- * The two treatments never appear together, which is what makes having both safe. The nav
- * has no `/category/*` entry and `isActive` matches on a path prefix, so a category page
- * activates no nav item and a board page activates no chip. Worth knowing before adding a
- * category entry to the nav: it would put a `--text` pill and an `--accent` pill 60px apart
- * in one header, and that *would* read as two systems.
+ * Those chips live in the page body, not the header, so the two treatments cannot meet. Worth
+ * knowing before moving them: a `--text` pill and an `--accent` pill side by side in one header
+ * would read as two systems.
  *
  * Hover stays neutral on purpose. A tinted hover would compete with the accent for the
  * meaning "selected", so hover is carried by the lettering instead — `--muted` is 5.7:1
@@ -360,6 +391,14 @@ a:hover { color: var(--accent); }
   opacity: 0.85;
 }
 
+/* SPEC §15 — the category filter, inside the search form. */
+.search-mini {
+  display: flex;
+  align-items: center;
+  /* 6px, not 8px. Every pixel of this pair's width is taken straight out of the nav, which
+   * is the one thing in the row that must never scroll (see `.nav-item` below). */
+  gap: 6px;
+}
 .search-mini input {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -367,19 +406,46 @@ a:hover { color: var(--accent); }
   color: var(--text);
   padding: 6px 11px;
   font-size: 13px;
-  width: 190px;
+  /* 170px, down from 190px. Measured in English, which is the widest of the three labels:
+   * the nav needs 462px and the row has 1132px of content, so the pair can afford at most
+   * ~250px with any margin left over. */
+  width: 170px;
 }
 .search-mini input:focus { outline: none; border-color: var(--accent-dim); }
 
-.category-bar {
-  display: flex;
-  gap: 6px;
-  padding-top: 9px;
-  padding-bottom: 9px;
-  overflow-x: auto;
-  border-top: 1px solid var(--border-soft);
-  margin-top: -1px;
+/*
+  The select is styled to the same measure as the search box next to it — same border, radius,
+  padding and text size — so the pair reads as one control rather than as a filter with a search
+  field attached.
+
+  108px is a measured ceiling, not a taste: the longest option that has to fit un-truncated is
+  "Technology" at 66px, plus 11px left padding and 26px of caret gutter. Fixed rather than
+  auto-sizing because a variable width makes the search box jump as the selection changes.
+
+  `appearance: none` with the caret re-drawn as a `::after` chevron is what keeps the control
+  identical across platforms; the native arrow renders at a different size and colour on macOS,
+  Windows and Android, and the padding it reserves leaves the label off-centre.
+*/
+.category-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--panel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23787f8a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E")
+    no-repeat right 9px center / 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 6px 26px 6px 11px;
+  width: 108px;
+  text-overflow: ellipsis;
 }
+.category-select:hover { border-color: var(--faint); }
+.category-select:focus { outline: none; border-color: var(--accent-dim); }
+
+/* SPEC §15 — the category page's sort chips. The selected state is an inline style there,
+   because a sort chip is a set of links rather than a single filter's state. */
 .cat-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px;
@@ -390,9 +456,7 @@ a:hover { color: var(--accent); }
   white-space: nowrap;
 }
 .cat-chip:hover { color: var(--text); border-color: var(--faint); }
-.cat-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
 .cat-count { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
-.cat-chip.active .cat-count { color: var(--bg); opacity: 0.65; }
 
 /* --- main --- */
 
@@ -768,8 +832,8 @@ a:hover { color: var(--accent); }
  * They are deleted rather than left declared: a selector nothing renders reads as live
  * and gets restyled later, and `.cat-card`/`.cat-name`/`.cat-desc` were also members of
  * the 1.5 line-height group above, so they would have lingered there as references to
- * nothing. `.cat-count` survives — the header's category chips and this page's tag cloud
- * both still use it.
+ * nothing. `.cat-count` survives — the category select's option labels and this page's tag
+ * cloud both still use it, and `.cat-chip` survives on the category page's sort row.
  */
 
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -1123,31 +1187,27 @@ pre {
  * with six items too — the phone case was never a fitting case.
  */
 /*
- * The mark releases the site name.
+ * The header's spacing is now set once, at the base rule: the site name is drawn at no
+ * width at all, so there is no band where the row has more room and can afford a wider gap.
  *
- * This used to fire at 1180px. Adding the sixth nav item moved it, and the measurement is
- * the reason: at 1280px and above the row had 553px for the nav while the nav needed 558px
- * — 5px short, at *every* width from 1181px up, because above the threshold the site name
- * keeps its width and the row is otherwise fixed. So a desktop at 1280px scrolled by 5px
- * with no affordance, while 1180px and below were fine. Raising the threshold to the next
- * convenient round number hands the name's ~150px to the nav across that whole range.
- *
- * Fail-then-fade, restated: primary navigation is never what gives way. The site name is
- * the first thing to go because the mark and the document title already carry it.
+ * The block that used to live here hid the site name at 1300px. It is gone for the reason
+ * given at `.logo-text` — the category filter moved into this row, and the column is
+ * `--wrap`-capped at every width above it, so a wider monitor buys nothing.
  */
-@media (max-width: 1300px) {
-  .logo-text { display: none; }
-  .header-inner { gap: 18px; }
-}
 
 /*
  * The search box goes next, for the same kind of reason: it is a shortcut to a page the
  * nav lists.
  *
- * 1100px was the old threshold and it is now too late — between 1101px and 1300px the nav
- * needed 578px and had between 578px and 553px, which is inside the line only just, and
- * the extra item made the margin go negative at the low end. Moving it up gives the nav
- * the box's ~190px through the whole awkward range.
+ * 1100px was the old threshold, 1200px the one after it, and both reason about a ~190px
+ * box. The control is now a pair — the category filter sits beside the search field inside
+ * the same `.search-mini` wrapper — at roughly 350px, so this threshold is the one that
+ * absorbed the filter rather than the nav having to.
+ *
+ * Re-measured with the Chinese labels, which are the widest of the three: with the filter
+ * shown the nav needs 372px, and the row at 1201px leaves it 424px. At 1200px and below the
+ * pair is gone and the nav gets the whole row, which is why the threshold is here and not
+ * lower.
  */
 @media (max-width: 1200px) {
   .search-mini { display: none; }
