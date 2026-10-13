@@ -23,7 +23,7 @@
 9. [视频：目前没有任何处理](#9-视频目前没有任何处理)
 10. [公开站与缓存](#10-公开站与缓存)
 11. [榜单：四个里有三个完全相同](#11-榜单四个里有三个完全相同)
-12. [分类：固定五项，运行时不可写](#12-分类固定五项运行时不可写)
+12. [分类：固定八项，运行时不可写](#12-分类固定八项运行时不可写)
 13. [账号与 admin 鉴权](#13-账号与-admin-鉴权)
 14. [搜索](#14-搜索)
 15. [测试与验收](#15-测试与验收)
@@ -39,9 +39,9 @@
 
 生产地址 `https://x-article-hub.zachzhao.workers.dev`，约 19,200 行代码，30 次提交。
 
-**当前库存（实测）：** 16 篇文章 / 15 已发布 / 13 篇 featured、6 位作者、83 个媒体对象、41 个解析版本、82 条策展事件、**0 条 metrics**、23 个标签、**0 个用户表历史遗留**、1 个账号（站长的）。
+**当前库存（实测）：** 98 篇文章 / 98 已发布 / 3 篇 featured、279 个媒体对象、1 个解析版本（v16）、299 条策展事件、130 行 metrics、23 个标签、8 个分类、1 个用户。
 
-其中 **9 篇有分类，全部由人工指定；6 篇没有分类**。`category_id` 列（设计上给 AI 用）**16 篇全为 NULL**。
+`authors` 表 6 行是早期 demo 种子的遗留：98 篇文章的 `author_id` **全是 NULL**，作者只以 `author_username` 文本存在（92 个不同值）。分类则是 **98 篇全部有分类** —— 见 §12。
 
 ---
 
@@ -132,7 +132,7 @@ worker.use(i18n())
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | |
-| GET | `/api/categories` | 5 个固定分类 |
+| GET | `/api/categories` | 8 个固定分类 |
 | GET | `/api/articles` | 分页列表 |
 | GET | `/api/articles/:slug` | 单篇详情 |
 
@@ -253,7 +253,7 @@ ai_summary  ai_category  ai_confidence
 ```
 category_id  editor_category_id
 ```
-`category_id` 是设计给 AI 的那半，**16 篇全为 NULL**（`ai` job 类型无消费者，见 §12）。实际生效的只有 `editor_category_id`（9 篇）。
+`category_id` 是设计给 AI 的那半，98 篇**全部有值**，但值是一次性直接写进 D1 的，不是流水线填的（`ai` job 类型仍无消费者，见 §12）。`editor_category_id` 目前 0 篇，所以 COALESCE 走的全是右半；你在 admin 里改任何一篇，左半就会开始生效。
 
 **人工覆盖**
 ```
@@ -628,17 +628,22 @@ featured : COALESCE(a.published_at, a.imported_at) DESC, a.id DESC   // + WHERE 
 
 ---
 
-## 12. 分类：固定五项，运行时不可写
+## 12. 分类：固定八项，运行时不可写
 
-`categories` 表 5 行，全部来自 `migrations/0002_seed_categories.sql` 的手写 INSERT：
+`categories` 表 8 行，来自两条手写 INSERT：`migrations/0002_seed_categories.sql`（原 SPEC §13.5 的五项）和 `migrations/0014_more_categories.sql`（Gaming / Culture / Lifestyle）。
 
 | id | slug | name | sort | 文章数 |
 |---|---|---|---|---|
-| `cat_ai` | `ai` | AI | 10 | 5 |
-| `cat_technology` | `technology` | Technology | 20 | 2 |
-| `cat_business` | `business` | Business | 30 | 2 |
+| `cat_ai` | `ai` | AI | 10 | 22 |
+| `cat_technology` | `technology` | Technology | 20 | 4 |
+| `cat_business` | `business` | Business | 30 | 28 |
 | `cat_science` | `science` | Science | 40 | **0** |
-| `cat_ideas` | `ideas` | Ideas | 50 | **0** |
+| `cat_ideas` | `ideas` | Ideas | 50 | 10 |
+| `cat_gaming` | `gaming` | Gaming | 60 | 11 |
+| `cat_culture` | `culture` | Culture | 70 | 16 |
+| `cat_lifestyle` | `lifestyle` | Lifestyle | 80 | 7 |
+
+98 篇已发布文章，**98 篇都有分类**。
 
 slug 是**字面量**，不是 id 生成器。
 
@@ -646,12 +651,15 @@ slug 是**字面量**，不是 id 生成器。
 
 ```
 grep "INSERT INTO categories|UPDATE categories|DELETE FROM categories" src/
-→ 0 hits
+→ src/services/teardown.ts:188  DELETE FROM categories
+   src/services/teardown.ts:194  INSERT INTO categories
 ```
 
-**没有任何服务、管理界面或 API 能新建、改名或删除分类。** admin 文章页的下拉框是从 `listCategories` 渲染的，只能在这 5 个里选。加一个分类 = 写一条迁移 + 部署。
+只有 admin reset 的 teardown 碰这张表，而且它删完立刻在**同一个 batch** 里插回同样的 8 行，所以分类从没有可观测地消失过。**没有任何服务、管理界面或 API 能新建、改名或删除分类。** admin 文章页的下拉框是从 `listCategories` 渲染的，只能在这 8 个里选。
 
-### ⚠️ AI 分类层从未接线
+**加一个分类 = 写一条迁移 + 部署 + 同步改 `teardown.ts` 里那份硬编码副本。** 漏掉第三步的话，下一次 admin reset 会把你新加的分类抹掉，文章的 `category_id` 指向不存在的行，分类页 404。（本文档早先那条「`grep` → 0 hits」的说法是错的：teardown 一直在写这张表。）
+
+### ⚠️ AI 分类层仍未接线
 
 `src/jobs/dispatch.ts`：
 
@@ -661,15 +669,13 @@ metrics:  notImplemented('metrics'),
 reindex:  notImplemented('reindex'),
 ```
 
-有类型声明、有队列、**没有消费者**。`ArticleStatus` 的 `AI` 阶段、`articles.category_id` 列、SPEC §13 的 prompt 形状都在。
+有类型声明、有队列、**没有消费者**。`ArticleStatus` 的 `AI` 阶段和 SPEC §13 的 prompt 形状都在，但 `ai` job 永远不会给任何文章写分类。
 
-**结果：16 篇的 `category_id` 全是 NULL，9 篇的分类全部来自你在 admin 里手选**（写进 `editor_category_id`）。
-
-而 5 处查询都在读 `COALESCE(a.editor_category_id, a.category_id)` —— **右半永远为空**。
+**所以 `category_id` 是一次性直接写进 D1 的，不是被这条流水线填的。** 98 篇逐篇读标题 + 正文开头判断后写进 `category_id`（机器那一列）而不是 `editor_category_id` —— 5 处查询读的都是 `COALESCE(a.editor_category_id, a.category_id)`，所以你在 admin 里改任何一篇仍然会赢。代价是**新抓到的文章不会自动归类**：`category_id` 会停在这 98 篇，除非有人再写一次，或者把 §13 的 job 真正接上。
 
 ### 关于空分类
 
-`Science` 和 `Ideas` 是 0 篇。**页头筛选器照常列出它们，但已不再显示计数** —— 分类行变成搜索框左侧的 `<select>` 后只剩 ~71px 的文字空间，`Technology (0)` 有 86px 会被截断，而 `Technology` 是 66px。何况计数全是 0（没有任何已发布文章带分类），本来也不是信息。计数回到分类页上；要么派文章，要么隐藏空分类 —— 后者会动页头和 `/api/categories`，是**产品决定不是 bug 修复**，所以一直没做。
+只剩 `Science` 是 0 篇 —— 语料里确实没有一篇讲自然科学；睡眠、多巴胺、自律神经那几篇都是实践向的养生文，归了 Lifestyle。**页头筛选器照常列出它，但不显示计数** —— 分类行变成搜索框左侧的 `<select>` 后只剩 ~71px 的文字空间，`Technology (0)` 有 86px 会被截断，而 `Technology` 是 66px。计数回到分类页上；要么派文章，要么隐藏空分类 —— 后者会动页头和 `/api/categories`，是**产品决定不是 bug 修复**，所以一直没做。
 
 ---
 
@@ -962,7 +968,7 @@ reindex: notImplemented('reindex'),
 
 - **用户功能**：账号体系存在但**不挂任何功能**（无收藏、无评论、无付费墙）。这是有意的 —— 见 SPEC §43.1
 - **视频**：见 §9
-- **Science / Ideas 空分类**：见 §12
+- **Science 空分类**（语料里没有自然科学文章）：见 §12
 
 ---
 
@@ -1016,8 +1022,9 @@ SELECT COUNT(*) FROM articles WHERE final_score IS NOT NULL;      -- 应等于�
 -- 互动数据覆盖率（§16 D1：X 对部分文章不返回互动栏，远小于已发布数属正常）
 SELECT COUNT(DISTINCT article_id) FROM article_metrics WHERE views IS NOT NULL;
 
--- 分类全在 editor 侧（D 的确认）
-SELECT COUNT(*) FROM articles WHERE category_id IS NOT NULL;      -- 0 = AI 层未接线
+-- 分类归属：98 = 全部已发布文章都有分类（写在 category_id，机器那一列）
+SELECT COUNT(*) FROM articles WHERE category_id IS NOT NULL;      -- 98
+SELECT COUNT(*) FROM articles WHERE editor_category_id IS NOT NULL; -- 0 = 还没有人工覆盖
 
 -- 媒体是否有非图片
 SELECT content_type, COUNT(*) FROM media_objects GROUP BY content_type;
@@ -1031,7 +1038,7 @@ SELECT content_type, COUNT(*) FROM media_objects GROUP BY content_type;
 
 | 设计文档说 | 实际 |
 |---|---|
-| §13 AI 分类建议 | `ai` job 类型 `notImplemented`，`category_id` 全 NULL |
+| §13 AI 分类建议 | `ai` job 类型仍 `notImplemented`；`category_id` 由一次性 D1 写入填满，不靠该 job |
 | §14 Ranking | 已由 `refreshRanking` + `*/30` cron 接管 |
 | §21 Cron Triggers | `triggers` 为空 |
 | §10 媒体含视频 | 三层无视频概念 |

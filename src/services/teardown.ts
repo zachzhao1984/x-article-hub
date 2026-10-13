@@ -62,7 +62,7 @@ export interface TeardownResult {
    * Rows that survive because they are not archive content.
    *
    * `categories` is here rather than in `removed` even though the rows are briefly deleted:
-   * the five seeded categories are the schema's baseline and are re-inserted in the same
+   * the seeded categories are the schema's baseline and are re-inserted in the same
    * batch, so reporting them as removed would describe a state the database never observably
    * had. `users` and the session tables are simply never touched.
    */
@@ -134,8 +134,9 @@ export async function summarizeTeardown(env: Env): Promise<TeardownCounts & { r2
  * reset rather than an unlink: a category with no articles is not a category, and the
  * same is true of a tag or an author row.
  *
- * **Except the seeded categories, which go straight back.** `0002_seed_categories.sql` is
- * the schema's own baseline — five fixed categories that the application assumes exist, and
+ * **Except the seeded categories, which go straight back.** `0002_seed_categories.sql` and
+ * `0014_more_categories.sql` together are the schema's own baseline — eight fixed categories
+ * that the application assumes exist, and
  * that `seed-demo.ts` resolves through a subquery on their slug. Deleting them and stopping
  * there leaves the app seeding articles with a null `category_id` and `/category/ai`
  * returning 404, which is not a reset but a broken install: the acceptance script caught
@@ -185,17 +186,20 @@ export async function teardownArchive(env: Env, actor: string): Promise<Teardown
     env.DB.prepare('DELETE FROM authors'),
     env.DB.prepare('DELETE FROM tags'),
     env.DB.prepare('DELETE FROM categories'),
-    // ...and the five seeded categories straight back, in the same batch, because they are
-    // the schema's baseline rather than content. Duplicating 0002 here is the cost of D1
-    // having no way to re-run a migration on demand; the alternative is leaving the install
+    // ...and the seeded categories straight back, in the same batch, because they are
+    // the schema's baseline rather than content. Duplicating 0002 and 0014 here is the cost of
+    // D1 having no way to re-run a migration on demand; the alternative is leaving the install
     // without the taxonomy the application and the demo seeder both resolve by slug.
     env.DB.prepare(
       `INSERT INTO categories (id, slug, name, description, sort_order, created_at) VALUES
-         ('cat_ai',         'ai',         'AI',         'Models, agents, coding, robotics and the AI industry.',            10, 1759000000000),
-         ('cat_technology', 'technology', 'Technology', 'Developer tools, hardware, semiconductors, cloud and open source.',  20, 1759000000000),
-         ('cat_business',   'business',   'Business',   'Startups, SaaS, venture, strategy and markets.',                   30, 1759000000000),
-         ('cat_science',    'science',    'Science',    'Biology, physics, space and mathematics.',                         40, 1759000000000),
-         ('cat_ideas',      'ideas',      'Ideas',      'Philosophy, the future, society and culture.',                     50, 1759000000000)`,
+         ('cat_ai',         'ai',         'AI',         'Models, agents, coding, robotics and the AI industry.',               10, 1759000000000),
+         ('cat_technology', 'technology', 'Technology', 'Developer tools, hardware, semiconductors, cloud and open source.',     20, 1759000000000),
+         ('cat_business',   'business',   'Business',   'Startups, SaaS, venture, strategy and markets.',                      30, 1759000000000),
+         ('cat_science',    'science',    'Science',    'Biology, physics, space and mathematics.',                            40, 1759000000000),
+         ('cat_ideas',      'ideas',      'Ideas',      'Philosophy, arguments about thinking, work and the future.',          50, 1759000000000),
+         ('cat_gaming',     'gaming',     'Gaming',     'Video games, game studios, esports and the games industry.',          60, 1791849600000),
+         ('cat_culture',    'culture',    'Culture',    'Books, film, music, media, language, relationships and social life.', 70, 1791849600000),
+         ('cat_lifestyle',  'lifestyle',  'Lifestyle',  'Health, sleep, food, money, safety and the texture of daily life.',   80, 1791849600000)`,
     ),
   ]);
 
@@ -236,7 +240,7 @@ export async function teardownArchive(env: Env, actor: string): Promise<Teardown
       users: retained?.users ?? 0,
       identities: retained?.identities ?? 0,
       sessions: retained?.sessions ?? 0,
-      // Re-inserted in the same batch, so this is the seeded five rather than a surviving
+      // Re-inserted in the same batch, so this is the seeded eight rather than a surviving
       // count — read back rather than assumed, so a future edit to the seed list shows up.
       categories: await countCategories(env),
     },

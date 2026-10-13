@@ -181,7 +181,7 @@ src/
   services/            import (§5) · crawl (§7) · browser (§7) · publish (§6/§37) · archive · seed-demo
   types/               ArticleDocument (§9) + R2 path layout (§8)
   routes/              public-api · admin-api · admin-ui · views
-migrations/            0001_init · 0002_seed_categories · 0003_search (§12)
+migrations/            0001_init · 0002_seed_categories · … · 0014_more_categories (§12)
 scripts/               smoke.sh · smoke-site.sh · cleanup-smoke.sh
 tests/unit/            156 tests
 public/                admin.css · site.css
@@ -722,11 +722,13 @@ Hover stays neutral so the accent keeps meaning one thing — it is carried by t
 lettering, `--muted` 5.7:1 against the header versus `--text` at 13.9:1, with
 `--panel-2` as a faint raised surface behind it.
 
-The category chips below the nav answer the same question with a `--text` fill, and the
-two never appear together: the nav has no `/category/*` entry and `isActive` matches on a
-path prefix, so a category page activates no nav item and a board page activates no chip.
-A test asserts both halves, because adding a category entry to the nav would put a
-near-black pill 60px below an accent one.
+The category filter used to be a row of chips below the nav carrying a `--text` fill. It is
+now a `<select>` inside the header's search pair, and it deliberately has **no** fill of its
+own, so the nav's accent pill is the only selected state on screen. The other half of that
+invariant is unchanged: the nav has no `/category/*` entry and `isActive` matches on a path
+prefix, so a category page activates no nav item. A test asserts both halves — the select's
+neutrality and the nav's silence — because a filled select would put a second "you are here"
+60px from the accent one.
 
 **Weight is regular, size is per call site** — 18px in the navigation beside 14px
 labels, 15px in the segmented control where the box is fixed. Regular and bold are
@@ -845,11 +847,12 @@ republish the full text".
 
 ## Demo content
 
-There is no real published content yet, because reading a real X Article needs a
-session (see above). To make the product verifiable,
-`src/services/seed-demo.ts` writes 6 clearly-fictional articles that exercise
-every code path: blocks, headings, quotes, tags, topics, two metric samples (so
-velocity is computable), all five categories, and real §14 scores.
+Reading a real X Article needs a session (see above), so when this was built there was
+nothing to read. `src/services/seed-demo.ts` writes 6 clearly-fictional articles that
+exercise every code path: blocks, headings, quotes, tags, topics, two metric samples (so
+velocity is computable), one article in each of the five original categories, and real §14
+scores. The archive now holds 98 real articles, so the seeder earns its keep on a dev
+database and as code-path coverage rather than as a way to make the site non-empty.
 
 ```bash
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Origin: https://<host>" \
