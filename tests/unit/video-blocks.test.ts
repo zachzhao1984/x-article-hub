@@ -169,6 +169,7 @@ describe('the media pipeline and the reader agree about videos', () => {
     expect(returned).toMatch(/controls/);
     expect(returned).toMatch(/playsinline/);
     expect(returned).toMatch(/preload="metadata"/);
+    expect(src).toMatch(/<meta name="referrer" content="no-referrer" slot="head"/);
     expect(returned).not.toMatch(/\/media\//);
     // `nofollow`, like the original-link chain: this page should not pass authority out.
     expect(returned).toMatch(/rel="noopener noreferrer nofollow"/);

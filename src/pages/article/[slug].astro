@@ -83,6 +83,7 @@ const jsonLd = isTakedown
   authorName={article.author_name ?? article.author_username}
 >
   {jsonLd && <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />}
+  <meta name="referrer" content="no-referrer" slot="head" />
 
   <SiteHeader>
     <div class="article-shell">
