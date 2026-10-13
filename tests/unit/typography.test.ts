@@ -206,6 +206,9 @@ describe('typography', () => {
     const defined = new Set(
       [...clean.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]?.toLowerCase() ?? ''),
     );
+    // Shiki supplies these properties in the generated HTML's inline styles.
+    defined.add('--shiki-dark');
+    defined.add('--shiki-dark-bg');
     expect(defined.size, 'found no custom properties at all — is this reading the right file?').toBeGreaterThan(10);
 
     const used = new Map<string, string>();

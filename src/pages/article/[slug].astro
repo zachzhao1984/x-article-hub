@@ -5,6 +5,7 @@ import Base from '../../layouts/Base.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import InlineText from '../../components/InlineText.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
 import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from '../../db/public';
 import { readArticleDocument } from '../../services/archive';
 import { i18nSpread } from '../../lib/i18n';
@@ -217,7 +218,7 @@ const jsonLd = isTakedown
                             <ul>{block.items.map((i) => <li><InlineText spans={i} /></li>)}</ul>
                           );
                         case 'code':
-                          return <pre><code>{block.code}</code></pre>;
+                          return <CodeBlock code={block.code} language={block.language} />;
                         case 'image': {
                           const img = document.images.find((i) => i.imageId === block.imageId);
                           if (!img) return null;

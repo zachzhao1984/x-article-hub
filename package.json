@@ -24,7 +24,8 @@
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.3",
     "astro": "^7.3.5",
-    "hono": "^4.7.0"
+    "hono": "^4.7.0",
+    "shiki": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

@@ -402,7 +402,16 @@ function parseBlocks(
     const fence = FENCE_RE.exec(line.trim());
     if (fence) {
       flushList();
-      const language = fence[1] || undefined;
+      let language = fence[1] || undefined;
+      // X exports its code-language chip as a paragraph before a bare fence.
+      const previous = blocks.at(-1);
+      if (!language && previous?.type === 'paragraph' && previous.spans.length === 1 && previous.spans[0]?.type === 'text') {
+        const label = previous.spans[0].text.trim().toLowerCase();
+        if (/^(text|plaintext|javascript|typescript|js|ts|jsx|tsx|json|html|css|bash|sh|shell|python|py|markdown|md|http|sql|yaml|yml|xml|go|rust|java|c|cpp|ruby|php)$/.test(label)) {
+          language = label;
+          blocks.pop();
+        }
+      }
       const body2: string[] = [];
       index += 1;
       while (index < lines.length && !FENCE_RE.test((lines[index] ?? '').trim())) {

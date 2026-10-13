@@ -468,6 +468,8 @@ type ArticleBlock =
 
 ### 7.2 两条容易被忽略的行为
 
+解析器版本现为 **16**：识别裸代码围栏前由 X 导出的独立语言标签，将其写入 code block 的 `language`，不再显示为正文段落。阅读页通过 Shiki core 和 JavaScript regex engine 服务端高亮，按 GitHub light/dark 双主题生成颜色。代码框有语言标签、横向滚动；未知语言回退 text，代码按转义文本输出。Worker 仅打包固定语法集合，不加载完整 Shiki 语言包或 WASM。
+
 解析器版本现为 **15**。对原始 HTML 中 `data-href="/i/web/status/..."` 证实的嵌入帖文，恢复匹配的 Markdown 帖文片段为 `embed` block，保存作者、正文和原帖 URL，去除视频时长及互动数字。有媒体元数据时，卡片内显示原生视频播放器及预览图，直接请求 X 源站 MP4，不下载视频。媒体元数据缓存在 `embedded-posts/{postId}/media.json`；缓存未命中时尝试 X syndication 接口及 FxTwitter。实测此 OpenAI 帖文的接口在本地可读、Worker 内未取得视频信息，已从本地验证结果补入缓存。接口不可用且无缓存时保留文字及原帖链接，不加载 X 第三方组件。
 
 **视频播放。** 阅读页使用带 `controls`、`playsinline` 和 `preload="metadata"` 的原生播放器，直接请求视频源站 URL；保留源站观看链接和标题，不将视频下载到 R2，不自动播放。

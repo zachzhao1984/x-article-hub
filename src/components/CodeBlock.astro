@@ -1,0 +1,10 @@
+---
+import { highlightCode } from '../lib/code-highlight';
+interface Props { code: string; language?: string; }
+const { code, language } = Astro.props;
+const html = await highlightCode(code, language);
+---
+<div class="code-block">
+  <div class="code-block-header"><span>{language || 'text'}</span></div>
+  <div set:html={html} />
+</div>

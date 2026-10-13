@@ -869,6 +869,14 @@ a:hover { color: var(--accent); }
   line-height: 1.5;
 }
 .article-body code { font-family: var(--mono); font-size: 0.88em; }
+.code-block { margin: 1.5em 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.code-block-header { padding: 8px 16px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--muted); }
+.article-body .code-block pre { margin: 0; border: 0; border-radius: 0; padding: 16px; line-height: 1.65; }
+.article-body .code-block pre code { font-size: inherit; }
+:root[data-theme='dark'] .shiki, :root[data-theme='dark'] .shiki span { color: var(--shiki-dark, var(--text)) !important; background-color: var(--shiki-dark-bg, var(--panel)) !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .shiki, :root:not([data-theme='light']) .shiki span { color: var(--shiki-dark, var(--text)) !important; background-color: var(--shiki-dark-bg, var(--panel)) !important; }
+}
 .article-body :not(pre) > code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
 .article-body figure { margin: 1.8em 0; }
 .article-body img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--border); }
