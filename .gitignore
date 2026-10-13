@@ -2,6 +2,7 @@ node_modules/
 .wrangler/
 dist/
 .astro/
+.agents/
 .agent/
 .cloudflare/
 .dev.vars
@@ -13,3 +14,4 @@ dist/
 .env
 .env.*
 !.env.example
+skills-lock.json
