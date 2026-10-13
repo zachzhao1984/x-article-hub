@@ -36,6 +36,7 @@ retry it. A real HTTP error is not retried — it is information, and the caller
 
 import argparse
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -107,7 +108,14 @@ def collect_targets(api, wanted, limit):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default="https://x-article-hub.zachzhao.workers.dev")
-    ap.add_argument("--token", default="12345678")
+    # The admin token opens the production admin API, so it is a *secret*, not a repo
+    # value: read from the environment with no fallback. A default here would publish the
+    # key alongside the code the moment this repository became public.
+    ap.add_argument(
+        "--token",
+        default=os.environ.get("ADMIN_TOKEN"),
+        help="admin token (defaults to $ADMIN_TOKEN)",
+    )
     ap.add_argument("--workers", type=int, default=4, help="concurrent crawls")
     ap.add_argument("--delay", type=float, default=2.0, help="seconds between task starts")
     ap.add_argument("--limit", type=int, default=0, help="max articles (0 = all)")
@@ -120,6 +128,11 @@ def main() -> int:
     )
     ap.add_argument("--max-attempts", type=int, default=6, help="crawl attempts per article")
     args = ap.parse_args()
+    if not args.token:
+        ap.error(
+            "no admin token: pass --token or set ADMIN_TOKEN. "
+            "It is the wrangler secret ADMIN_TOKEN, not a value kept in this repo."
+        )
 
     api = Api(args.base_url, args.token)
     wanted = {s.strip() for s in args.statuses.split(",") if s.strip()}

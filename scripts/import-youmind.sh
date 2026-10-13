@@ -44,7 +44,10 @@
 set -euo pipefail
 
 BASE="${BASE_URL:-https://x-article-hub.zachzhao.workers.dev}"
-TOKEN="${ADMIN_TOKEN:-12345678}"
+# The admin token opens the production admin API, so it is a *secret*, not a repo value:
+# read from the environment with no fallback. A default here would publish the key
+# alongside the code the moment this repository became public.
+TOKEN="${ADMIN_TOKEN:-}"
 EXPLORE="https://youmind.com/landing/x-viral-articles/explore"
 PAGES=10
 DELAY=2
@@ -73,6 +76,11 @@ done
 
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
+if [[ -z "$TOKEN" ]]; then
+  echo "no admin token: pass --token or set ADMIN_TOKEN." >&2
+  echo "It is the wrangler secret ADMIN_TOKEN, not a value kept in this repo." >&2
+  exit 2
+fi
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

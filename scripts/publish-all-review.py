@@ -23,6 +23,7 @@ interruption continues rather than repeating.
 
 import argparse
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -46,10 +47,22 @@ def _retry(open_fn, attempts=4):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default="https://x-article-hub.zachzhao.workers.dev")
-    ap.add_argument("--token", default="12345678")
+    # The admin token opens the production admin API, so it is a *secret*, not a repo
+    # value: read from the environment with no fallback. A default here would publish the
+    # key alongside the code the moment this repository became public.
+    ap.add_argument(
+        "--token",
+        default=os.environ.get("ADMIN_TOKEN"),
+        help="admin token (defaults to $ADMIN_TOKEN)",
+    )
     ap.add_argument("--delay", type=float, default=0.3, help="seconds between publishes")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    if not args.token:
+        ap.error(
+            "no admin token: pass --token or set ADMIN_TOKEN. "
+            "It is the wrangler secret ADMIN_TOKEN, not a value kept in this repo."
+        )
 
     base = args.base_url.rstrip("/")
     headers = {

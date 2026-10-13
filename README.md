@@ -1122,8 +1122,16 @@ application, then delete the shim:
 wrangler secret delete ADMIN_TOKEN
 ```
 
-⚠️ The currently-set `ADMIN_TOKEN` is 8 characters and trivially guessable. Rotate
-it: `npx wrangler secret put ADMIN_TOKEN -c dist/server/wrangler.json`.
+⚠️ **`ADMIN_TOKEN` 是 wrangler secret，永远不要写进仓库。** 2026-10-13 轮换过一次：
+它曾是 8 位的 `12345678`，且作为默认值散落在 5 个脚本里 —— 那正是把它变成公开仓库
+就会泄露的形状。现在是 48 位随机值，存在 `.dev.vars`（已被 `.gitignore` 排除），
+脚本一律从 `$ADMIN_TOKEN` 读且**没有回退默认值**，缺失时直接报错退出。轮换：
+
+```bash
+openssl rand -hex 24 | npx wrangler secret put ADMIN_TOKEN
+```
+
+`devtoken` 是 smoke 脚本的本地默认值，生产上返回 401，不是凭据。
 
 ---
 

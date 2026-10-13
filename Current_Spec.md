@@ -978,9 +978,9 @@ npm run build && npm run deploy
 npm run deploy     # = build + wrangler deploy -c dist/server/wrangler.json
 
 npx vitest run                                  # 335 个单元测试
-./scripts/smoke.sh https://… 12345678            # 生产验收，跑完必须 cleanup
-./scripts/smoke-site.sh https://… 12345678
-./scripts/cleanup-smoke.sh https://… 12345678
+./scripts/smoke.sh https://… "$ADMIN_TOKEN"        # 生产验收，跑完必须 cleanup
+./scripts/smoke-site.sh https://… "$ADMIN_TOKEN"
+./scripts/cleanup-smoke.sh https://… "$ADMIN_TOKEN"
 ```
 
 ### 18.2 Cloudflare 特有的坑
