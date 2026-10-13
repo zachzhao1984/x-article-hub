@@ -324,9 +324,29 @@ sunken panel fill.
   actions, not reading actions.
 - **Hover:** The secondary's border and text shift to verdigris; the primary
   brightens by 8% rather than changing hue.
-- **Focus:** Inputs and selects drop their outline and darken the border to
-  verdigris-dim. Note that this is weaker than the standard the switches already
-  meet — see Do's and Don'ts.
+- **Focus:** The standard ring (below).
+
+### Focus Ring
+
+One ring for every focusable element, public and admin alike. A 2px verdigris
+outline drawn **inset** — `outline-offset: -1px` — on `:focus-visible`.
+
+- **Shape:** 2px solid accent, `-1px` offset. No radius is declared; the outline
+  already follows its own element's radius, so a 7px input draws a 7px ring and
+  a square link draws a square one.
+- **Trigger:** `:focus-visible`, not `:focus`. Tabbing to a link rings it; a
+  mouse click does not. A text input *does* ring on click, which is correct —
+  the caret is in there and the reader needs to see where it went.
+- **Second cue:** Inputs and selects additionally darken their border to
+  verdigris-dim. That is a supplementary signal for a reader already looking at
+  the field, never a replacement for the ring.
+- **Why inset:** `.card-article` is `overflow: hidden` because that is what
+  clips its cover image to the radius, so an outset ring around the card's title
+  link is cut off on both sides and reads as a pair of brackets. Inset is drawn
+  inside the border box and is never clipped by any ancestor.
+- **Exception:** The theme and language switches redirect the ring from their
+  visually-hidden radio onto the visible option. That is structural, not a
+  second standard — the offset still matches.
 
 ### Cards
 
@@ -359,7 +379,7 @@ Taxonomy, always as a pill.
 ### Inputs and Selects
 
 - **Shape:** 7px radius, `6px 11px` padding, panel fill, 1px hairline border.
-- **Focus:** Border to verdigris-dim, outline suppressed.
+- **Focus:** The standard ring, plus a border shift to verdigris-dim.
 - **Select:** Same geometry, with a bespoke inline-SVG chevron set at 12px on the
   right — no native appearance, no icon font.
 
@@ -397,6 +417,8 @@ is the only element where serif, accent colour and a scrim all appear at once.
   `#000` as the accent's contrast colour.
 - **Do** keep new header elements inside the 1180px column and displace
   something to make room.
+- **Do** inherit the focus ring. Any focusable element gets it automatically; a
+  new control needs no focus styling of its own.
 
 ### Don't:
 
@@ -412,3 +434,9 @@ is the only element where serif, accent colour and a scrim all appear at once.
   paths; the only Unicode characters permitted in the interface are typographic
   marks that *are* the label (arrows, stars, dashes, ellipses).
 - **Don't** add a resting shadow to anything in document flow.
+- **Don't** suppress a focus outline. `outline: none` on a focusable element
+  takes the ring away from a keyboard user and cannot be traded for a border
+  colour change — that colour is close to invisible against the hairline it
+  borders, which is exactly why this system had to be unified.
+- **Don't** make the ring outset. An outset ring is clipped by any
+  `overflow: hidden` ancestor, and the card is one of them.

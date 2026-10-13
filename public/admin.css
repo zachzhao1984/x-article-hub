@@ -102,6 +102,15 @@ body {
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* Same ring as the public site, for the same reasons — see the long note in site.css.
+   Inputs, buttons and links in the admin previously took no focus treatment at all
+   except a rule further down that only matched text fields, so tabbing through the
+   admin reached the browser default on everything else. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
 code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: 0.9em; }
 
 .topbar {
@@ -201,7 +210,7 @@ code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; f
 
 .theme-switch__option:has(input:focus-visible) {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 
 /* Visually hidden but still focusable and still read by assistive tech. A
@@ -286,7 +295,10 @@ textarea, input[type="text"], input[type="password"] {
   font-size: 13px;
   resize: vertical;
 }
-textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+/* The ring comes from the global rule above. All this adds is hiding the border
+   underneath it: the outline is drawn inside the border box, so the 1px border would
+   otherwise sit visible inside the ring. */
+textarea:focus, input:focus { border-color: transparent; }
 
 .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .button {

@@ -240,6 +240,42 @@ pre, .card-article, h1, h2, h3, h4, h5, h6, ul, ol, blockquote,
 a { color: inherit; text-decoration: none; }
 a:hover { color: var(--accent); }
 
+/*
+ * One focus ring for the whole site. Everything focusable gets it, and nothing may
+ * take it away.
+ *
+ * It was three standards, not one. Inputs and selects suppressed the outline and
+ * shifted the border colour to `--accent-dim`, which is close to invisible for
+ * anyone who cannot separate that hue from the hairline it borders. The theme and
+ * language switches drew a 2px accent ring at +1px. The admin drew the same ring at
+ * -1px. Two of the three were right; the one that was wrong was the one on the
+ * elements a reader actually types into.
+ *
+ * `-1px` — inset — rather than outset, for a reason the layout forces: `.card-article`
+ * is `overflow: hidden` because that is what clips its cover image to the card's
+ * radius, so an outset ring around the card's title link is cut off on both sides and
+ * the reader gets a pair of brackets instead of a ring. Inset is drawn inside the
+ * border box and is never clipped by any ancestor. It also lets a borderless link
+ * show one, where an outset ring would need padding the link does not have.
+ *
+ * `:focus-visible`, not `:focus`, so a mouse click on a link does not paint a ring —
+ * while a text input still gets one on click, because the caret is there and the
+ * reader needs to see it.
+ *
+ * No `border-radius` here on purpose. An outline already follows its element's own
+ * radius, so a 7px input draws a 7px ring and a square link draws a square one.
+ * Declaring a radius would give every element the same ring shape and break the
+ * ones that are actually round.
+ *
+ * Zero specificity via `:where()` on purpose. A component may still *add* to this —
+ * an input darkens its border as well, which is a second cue, not a substitute —
+ * but no component rule can quietly match it away again.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 24px; }
 
 /* --- header --- */
@@ -411,7 +447,7 @@ a:hover { color: var(--accent); }
    * ~250px with any margin left over. */
   width: 170px;
 }
-.search-mini input:focus { outline: none; border-color: var(--accent-dim); }
+.search-mini input:focus { border-color: var(--accent-dim); }
 
 /*
   The select is styled to the same measure as the search box next to it — same border, radius,
@@ -442,7 +478,7 @@ a:hover { color: var(--accent); }
   text-overflow: ellipsis;
 }
 .category-select:hover { border-color: var(--faint); }
-.category-select:focus { outline: none; border-color: var(--accent-dim); }
+.category-select:focus { border-color: var(--accent-dim); }
 
 /* SPEC §15 — the category page's sort chips. The selected state is an inline style there,
    because a sort chip is a set of links rather than a single filter's state. */
@@ -1000,7 +1036,7 @@ a:hover { color: var(--accent); }
   padding: 11px 15px;
   font-size: 15px;
 }
-.search-form input:focus { outline: none; border-color: var(--accent-dim); }
+.search-form input:focus { border-color: var(--accent-dim); }
 .search-form button {
   background: var(--accent);
   color: var(--accent-contrast);
@@ -1566,9 +1602,13 @@ pre {
   background: var(--accent);
 }
 
+/* The focusable element here is a visually-hidden radio, so the standard ring would
+   land on it and be invisible. This redirects the ring onto the visible option the
+   reader can actually see. Offset matches the global standard for the same reason
+   that one is inset: an outset ring would be clipped by the switch's own bounds. */
 .theme-switch__option:has(input:focus-visible) {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 
 /* Visually hidden but still focusable and still read by assistive tech. A
@@ -1652,7 +1692,7 @@ pre {
 
 .lang-switch__option:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

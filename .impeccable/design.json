@@ -119,6 +119,14 @@
     "articleBody": "72ch measure at 17.5px/1.75."
   },
   "breakpoints": ["1200px", "900px", "820px", "720px", "700px (header loses single-row arrangement — the decisive one)", "560px"],
+  "focusRing": {
+    "style": "2px solid accent, drawn inset at outline-offset: -1px, on :focus-visible",
+    "appliesTo": ["a", "button", "input", "select", "textarea", "summary", "[tabindex]"],
+    "bundles": ["site.css", "admin.css"],
+    "whyInset": "`.card-article` is overflow:hidden because that is what clips its cover to the radius, so an outset ring around the card's title link would be cut off on both sides. Inset is never clipped by an ancestor.",
+    "secondaryCue": "Inputs and selects also darken their border to accent-dim. Supplementary, never a substitute.",
+    "exception": "The theme and language switches redirect the ring from their visually-hidden radio onto the visible option; the offset still matches."
+  },
   "components": [
     {
       "id": "button",
@@ -184,13 +192,6 @@
     "treatment": "Covers crop to fill at a fixed aspect, clipped by the card's 10px radius. Missing imagery renders as an explicit missing-figure plate rather than a broken image or a silent placeholder."
   },
   "knownGaps": [
-    {
-      "id": "focus-outline-suppressed",
-      "issue": "Inputs and selects suppress the focus outline and darken the border to verdigris-dim instead. The theme and language switches already use a 2px solid outline with 1px offset, so the site holds two different focus standards.",
-      "severity": "medium",
-      "affects": ["input", "select"],
-      "resolutionStatus": "unresolved"
-    },
     {
       "id": "inverted-heading-hierarchy",
       "issue": "Board pages emit a 13px/700 h1 as an eyebrow with the display size on a <p> beneath it. The visual move is deliberate and named, but the semantic heading is the small element, which reads oddly to a screen reader's heading list.",
