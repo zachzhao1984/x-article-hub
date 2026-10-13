@@ -451,7 +451,7 @@ articles/{id}/avatar.{ext}                      头像
 
 `src/parser/markdown.ts` + `src/services/parse.ts`。
 
-**`PARSER_VERSION = 9`。** `parseArticle` 有幂等短路：文章已是当前版本且有 `content_r2_key` 就直接返回，所以重复触发解析不会重复消耗。版本 7 将正文字符串改为内联片段；版本 8 处理重复加粗分隔符和转义标点；版本 9 从原始 HTML 补回 Markdown 转换遗漏的视频源站链接。视频不下载，保留标题；通过前一段正文定位插入位置，匹配不到时附在正文末尾。
+**`PARSER_VERSION = 10`。** `parseArticle` 有幂等短路：文章已是当前版本且有 `content_r2_key` 就直接返回，所以重复触发解析不会重复消耗。版本 7 将正文字符串改为内联片段；版本 8 处理重复加粗分隔符和转义标点；版本 9 从原始 HTML 补回 Markdown 转换遗漏的视频源站链接。视频不下载，保留标题；通过前一段正文定位插入位置，匹配不到时附在正文末尾。版本 10 修复重新解析丢失已归档图片状态的问题：写回前按源 URL 匹配 `media_objects` 的 ready 正文图片，恢复媒体路由 ID、R2 key 和尺寸，不重新下载。
 
 ### 7.1 输出的 7 种 block
 

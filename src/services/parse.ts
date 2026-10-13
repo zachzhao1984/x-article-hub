@@ -16,6 +16,7 @@
 
 import { R2_PATHS } from '../types/article-document';
 import { recoverVideoLinks } from '../parser/video';
+import { restoreArchivedMedia, type ArchivedMedia } from '../parser/archived-media';
 import type { ArticleDocument } from '../types/article-document';
 import { countWords, documentToPlainText, inlineToText } from '../types/article-document';
 import { parseMarkdownToDocument } from '../parser/markdown';
@@ -61,8 +62,10 @@ import { readRawArchive } from './crawl';
  *   v8 - normalize duplicated bold delimiters and escaped punctuation from X captures,
  *     and rebuild stored link labels with emphasis markers removed.
  *   v9 - recover original video links from HTML when Markdown conversion omits them.
+ *   v10 - restore ready image rows before writing rebuilt documents; a re-parse
+ *     must not reset archived images to external fallbacks.
  */
-export const PARSER_VERSION = 9;
+export const PARSER_VERSION = 10;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 
@@ -136,6 +139,13 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     capturedAt,
   });
   recoverVideoLinks(document, archive.html ?? '');
+  // Re-parsing bypasses the media job, so hydrate the rebuilt document before
+  // writing it. Otherwise ready R2 images become unarchived placeholders.
+  const { results: archivedMedia } = await env.DB.prepare(
+    `SELECT id, source_url, r2_key, width, height FROM media_objects
+      WHERE article_id = ? AND kind = 'body' AND status = 'ready' AND r2_key IS NOT NULL`,
+  ).bind(articleId).all<ArchivedMedia>();
+  restoreArchivedMedia(document, archivedMedia);
 
   // SPEC §9.3 — the crawl's metadata is authoritative when the Markdown had none;
   // a Parser that dropped the title would be a silent data loss.
