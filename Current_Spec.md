@@ -468,6 +468,8 @@ type ArticleBlock =
 
 ### 7.2 两条容易被忽略的行为
 
+**视频播放。** 阅读页使用带 `controls`、`playsinline` 和 `preload="metadata"` 的原生播放器，直接请求视频源站 URL；保留源站观看链接和标题，不将视频下载到 R2，不自动播放。
+
 **头像不是图。** `LINKED_IMAGE_RE` 匹配到的行，如果 href 是 profile 或 src 命中头像 CDN 模式，就被提取成 `authorChip` 而不是一张图。SPEC §9.3 说"保留作者结构"，没说要把别人的脸作为插图发在文章中间。
 
 **内联格式由片段渲染。** `InlineSpan` 支持 `text`、`strong`、`em`、`code` 和带 `href` 的 `link`，阅读页统一通过 `InlineText.astro` 渲染。Markdown 链接保持可点击；裸 URL 仍是纯文本，并被收集到 `document.links`。按用户选择，链接标签内的强调标记去除，标签不保留嵌套加粗。X 捕获中的 `****标题****` 按加粗处理；转义星号保留为作者的字面标点。`inlineToText` 为搜索、字数和摘要提取纯文本。

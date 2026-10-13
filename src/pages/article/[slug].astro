@@ -221,7 +221,7 @@ const jsonLd = isTakedown
                           const img = document.images.find((i) => i.imageId === block.imageId);
                           if (!img) return null;
 
-                          // A video is a link to the recording, not a figure.
+                          // Play video directly from its original host, with a fallback link.
                           //
                           // It used to fall through to the "Image not archived" branch
                           // below, which is written for an image whose download failed —
@@ -237,7 +237,14 @@ const jsonLd = isTakedown
                           // authority to a CDN.
                           if (img.status === 'video') {
                             return (
-                              <p class="fig-video">
+                              <div class="fig-video">
+                                <video
+                                  src={img.sourceUrl}
+                                  controls
+                                  playsinline
+                                  preload="metadata"
+                                  aria-label={img.altText || 'Video'}
+                                />
                                 <a
                                   href={img.sourceUrl}
                                   target="_blank"
@@ -248,7 +255,7 @@ const jsonLd = isTakedown
                                 </a>
                                 {img.altText && <span>{img.altText}</span>}
                                 <span {...i18nSpread('article.videoNote')}>the recording is not archived here; this link goes to X</span>
-                              </p>
+                              </div>
                             );
                           }
 

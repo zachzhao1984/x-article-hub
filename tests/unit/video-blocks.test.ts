@@ -165,6 +165,10 @@ describe('the media pipeline and the reader agree about videos', () => {
     expect(returned, 'cannot locate the video branch return').not.toBe('');
 
     expect(returned).toMatch(/href=\{img\.sourceUrl\}/);
+    expect(returned).toMatch(/<video[\s\S]*?src=\{img\.sourceUrl\}/);
+    expect(returned).toMatch(/controls/);
+    expect(returned).toMatch(/playsinline/);
+    expect(returned).toMatch(/preload="metadata"/);
     expect(returned).not.toMatch(/\/media\//);
     // `nofollow`, like the original-link chain: this page should not pass authority out.
     expect(returned).toMatch(/rel="noopener noreferrer nofollow"/);
@@ -176,7 +180,7 @@ describe('the media pipeline and the reader agree about videos', () => {
     // The words matter. The old copy asserted the figure "still loads from x.com", which
     // for a video was the opposite of what was happening.
     const videoAt = page.indexOf("img.status === 'video'");
-    const branch = page.slice(videoAt, videoAt + 900);
+    const branch = page.slice(videoAt, videoAt + 1600);
     expect(branch).toMatch(/Watch the video on x\.com/);
     expect(branch).toMatch(/not archived here/);
     // Not the failed-image sentence.

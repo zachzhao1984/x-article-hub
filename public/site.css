@@ -1257,15 +1257,9 @@ pre {
   color: var(--faint);
 }
 
-/*
- * A video is a link, not a figure — no reserved box, because there is no image whose
- * dimensions are known, and a placeholder sized like one is what made the old treatment
- * read as a broken picture rather than as "the recording is elsewhere".
- *
- * No `figure` margin either: this is a paragraph with a link in it, and the href carries
- * the affordance the accent gives every other link on the page.
- */
+/* Video streams from the original host; the link remains available as a fallback. */
 .fig-video { margin: 20px 0; }
+.fig-video video { display: block; width: 100%; max-height: 80vh; background: var(--bg); border-radius: 8px; margin-bottom: 10px; }
 .fig-video span { display: block; font-size: 12px; line-height: 1.5; color: var(--faint); }
 
 .avatar.is-remote { opacity: 0.75; }
