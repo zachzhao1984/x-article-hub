@@ -19,7 +19,12 @@ const { sort, heading, path, description } = Astro.props;
 const db = env.DB as unknown as D1Database;
 
 const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1') || 1);
-const PER_PAGE = 20;
+// Twelve rather than the twenty the archive pages use. A card is tall enough that twenty
+// of them is three screens of scrolling before the pager comes into view, and on a board
+// whose whole job is browsing, reaching the controls matters more than packing a page.
+// `hasMore` keys off this same constant, so the last page's "is there another" is right
+// by construction rather than by a second literal to keep in step.
+const PER_PAGE = 12;
 
 const articles = await listPublishedArticles(db, { sort, limit: PER_PAGE, offset: (page - 1) * PER_PAGE });
 const hasMore = articles.length === PER_PAGE;
@@ -58,11 +63,20 @@ const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
             ))}
           </div>
 
+          {/*
+            The number sits at the left edge and both controls at the right. The `auto`
+            margin on the number is what does the pushing — `justify-content: space-between`
+            would place these three children at left, centre and right, which strands the
+            newer link in the middle with the number. The empty `<span>` placeholders the
+            old order needed, to keep space-between's three slots filled, go with it: with
+            an auto margin there is nothing to pad out, so a board on its first page simply
+            has no newer link.
+          */}
           {(prevHref || nextHref) && (
             <nav class="pager">
-              {prevHref ? <a href={prevHref} {...i18nSpread('board.newer')}>← Newer</a> : <span />}
               <span class="muted" {...i18nSpread('board.page', { page })}>Page {page}</span>
-              {nextHref ? <a href={nextHref} {...i18nSpread('board.older')}>Older →</a> : <span />}
+              {prevHref && <a href={prevHref} {...i18nSpread('board.newer')}>← Newer</a>}
+              {nextHref && <a href={nextHref} {...i18nSpread('board.older')}>Older →</a>}
             </nav>
           )}
         </>

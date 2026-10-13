@@ -211,7 +211,7 @@ body {
  * element rules; `.article-body` is not among them, so a paragraph inside it can
  * only match `.article-body p` and keeps the container's inherited 1.75.
  */
-.hero-sub, .board-title, .board-more,
+.hero-sub, .board-title, .board-more, .pager, .pager a,
 .card-meta, .card-foot, .badge, .cat-chip, .cat-count,
 .tag, .nav-item, .search-mini input, .category-select,
 .search-form input, .search-form button, .result-snippet, .article-crumbs,
@@ -512,6 +512,25 @@ a:hover { color: var(--accent); }
 .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .board-more { font-size: 13px; color: var(--faint); }
 .board-more:hover { color: var(--accent); }
+
+/*
+ * The board pager: the page number at the left edge, both controls at the right.
+ *
+ * The `auto` margin is the whole layout, and it is not the obvious spelling.
+ * `justify-content: space-between` reads like the right tool and is wrong here — with
+ * three children it parks them at left, centre and right, which strands the number in
+ * the middle next to the newer link instead of at the edge. An auto margin pushes only
+ * what follows it, so the number stays put and the controls travel together.
+ *
+ * Baseline rather than centre, to match `.board-head` above: the number and the links are
+ * both small text, and aligning their baselines is what makes them read as one row rather
+ * than as three separate floats. Sized like `.board-more` for the same reason — a pager
+ * is a secondary control and should not out-shout the cards it moves between.
+ */
+.pager { display: flex; align-items: baseline; gap: 16px; font-size: 13px; }
+.pager > :first-child { margin-right: auto; }
+.pager a { color: var(--faint); }
+.pager a:hover { color: var(--accent); }
 
 .board-split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
 
