@@ -1,0 +1,216 @@
+{
+  "version": "1",
+  "summary": "A warm, near-monochrome reading room: Manila-paper ground, one deep verdigris accent used as rarely as a librarian's stamp, hairline borders carrying all structure, and a deliberately static interface that earns its calm from typography and whitespace rather than from effects.",
+  "northStar": "The Reading Room",
+  "antiReferences": [
+    "dashboard / tech-feel: no telemetry aesthetic, no dense metric panels, no sci-fi blue gradients, no chrome implying a running machine",
+    "SaaS landing page: no gradient hero, no glassmorphism, no oversized decorative display type, no conversion-shaped CTA blocks",
+    "magazine cover: no decorative serif headlines, no emotion-led typographic spectacle, no ornamental layout tricks"
+  ],
+  "namedRules": [
+    {
+      "id": "one-accent",
+      "name": "The One Accent Rule",
+      "rationale": "Verdigris is the only colour on the site not derived from paper or ink, so its scarcity is what makes a hovered link mean 'this is live'. Used once per viewport it reads as signal; used twice it reads as decoration and stops carrying information."
+    },
+    {
+      "id": "flat-by-hairline",
+      "name": "The Flat-By-Hairline Rule",
+      "rationale": "Depth here is panel-versus-paper plus a 1px border. A hover changes the border colour and nothing else, because a card that lifts imports a physical metaphor this archive does not have. A new component that seems to need depth needs a border first."
+    },
+    {
+      "id": "cjk-floor",
+      "name": "The CJK Floor Rule",
+      "rationale": "Chinese glyphs occupy the full em box, so a 15px CJK line falls below the comfortable reading floor — especially in mixed Latin/numeric articles, which this corpus is full of. 16px is therefore a hard floor, not a preference."
+    }
+  ],
+  "colors": {
+    "verdigris": "#176b75",
+    "verdigris-dim": "#145f68",
+    "verdigris-on": "#ffffff",
+    "paper": "#faf9f6",
+    "panel": "#ffffff",
+    "panel-sunk": "#f3f3ef",
+    "hairline": "#dfe4e1",
+    "hairline-soft": "#e9ede9",
+    "ink": "#202a30",
+    "ink-muted": "#59656b",
+    "ink-faint": "#657176",
+    "signal-ok": "#2f7d5c",
+    "signal-warn": "#b8873a",
+    "signal-danger": "#b3402a",
+    "header-veil": "#faf9f6e8"
+  },
+  "colorMeta": {
+    "primary": {
+      "canonical": "#176b75",
+      "role": "The single accent. Appears on hovered links, the active nav item, the ranking numeral, primary buttons and every focus edge.",
+      "doNotUseAs": "A section background, a gradient stop, a decorative fill, or a resting surface of any size.",
+      "tonalRamp": ["#e8f2f3", "#c5dfe1", "#93c2c7", "#5fa2aa", "#176b75", "#145f68", "#0f4a52", "#0a343a", "#062228", "#03141a"],
+      "accessibility": {
+        "asTextOn": "paper (#faf9f6)",
+        "lightContrastRatio": 5.87,
+        "darkCanonical": "#12ccd8",
+        "darkAsTextOn": "dark-paper (#13191c)",
+        "darkContrastRatio": 8.98,
+        "notes": "Both themes pass AA for normal text. Dark-mode verdigris also inverts its contrast colour to #000; do not carry the light theme's #fff onto it."
+      }
+    }
+  },
+  "typography": {
+    "primaryFamily": "Inter, PingFang SC, Noto Sans CJK SC, Hiragino Sans GB, -apple-system, system-ui, sans-serif",
+    "monoFamily": "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Noto Sans Mono CJK SC, monospace",
+    "roles": [
+      {
+        "id": "display",
+        "purpose": "Board and section headings — clamp(30px, 6vw, 48px), weight 400, 1.08 leading.",
+        "why": "The site's signature inversion: the board's <h1> is a 13px/700 eyebrow and this display size sits beneath it in a <p>. The small loud label above the large quiet title is the move, so the h1 must stay small."
+      },
+      {
+        "id": "headline",
+        "purpose": "Article titles — clamp(28px, 5vw, 40px), weight 700, 1.28 leading.",
+        "why": "Weight 700 is required at this size over warm paper; 600 disappears into the ground once CJK strokes thin out."
+      },
+      {
+        "id": "title",
+        "purpose": "Card titles — 18px, weight 600, 1.3 leading, single line with ellipsis.",
+        "why": "Fixed at one line so a row of cards shares a baseline. Letting a title wrap is what breaks the grid's rhythm."
+      },
+      {
+        "id": "body",
+        "purpose": "Site body 16px/1.75; article prose 17.5px/1.75 capped at 72ch.",
+        "why": "1.75 leading is the CJK-comfortable value — Latin-only sites default to 1.5–1.6 and Chinese glyphs close up badly there. The 72ch measure is what keeps 17.5px prose readable at that leading."
+      },
+      {
+        "id": "label",
+        "purpose": "The 11–13px band carrying all metadata: captions, chips, pagers, bylines, stats. Weight varies 600–700 for eyebrows and badges; size band does not.",
+        "why": "Metadata is a class, not a set of one-offs. Holding the band means a new caption inherits the right tier instead of inventing 12.5px."
+      }
+    ]
+  },
+  "spacing": {
+    "xs": "6px",
+    "sm": "12px",
+    "md": "16px",
+    "lg": "24px",
+    "note": "Derived from measured usage, not declared as a scale in code. 6px is the control padding/gap floor, 16px the grid gap, 24px the container inset. Gaps of 18px (header) and 7px/8px (icon-adjacent) sit between them and are fine."
+  },
+  "rounded": {
+    "surface": "10px",
+    "button": "8px",
+    "control": "7px",
+    "pill": "999px"
+  },
+  "borders": {
+    "width": "1px",
+    "color": "hairline (#dfe4e1) / hairline-soft (#e9ede9) in light; rgba(255,255,255,0.15) / rgba(255,255,255,0.09) in dark",
+    "rules": "No doubled borders, no inset shadows, no clipped or angled corners, no decorative geometry. Dark-theme borders are alpha-white, never solid grey."
+  },
+  "shadows": {
+    "menuFloat": "0 8px 24px rgb(0 0 0 / 0.12); dark: 0 10px 30px rgb(0 0 0 / 0.5)",
+    "rules": "Exactly one shadow, reserved for genuinely floating layers (theme and language menus). Nothing in document flow may cast one."
+  },
+  "radiusScale": ["999px (pill: taxonomy)", "10px (surface: cards, containers)", "8px (button)", "7px (control: inputs, selects, nav items)", "50% (circle: avatars)"],
+  "layout": {
+    "grid": "Single centred column, max-width 1180px, 24px side padding.",
+    "cardGrid": "auto-fill, minmax(300px, 1fr), 16px gap — yields 3–4 columns at container width. Cards equal-height, cover cropped to fill, metadata pinned bottom.",
+    "header": "Sticky, 58px tall, translucent veil with 12px backdrop blur, 18px inner gap. Nav, category filter and search share one row and the column cannot widen to give them room.",
+    "pagination": "12 per page; page number at the left edge, both controls at the right.",
+    "articleBody": "72ch measure at 17.5px/1.75."
+  },
+  "breakpoints": ["1200px", "900px", "820px", "720px", "700px (header loses single-row arrangement — the decisive one)", "560px"],
+  "components": [
+    {
+      "id": "button",
+      "pattern": "8px radius, 8px 16px padding, 14px label. Secondary = panel-sunk fill + hairline border (the default and majority case); primary = verdigris fill + white 600 label, used sparingly for admin actions only.",
+      "do": "Change the secondary's border and text to verdigris on hover; brighten the primary 8% without changing hue.",
+      "dont": "Don't add a resting shadow, a gradient, or a transform on hover."
+    },
+    {
+      "id": "card-article",
+      "pattern": "10px surface radius, overflow hidden, panel fill, 1px hairline. Cover cropped to fill in a fixed 150px-height box — pinned height, not an aspect ratio, so the same card is the same height in every grid — flush to the top and side borders. Single-line ellipsised 18px/600 title, 13.5px excerpt clamped to two lines at 1.55, 12px metadata pinned bottom.",
+      "do": "Let the hairline and the panel-versus-paper step do all the structural work.",
+      "dont": "Don't lift, scale, shadow, or transform on hover — border colour only, 0.15s."
+    },
+    {
+      "id": "chip-tag",
+      "pattern": "999px radius, 4px 11px padding, 13px label, transparent fill, 1px hairline border.",
+      "do": "On hover step text up to ink and the border to the faint tier — the cards' two-step lift at smaller amplitude.",
+      "dont": "Don't fill a chip or give it an accent background; taxonomy classifies, it does not act."
+    },
+    {
+      "id": "input",
+      "pattern": "7px radius, 6px 11px padding, panel fill, 1px hairline border. Select shares the geometry with a bespoke inline-SVG chevron at 12px.",
+      "do": "Keep the chevron a hand-authored inline SVG.",
+      "dont": "Don't restore native appearance or introduce an icon font."
+    },
+    {
+      "id": "nav-item",
+      "pattern": "7px radius, 6px 9px padding, 14px label, 6px icon gap. Resting ink-muted on transparent; hover sunken-panel fill with text to ink.",
+      "do": "Keep the active state a verdigris fill with white label — the only place the accent appears at rest, and the header's loudest element.",
+      "dont": "Don't add a second active treatment or an underline."
+    },
+    {
+      "id": "rank-numeral",
+      "pattern": "Signature. 20px/700 Georgia numeral, tabular figures, verdigris, on a plate pinned 10px/8px inside the bottom-left of a trending card's cover. Plate is paper at 82% opacity.",
+      "do": "Keep the scrim translucent so the numeral stays legible over any image without introducing a solid block.",
+      "dont": "Don't add a second serif element anywhere, and don't move the numeral out of the cover."
+    }
+  ],
+  "motion": {
+    "intention": "Almost none, on purpose. The system is static by position: the only motion is a 0.12–0.15s colour shift that confirms a state change the user just caused. Anything more would import a liveliness this reading room is defined against.",
+    "animationCount": 0,
+    "library": "none",
+    "durations": {
+      "fast": "0.12s (color, background-color)",
+      "default": "0.15s (border-color)"
+    },
+    "easings": ["ease"],
+    "semanticTokens": [],
+    "reducedMotion": "Handled for the theme switch only — the one element with a non-colour transition."
+  },
+  "motionMeta": {
+    "state": "reduced",
+    "rationale": "There is no animation in the system, so a reduced-motion budget is not the limiting factor here; the limit is that three transition values exist at all. Any new motion must replace a colour transition, not add to the set.",
+    "library": "none",
+    "animationCount": 0
+  },
+  "icons": {
+    "style": "Vendored Phosphor SVG paths, stroke- or fill-rendered inline.",
+    "rules": "No emoji as UI glyphs. The only Unicode characters permitted in the interface are typographic marks that *are* the label — arrows, stars, dashes, ellipses. No icon font, no external icon CDN."
+  },
+  "imagery": {
+    "sources": "Article covers generated into R2; original article images archived to R2; letter-avatar fallbacks for authors.",
+    "treatment": "Covers crop to fill at a fixed aspect, clipped by the card's 10px radius. Missing imagery renders as an explicit missing-figure plate rather than a broken image or a silent placeholder."
+  },
+  "knownGaps": [
+    {
+      "id": "focus-outline-suppressed",
+      "issue": "Inputs and selects suppress the focus outline and darken the border to verdigris-dim instead. The theme and language switches already use a 2px solid outline with 1px offset, so the site holds two different focus standards.",
+      "severity": "medium",
+      "affects": ["input", "select"],
+      "resolutionStatus": "unresolved"
+    },
+    {
+      "id": "inverted-heading-hierarchy",
+      "issue": "Board pages emit a 13px/700 h1 as an eyebrow with the display size on a <p> beneath it. The visual move is deliberate and named, but the semantic heading is the small element, which reads oddly to a screen reader's heading list.",
+      "severity": "low",
+      "affects": ["display", "layout"],
+      "resolutionStatus": "accepted"
+    },
+    {
+      "id": "transitions-not-tokenised",
+      "issue": "The three transition values are scattered as literals rather than declared as custom properties, so a duration change is a find-and-replace rather than a token edit.",
+      "severity": "low",
+      "affects": ["motion"],
+      "resolutionStatus": "unresolved"
+    },
+    {
+      "id": "dark-theme-not-in-frontmatter",
+      "issue": "The dark palette is a full parallel set of custom properties and is not represented in DESIGN.md's frontmatter tokens, which are light-only. The sidecar records it under colorMeta.primary only.",
+      "severity": "low",
+      "affects": ["colors"],
+      "resolutionStatus": "accepted"
+    }
+  ]
+}
