@@ -380,8 +380,32 @@ Taxonomy, always as a pill.
 
 - **Shape:** 7px radius, `6px 11px` padding, panel fill, 1px hairline border.
 - **Focus:** The standard ring, plus a border shift to verdigris-dim.
-- **Select:** Same geometry, with a bespoke inline-SVG chevron set at 12px on the
-  right — no native appearance, no icon font.
+- **Select:** Same geometry, with a bespoke chevron — no native appearance, no
+  icon font.
+
+### Category Filter
+
+The one control in the header that states where the reader is, so it is the one
+control that has to *look* like it is stating something.
+
+- **Shape:** Identical to the inputs — 7px radius, panel fill, 108px fixed.
+  It shares their measure so the filter and the search box read as one unit.
+- **Caret:** A masked sibling, not a background image. A data-URI SVG has to
+  name its stroke colour, so it was hardcoded and could follow neither the
+  theme nor the selected state; a mask takes its colour from `currentColor` and
+  one declaration now serves both themes and every state.
+- **Resting:** Panel fill, hairline border, ink label, faint caret.
+- **Hover:** Border to the faint tier, caret to muted — matching `.nav-item`,
+  the other control in the row. A border shift alone left it the one
+  interactive thing in the header that gave no ground back.
+- **Selected:** Verdigris fill with accent-contrast label and caret, matching
+  `.nav-item.active` token for token rather than inventing a second treatment.
+  This is the fix the polish was for: the filter is the only place the header
+  names the current category, and it used to look identical whether it said
+  "All topics" or the page you were standing on.
+- **Why it does not break the One Accent Rule:** no nav item points at a
+  category route, so a page can never carry both a `.nav-item.active` and this
+  control's active state. Two accent fills stay impossible by construction.
 
 ### Navigation
 

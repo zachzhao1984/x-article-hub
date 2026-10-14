@@ -167,27 +167,40 @@ const activeCategory = (() => {
       bookmarkable view of it. Submitting `?category=…&q=…` to `/search` instead would ship a
       parameter the results page has no way to honour — the reader would see a search that
       silently ignored half of what they asked for.
+
+      The chevron is a masked sibling rather than a `background` image on the select itself, for
+      two reasons. A data-URI SVG has to name its stroke colour, so it was hardcoded and could
+      not follow the theme or invert when the control marks the current category. And a
+      background image on the select would have to be re-declared per state, doubling a value
+      that a mask inherits for free from `currentColor`.
+
+      `is-active` marks the category the reader is already on. Without it the control is
+      pixel-identical whether it says "All topics" or the page you are standing in, so the one
+      place the header states the current category never looked like it was stating anything.
     */}
     <div class="search-mini">
-      <select
-        class="category-select"
-        aria-label="Filter by category"
-        data-i18n-aria-key="nav.categories"
-        data-i18n-aria-zh={TRANSLATIONS.zh['nav.categories']}
-        data-i18n-aria-ja={TRANSLATIONS.ja['nav.categories']}
-        onchange="location.href = this.value ? '/category/' + this.value : '/'"
-      >
-        <option value="" selected={!activeCategory} {...i18nSpread('nav.allTopics')}>All topics</option>
-        {
-          categories.map(
-            (c) => (
-              <option value={c.slug} selected={activeCategory === c.slug}>
-                {c.name}
-              </option>
-            ),
-          )
-        }
-      </select>
+      <div class={activeCategory ? 'category-filter is-active' : 'category-filter'}>
+        <select
+          class="category-select"
+          aria-label="Filter by category"
+          data-i18n-aria-key="nav.categories"
+          data-i18n-aria-zh={TRANSLATIONS.zh['nav.categories']}
+          data-i18n-aria-ja={TRANSLATIONS.ja['nav.categories']}
+          onchange="location.href = this.value ? '/category/' + this.value : '/'"
+        >
+          <option value="" selected={!activeCategory} {...i18nSpread('nav.allTopics')}>All topics</option>
+          {
+            categories.map(
+              (c) => (
+                <option value={c.slug} selected={activeCategory === c.slug}>
+                  {c.name}
+                </option>
+              ),
+            )
+          }
+        </select>
+        <span class="category-filter__chevron" aria-hidden="true" />
+      </div>
 
       <form action="/search" method="get" role="search">
         <input

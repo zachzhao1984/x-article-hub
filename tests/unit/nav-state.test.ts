@@ -154,25 +154,83 @@ describe('the nav current state', () => {
   });
 
   it('never puts two different current treatments in one header', () => {
-    // The category filter is a `<select>` inside the search form, so the header now owns
-    // exactly one "you are here" treatment: the nav's accent fill. The earlier version of
-    // this assertion compared that fill against `.cat-chip.active`'s `--text` fill — the
-    // category chips used to be a second row in the header, and the two treatments were 60px
-    // apart. Now that the chips are gone, the honest form of the invariant is that no other
-    // header control paints a selected state at all, which a returning "All topics" option or
-    // a tinted `.category-select` would both break.
+    // The header owns one "you are here" *treatment*: the accent fill with accent-contrast
+    // lettering. The earlier version of this assertion compared that fill against
+    // `.cat-chip.active`'s `--text` fill — the category chips used to be a second row in the
+    // header, and the two treatments were 60px apart.
+    //
+    // It then went further and required that no other header control paint a selected state
+    // at all. That was the honest form of the invariant *while the filter stayed neutral*,
+    // and it was the right thing to assert then: the select is the one place the header
+    // states the current category, and it stated it by being pixel-identical to its idle
+    // state, so the reader had no way to see which category they were in. A control that
+    // claims to be a filter and shows no filter state is the defect, not the fix.
+    //
+    // What the invariant actually protects is one treatment, never two — so the assertions
+    // below now check that the filter borrows the nav's treatment rather than inventing a
+    // second one, and that the two can never be on screen together.
     const header = readFileSync(resolve('src/components/SiteHeader.astro'), 'utf8');
     const navHrefs = [...header.matchAll(/href: '([^']+)'/g)].map((m) => m[1] ?? '');
     expect(navHrefs.some((href) => href.startsWith('/category'))).toBe(false);
     expect(navHrefs).not.toContain('/category/:slug');
     expect(header).not.toContain('cat-chip');
 
-    // The filter stays neutral: no fill of its own, so the accent fill is the only one on
-    // screen. `ruleFor` throws rather than returning undefined, so a rule that is deleted
-    // outright fails here too instead of silently passing.
-    const select = ruleFor('.category-select');
-    expect(select).not.toContain('background: var(--text)');
-    expect(select).not.toContain('--accent');
-    expect(ruleFor('.nav-item.active')).toContain('background: var(--accent)');
+    // Structural, not visual: because no nav item points at a category route, a page can
+    // never carry both a `.nav-item.active` and the filter's `.is-active`. Two accent fills
+    // on one header stay impossible by construction rather than by discipline.
+    expect(navHrefs.length).toBeGreaterThan(0);
+
+    // The filter's selected state is the nav's own, token for token — not a second
+    // treatment that merely looks similar today.
+    const navActive = ruleFor('.nav-item.active');
+    const filterActive = ruleFor('.category-filter.is-active .category-select');
+    expect(filterActive).toContain('background: var(--accent)');
+    expect(filterActive).toContain('color: var(--accent-contrast)');
+    expect(navActive).toContain('background: var(--accent)');
+
+    // Idle, the filter stays neutral: the accent appears only once the reader has chosen.
+    const idle = ruleFor('.category-select');
+    expect(idle).not.toContain('background: var(--text)');
+    expect(idle).not.toContain('var(--accent)');
+
+    // And the idle treatment still measures as visible against the header, so the control
+    // is not relying on its selected state to be findable.
+    for (const theme of ['light', 'dark'] as const) {
+      const t = tokens(theme);
+      expect(contrast(t['--border']!, t['--panel']!), `${theme}: the idle filter border`).toBeGreaterThanOrEqual(1.2);
+    }
+  });
+});
+describe('the category filter\'s chevron', () => {
+  const header = readFileSync(resolve('src/components/SiteHeader.astro'), 'utf8');
+  const chevron = ruleFor('.category-filter__chevron');
+
+  it('is a masked element, so its colour follows its state', () => {
+    // It used to be a `background` image on the select, and a data-URI SVG has to name its
+    // stroke colour — so it was hardcoded `#787f8a` and could follow neither the theme nor
+    // the selected state. A mask takes its colour from `currentColor` instead, which is the
+    // only way one declaration serves both themes and every state.
+    expect(chevron).toContain('background: currentColor');
+    expect(chevron).toMatch(/mask:\s*url/);
+    expect(header).toContain('category-filter__chevron');
+  });
+
+  it('names no colour of its own', () => {
+    // The whole point of the mask. A hex or a token colour on this element means the
+    // hardcoded stroke has come back through a different door.
+    expect(chevron).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    expect(chevron).not.toContain('color: var(--accent)');
+  });
+
+  it('inverts when the control marks the current category', () => {
+    expect(ruleFor('.category-filter.is-active .category-filter__chevron')).toContain(
+      'color: var(--accent-contrast)',
+    );
+  });
+
+  it('is not interactive, so it cannot swallow a click meant for the select', () => {
+    // It sits on top of the control at the right edge, which is exactly where a reader
+    // aiming for the caret would land.
+    expect(chevron).toContain('pointer-events: none');
   });
 });

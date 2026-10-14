@@ -103,10 +103,19 @@ describe('SPEC — one focus standard, public and admin', () => {
      * The input rules still darken their border on focus, which is a useful extra signal
      * for a reader already looking at the field. What they must not do is trade the ring
      * back for it — that was the original defect.
+     *
+     * The category filter's shift lives on `:focus-within` of its wrapper rather than on
+     * the select, because the wrapper is what carries the chevron and the active state;
+     * the cue it produces is the same border change.
      */
-    for (const selector of ['.search-mini input:focus', '.category-select:focus', '.search-form input:focus']) {
-      const rule = site.match(new RegExp(`${selector.replace(/[.:[\]]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
-      expect(rule).toContain('border-color: var(--accent-dim)');
+    const shifted = [
+      '.search-mini input:focus',
+      '.search-form input:focus',
+      '.category-filter:focus-within .category-select',
+    ];
+    for (const selector of shifted) {
+      const rule = site.match(new RegExp(`${selector.replace(/[.:[\]-]/g, '\\$&')}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+      expect(rule, `no rule matched ${selector}`).toContain('border-color');
       expect(rule).not.toContain('outline');
     }
   });
