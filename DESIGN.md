@@ -185,9 +185,14 @@ every value with the light theme and introduces no new tokens.
 ### Named Rules
 
 **The One Accent Rule.** Verdigris appears on roughly one element per viewport: a
-hovered link, the active nav item, a focused field, a ranking numeral. It is never
-a section background, never a gradient, never a decorative fill. Its scarcity is
-what makes a hovered link mean "this is live".
+hovered link, the active nav item, the selected category filter, a focused field,
+a ranking numeral. It is never a section background, never a gradient, never a
+decorative fill. Its scarcity is what makes a hovered link mean "this is live".
+
+Two of those are current-state fills and they are the rule's only real risk, so
+they are kept apart structurally rather than by discipline: no nav item points at
+a category route, so a page can never carry both an active nav item and a selected
+filter. At most one of the two is ever on screen.
 
 **The Translucent Border Rule.** Dark-theme borders are alpha-white, never
 solid grey. A solid `#3a4247` hairline looks correct on the panel and wrong on

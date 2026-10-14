@@ -148,14 +148,20 @@
     },
     {
       "id": "input",
-      "pattern": "7px radius, 6px 11px padding, panel fill, 1px hairline border. Select shares the geometry with a bespoke inline-SVG chevron at 12px.",
-      "do": "Keep the chevron a hand-authored inline SVG.",
+      "pattern": "7px radius, 6px 11px padding, panel fill, 1px hairline border.",
+      "do": "Keep native appearance suppressed and any icon hand-authored.",
       "dont": "Don't restore native appearance or introduce an icon font."
+    },
+    {
+      "id": "category-filter",
+      "pattern": "Same geometry as the input — 7px radius, panel fill, 108px fixed — so it reads as one unit with the search box beside it. The caret is a masked sibling, not a background image, so it takes its colour from currentColor and follows both theme and state.",
+      "do": "Give the selected state the nav's own accent fill, token for token, and invert the caret with it.",
+      "dont": "Don't hardcode a colour into the caret's mask, and don't let the selected control look identical to its idle state — it is the only place the header names the current category."
     },
     {
       "id": "nav-item",
       "pattern": "7px radius, 6px 9px padding, 14px label, 6px icon gap. Resting ink-muted on transparent; hover sunken-panel fill with text to ink.",
-      "do": "Keep the active state a verdigris fill with white label — the only place the accent appears at rest, and the header's loudest element.",
+      "do": "Keep the active state a verdigris fill with white label — the loudest element in the header.",
       "dont": "Don't add a second active treatment or an underline."
     },
     {
