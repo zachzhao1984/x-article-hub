@@ -29,12 +29,14 @@
  * popularity cannot shift what a published one scores.
  */
 
-import { metricsFromRow, rawPopularity, normalizeScores, clampQuality, combineScores, ZERO_METRICS } from '../ranking/score';
+import { metricsFromRow, rawPopularity, normalizeScores, clampQuality, combineScores, trendingDecay, ZERO_METRICS } from "../ranking/score";
 import { rankingWeights } from '../config/ranking';
 import { log } from '../lib/logger';
 
 interface CandidateRow extends Record<string, unknown> {
   id: string;
+  published_at: number | null;
+  imported_at: number | null;
   likes: number | null;
   reposts: number | null;
   replies: number | null;
@@ -73,6 +75,8 @@ export async function refreshRanking(env: Env): Promise<RankingRefreshResult> {
             a.quality_score,
             a.editor_score,
             a.featured,
+            a.published_at,
+            a.imported_at,
             m.likes, m.reposts, m.replies, m.quotes, m.bookmarks, m.views, m.captured_at
        FROM articles a
        LEFT JOIN article_metrics m
@@ -91,12 +95,17 @@ export async function refreshRanking(env: Env): Promise<RankingRefreshResult> {
   // a ranking signal even though it is the wrong thing to *store* — the distinction is kept
   // at the collection end (`EngagementMetrics`) where "not found" is still distinguishable
   // from "zero", and lost deliberately here, where a missing number has to rank somewhere.
-  const metrics = results.map((row) =>
-    row.captured_at === null ? ZERO_METRICS : metricsFromRow(row),
-  );
-  const popularity = normalizeScores(metrics.map(rawPopularity));
-
   const now = Date.now();
+  const rawScores = results.map((row) => {
+    const m = row.captured_at === null ? ZERO_METRICS : metricsFromRow(row);
+    // Trending must respect publication time: an old viral post should not
+    // permanently flatten newer articles while their engagement is still growing.
+    const publishedAt = row.published_at ?? row.imported_at;
+    return rawPopularity(m) * trendingDecay(publishedAt, now);
+  });
+  const popularity = normalizeScores(rawScores);
+
+  const updatedAt = Date.now();
   const statements = results.map((row, i) => {
     const quality = clampQuality(row.quality_score);
     // The editor's override is a flag, not a dial: featured means 100, everything else 0.
@@ -109,7 +118,7 @@ export async function refreshRanking(env: Env): Promise<RankingRefreshResult> {
       `UPDATE articles
           SET popularity_score = ?2, quality_score = ?3, editor_score = ?4, final_score = ?5, updated_at = ?6
         WHERE id = ?1`,
-    ).bind(row.id, popularity[i] ?? 0, quality, editor, final, now);
+    ).bind(row.id, popularity[i] ?? 0, quality, editor, final, updatedAt);
   });
 
   await env.DB.batch(statements);

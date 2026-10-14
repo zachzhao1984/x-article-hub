@@ -58,14 +58,20 @@ export function metricsFromRow(row: Record<string, unknown> | null | undefined):
  * viral post does not flatten the scale.
  */
 export function rawPopularity(m: Metrics): number {
-  return (
+  // Four dimensions, kept in separate terms so a regression test can see each one.
+  const countScore =
+    POPULARITY_WEIGHTS.views * Math.log(m.views + 1) +
     POPULARITY_WEIGHTS.likes * Math.log(m.likes + 1) +
     POPULARITY_WEIGHTS.reposts * Math.log(m.reposts + 1) +
-    POPULARITY_WEIGHTS.replies * Math.log(m.replies + 1) +
-    POPULARITY_WEIGHTS.quotes * Math.log(m.quotes + 1) +
-    POPULARITY_WEIGHTS.bookmarks * Math.log(m.bookmarks + 1) +
-    POPULARITY_WEIGHTS.views * Math.log(m.views + 1)
-  );
+    POPULARITY_WEIGHTS.replies * Math.log(m.replies + 1);
+
+  // Engagement quality correction: a low-view, high-engagement article should not
+  // disappear. This is intentionally weaker than the count terms.
+  const interactions = m.likes + m.reposts + m.replies;
+  const interactionRate = interactions / Math.max(m.views, 1);
+  const qualityCorrection = 0.25 * Math.log1p(interactionRate * 100);
+
+  return countScore + qualityCorrection;
 }
 
 /**
@@ -90,6 +96,17 @@ export function combineScores(
     weights.quality * scores.quality +
     weights.editor * scores.editor
   );
+}
+
+/** Time decay used by Trending: new articles are not permanently locked out by old,
+ *  high-engagement ones. 72h half-life, floor at 0.05 so old evergreens still show. */
+export function trendingDecay(publishedAt: number | null | undefined, now: number = Date.now()): number {
+  const time =
+    typeof publishedAt === "number" && Number.isFinite(publishedAt) && publishedAt > 0
+      ? publishedAt
+      : now;
+  const ageHours = Math.max(0, (now - time) / 3600000);
+  return Math.max(0.05, Math.exp(-ageHours / 72));
 }
 
 /** SPEC §14.3 — quality comes from AI but is clamped; a model must not be able to inject NaN. */

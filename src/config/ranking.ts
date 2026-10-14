@@ -18,12 +18,12 @@ export interface RankingWeights {
 
 /** SPEC §14.1 — log-compressed engagement weights. */
 export const POPULARITY_WEIGHTS = {
-  likes: 0.3,
+  views: 0.35,
+  likes: 0.30,
   reposts: 0.25,
-  replies: 0.15,
-  quotes: 0.1,
-  bookmarks: 0.1,
-  views: 0.1,
+  replies: 0.10,
+  quotes: 0,
+  bookmarks: 0,
 } as const;
 
 /**

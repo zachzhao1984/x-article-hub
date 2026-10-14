@@ -30,7 +30,7 @@ describe('rawPopularity (SPEC §14.1)', () => {
   });
 
   it('is monotonic in every metric', () => {
-    for (const key of ['likes', 'reposts', 'replies', 'quotes', 'bookmarks', 'views'] as const) {
+    for (const key of ["views", "likes", "reposts", "replies"] as const) {
       const low = rawPopularity({ ...ZERO_METRICS, [key]: 10 });
       const high = rawPopularity({ ...ZERO_METRICS, [key]: 1000 });
       expect(high, key).toBeGreaterThan(low);
