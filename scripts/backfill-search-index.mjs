@@ -33,7 +33,7 @@ import { segmentCjk } from '../src/lib/cjk.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APPLY = process.argv.includes('--apply');
-const DB = 'x-article-hub';
+const DB = '61f1e63b-4097-49fb-a99d-1f05dcb69ad9';
 
 function sh(command) {
   const result = spawnSync('sh', ['-c', command], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
@@ -43,7 +43,7 @@ function sh(command) {
 
 /** `wrangler d1 execute --json` prints an array of result sets, one per statement. */
 const query = (sql) =>
-  JSON.parse(sh(`npx wrangler d1 execute ${DB} --remote --json --command ${JSON.stringify(sql)}`))[0].results;
+  JSON.parse(sh(`npx cf d1 query ${DB} --sql ${JSON.stringify(sql)}`))[0].results;
 
 /** SQLite single-quoted literals: double the quote, nothing else. */
 const literal = (value) => `'${String(value).replace(/'/g, "''")}'`;
@@ -98,7 +98,14 @@ writeFileSync(file, `${statements.join('\n')}\n`, 'utf8');
 console.log(`wrote ${rows.length} statements to ${file}`);
 
 try {
-  sh(`npx wrangler d1 execute ${DB} --remote --file ${JSON.stringify(file)}`);
+  const applied = spawnSync(
+    'npx',
+    ['cf', 'd1', 'query', DB, '--sql', readFileSync(file, 'utf8')],
+    { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
+  );
+  if (applied.status !== 0) {
+    throw new Error(`npx cf d1 query ${DB} --sql <${file}>\n${applied.stderr}`);
+  }
   unlinkSync(file);
 } catch (error) {
   console.error(`apply failed — ${file} left in place so the statements can be read`);

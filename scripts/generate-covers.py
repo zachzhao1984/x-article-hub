@@ -96,7 +96,7 @@ def main() -> int:
           AND m.kind IN ('body','cover') AND m.r2_key IS NOT NULL)
       ORDER BY a.imported_at DESC"""
     result = subprocess.run(
-        ['npx', 'wrangler', 'd1', 'execute', 'x-article-hub', '--remote', '--json', '--command', query],
+        ['npx', 'cf', 'd1', 'query', '61f1e63b-4097-49fb-a99d-1f05dcb69ad9', '--sql', query],
         check=True, capture_output=True, text=True,
     )
     targets = json.loads(result.stdout)[0]['results']

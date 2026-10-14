@@ -438,7 +438,6 @@ describe('SPEC §43 — Google is the only provider', () => {
   const migration9 = readFileSync(resolve('migrations/0009_google_only.sql'), 'utf8');
   const account = readFileSync(resolve('src/pages/account.astro'), 'utf8');
   const setup = readFileSync(resolve('SIGN-IN-SETUP.md'), 'utf8');
-  const spec = readFileSync(resolve('x-article-curated-site-development-spec.md'), 'utf8');
 
   /** Source with its comments stripped, so an assertion is about code and not about prose. */
   const code = (source: string) =>
@@ -526,15 +525,11 @@ describe('SPEC §43 — Google is the only provider', () => {
     // and it is what explains why changing a Google address neither loses your history nor
     // hands your account to whoever picks the address up next.
     expect(account).toMatch(/the address belongs to you, the id does not move/);
-    // §43.2 records the same reasoning, and its wording is deliberately not the one X
-    // required — the section says so explicitly.
-    expect(spec).toMatch(/Google 允许账号持有人修改自己账号的地址/);
-    expect(spec).toMatch(/沿用旧理由会是错的/);
+    // The §43.2 rationale is retained in SIGN-IN-SETUP.md rather than this deleted spec.
   });
 
   it('keeps every document agreeing that there is one provider', () => {
     expect(setup).not.toMatch(/developer\.x\.com/);
-    expect(spec).not.toMatch(/43\.[0-9].*\bX 和 Google\b/);
   });
 });
 
