@@ -34,10 +34,12 @@ const result = q ? await searchPublishedArticles(db, q, PER_PAGE, (page - 1) * P
         placeholder="Search titles, body text, authors and tags"
         aria-label="Search articles"
         data-i18n-placeholder-key="search.placeholder"
-        data-i18n-placeholder-zh={TRANSLATIONS.zh['search.placeholder']}
+        data-i18n-placeholder-en={TRANSLATIONS.en["search.placeholder"]}
+        data-i18n-placeholder-zh={TRANSLATIONS.zh["search.placeholder"]}
         data-i18n-placeholder-ja={TRANSLATIONS.ja['search.placeholder']}
         data-i18n-aria-key="search.label"
-        data-i18n-aria-zh={TRANSLATIONS.zh['search.label']}
+        data-i18n-aria-en={TRANSLATIONS.en["search.label"]}
+        data-i18n-aria-zh={TRANSLATIONS.zh["search.label"]}
         data-i18n-aria-ja={TRANSLATIONS.ja['search.label']}
         autofocus
       />

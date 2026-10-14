@@ -184,7 +184,8 @@ const activeCategory = (() => {
           class="category-select"
           aria-label="Filter by category"
           data-i18n-aria-key="nav.categories"
-          data-i18n-aria-zh={TRANSLATIONS.zh['nav.categories']}
+          data-i18n-aria-en={TRANSLATIONS.en["nav.categories"]}
+          data-i18n-aria-zh={TRANSLATIONS.zh["nav.categories"]}
           data-i18n-aria-ja={TRANSLATIONS.ja['nav.categories']}
           onchange="location.href = this.value ? '/category/' + this.value : '/'"
         >
@@ -209,10 +210,12 @@ const activeCategory = (() => {
           placeholder="Search articles"
           aria-label="Search articles"
           data-i18n-placeholder-key="header.search.placeholder"
-          data-i18n-placeholder-zh={TRANSLATIONS.zh['header.search.placeholder']}
+          data-i18n-placeholder-en={TRANSLATIONS.en["header.search.placeholder"]}
+          data-i18n-placeholder-zh={TRANSLATIONS.zh["header.search.placeholder"]}
           data-i18n-placeholder-ja={TRANSLATIONS.ja['header.search.placeholder']}
           data-i18n-aria-key="header.search.label"
-          data-i18n-aria-zh={TRANSLATIONS.zh['header.search.label']}
+          data-i18n-aria-en={TRANSLATIONS.en["header.search.label"]}
+          data-i18n-aria-zh={TRANSLATIONS.zh["header.search.label"]}
           data-i18n-aria-ja={TRANSLATIONS.ja['header.search.label']}
         />
       </form>
