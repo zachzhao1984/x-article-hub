@@ -71,7 +71,7 @@
    * contrast is a design choice rather than a legibility one.
    */
   --sans:
-    Inter, "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei",
+    "Helvetica Neue", Helvetica, Inter, "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei",
     "Noto Sans CJK SC", "Noto Sans CJK TC", "Hiragino Sans GB", -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui,
     sans-serif;

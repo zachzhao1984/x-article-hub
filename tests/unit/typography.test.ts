@@ -71,7 +71,7 @@ describe('typography', () => {
     // Order is the point: `Inter` first because it has no CJK coverage, so it paints
     // Latin only and the CJK families take over per-character. A face that cannot
     // render a glyph is skipped, which is what lets one stack serve mixed text.
-    expect(sans).toMatch(/^\s*Inter,/);
+    expect(sans).toMatch(/^\s*"Helvetica Neue",/);
     for (const face of [
       'PingFang SC',
       'PingFang TC',
