@@ -176,8 +176,10 @@ body {
   /* 16px, not 15px. Chinese glyphs occupy the full em box, so 15px CJK is below
      the comfortable floor, especially in a mixed Latin/numeric article. */
   font: 400 16px/1.75 var(--sans);
-  -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-kerning: normal;
 }
 
 /*
