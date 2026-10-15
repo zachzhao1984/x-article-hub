@@ -315,25 +315,46 @@ function readNestedFromMarkdown(head: string, body: string, dateLabel: string, i
 }
 
 /**
- * A post's own pictures, lifted out of the flattened text.
+ * A post's own pictures, lifted out of the flattened text, and everything else the
+ * capture left as Markdown put back into words.
  *
- * X flattens a photo post into an image link followed by a "View media" link, again
- * and again, with a "Show more" button where it cut the caption off. Left alone that
- * is Markdown printed at the reader, so the pictures are lifted out and the capture's
- * own labels — which nobody typed — are dropped.
+ * X flattens a post into image links, "View media" links, a bare "02:53" for a video
+ * it could not give us, and a whole link card written as `[![cover](img) title](url)`.
+ * A flattened quoted post that the structured passes missed arrives the same way. Left
+ * alone that is Markdown printed at the reader — so the pictures are lifted out, the
+ * links keep their words, and the labels nobody typed are dropped.
  */
 export function extractPostMedia(text: string): { text: string; images: string[] } {
   const images: string[] = [];
   const rest = text
-    .replace(/!\[[^\]]*\]\((https:\/\/pbs\.twimg\.com\/media\/[^)]+)\)/g, (_whole, url: string) => {
-      images.push(decodeEntities(url));
-      return '';
-    })
-    .replace(/\[(?:View media|Paid partnership)\]\([^)]*\)/g, '')
-    .replace(/\b(?:Show more|View media)\b/g, '');
+    // A video X would not hand over arrives as its poster frame; showing the frame is
+    // still more than showing the Markdown that describes it.
+    .replace(
+      /!\[[^\]]*\]\((https:\/\/pbs\.twimg\.com\/(?:media|amplify_video_thumb)\/[^)]+)\)/g,
+      (_whole, url: string) => {
+        images.push(decodeEntities(url));
+        return '';
+      },
+    )
+    // A card written as `[![cover](img) title](url)`: the title is the only part that
+    // says anything.
+    .replace(/\[!\[[^\]]*\]\([^)]*\)([^\]]*)\]\([^)]*\)/g, '$1')
+    // Whatever image syntax is left claims nothing worth printing. This runs before the
+    // link rule below, or that rule would eat the brackets and leave a bare "!@name".
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    // Any other link keeps its words, which is at worst a plain sentence.
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\b(?:Show more|View media|Paid partnership)\b/g, '')
+    // A video's running time, standing alone on its own line. The whitespace on either
+    // side is horizontal on purpose: a `\s*` here would eat the paragraph break with it.
+    .replace(/(?:^|\n)[ \t]*\d{1,2}:\d{2}[ \t]*(?=\n|$)/g, '');
 
   return {
-    text: rest.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim(),
+    text: rest
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/^[ \t]+|[ \t]+$/gm, '')
+      .replace(/\n{2,}/g, '\n\n')
+      .trim(),
     images,
   };
 }

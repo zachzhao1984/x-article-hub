@@ -202,3 +202,53 @@ describe('a photo post', () => {
     });
   });
 });
+
+describe('what the capture left as Markdown', () => {
+  it('shows a video it could not hand over as its poster frame', () => {
+    const flat =
+      'a clip\n\n' +
+      '![](https://pbs.twimg.com/amplify_video_thumb/1/img/x?format=webp&name=medium)\n\n' +
+      '02:53';
+    expect(extractPostMedia(flat)).toEqual({
+      text: 'a clip',
+      images: ['https://pbs.twimg.com/amplify_video_thumb/1/img/x?format=webp&name=medium'],
+    });
+  });
+
+  it('turns a link card into the words on it rather than printing the syntax', () => {
+    const flat =
+      'a service\n\n' +
+      '[![CoreGen](https://pbs.twimg.com/card_img/1/x?format=webp) ' +
+      'AIを経営の成果につながる仕組みへ｜CoreGen AI顧問](https://t.co/KY4tNiPdQ6) ' +
+      '[From coregen.pages.dev](https://t.co/KY4tNiPdQ6)';
+
+    expect(extractPostMedia(flat).text).toBe(
+      'a service\n\nAIを経営の成果につながる仕組みへ｜CoreGen AI顧問 From coregen.pages.dev',
+    );
+  });
+
+  it('prints no Markdown at all, whatever shape the card takes', () => {
+    const flat =
+      '[Article 30代からの疲労蓄積を軽減する「夜のリセット習慣」10選 朝よりも夜が好きだ。...]' +
+      '(https://x.com/i/article/2106306493863924170)';
+    const out = extractPostMedia(flat).text;
+    expect(out).not.toMatch(/[!\[\]]|\(http/);
+    expect(out.startsWith('Article 30代から')).toBe(true);
+  });
+});
+
+describe('an avatar left behind by a flattened quote', () => {
+  it('never prints as a bare "!@name"', () => {
+    const flat =
+      'a post\n\n' +
+      '[![@minara](https://pbs.twimg.com/profile_images/1/x_normal.jpg) Minara AI](https://x.com/minara/status/2)\n\n' +
+      '02:53\n\n' +
+      '![@minara](https://pbs.twimg.com/profile_images/1/x_normal.jpg)\n\n' +
+      'Minara AI';
+
+    expect(extractPostMedia(flat)).toEqual({
+      text: 'a post\n\nMinara AI\n\nMinara AI',
+      images: [],
+    });
+  });
+});
