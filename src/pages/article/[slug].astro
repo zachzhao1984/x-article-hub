@@ -418,6 +418,36 @@ const jsonLd = isTakedown
 
                               {block.text && <div class="embedded-post__text">{block.text}</div>}
 
+                              {block.card && (
+                                <a
+                                  class="embedded-card"
+                                  href={block.card.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                >
+                                  <span class="embedded-card__cover">
+                                    <img
+                                      src={block.card.imageUrl}
+                                      alt=""
+                                      width="120"
+                                      height="72"
+                                      loading="lazy"
+                                      decoding="async"
+                                      referrerpolicy="no-referrer"
+                                    />
+                                    <span class="embedded-card__label" {...i18nSpread('article.embedCardLabel')}>
+                                      Article
+                                    </span>
+                                  </span>
+                                  <span class="embedded-card__body">
+                                    <span class="embedded-card__title">{block.card.title}</span>
+                                    {block.card.excerpt && (
+                                      <span class="embedded-card__excerpt">{block.card.excerpt}</span>
+                                    )}
+                                  </span>
+                                </a>
+                              )}
+
                               {block.videoUrl && (
                                 <video
                                   class="embedded-post__video"

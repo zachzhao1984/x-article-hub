@@ -62,6 +62,13 @@ export type ArticleBlock =
       viewCount?: number;
       videoUrl?: string;
       poster?: string;
+      /** A quoted X Article: the cover, title and excerpt X put in the post's card. */
+      card?: {
+        url: string;
+        imageUrl: string;
+        title: string;
+        excerpt?: string;
+      };
     };
 
 /**
@@ -192,6 +199,9 @@ export function documentToPlainText(doc: ArticleDocument): string {
         break;
       case 'embed':
         if (block.text) parts.push(block.text);
+        // The quoted article's own words stay searchable after the Markdown that
+        // carried them is lifted into a card.
+        if (block.card) parts.push(block.card.title, block.card.excerpt ?? '');
         break;
       case 'app':
         // The card replaces a bare URL paragraph, so the URL and the plugin title
