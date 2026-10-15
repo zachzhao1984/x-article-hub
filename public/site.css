@@ -572,12 +572,12 @@ a:hover { color: var(--accent); }
 
 /* --- boards --- */
 
-.board { margin-bottom: 44px; }
+.board { margin-bottom: 64px; }
 .board-title {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -597,7 +597,7 @@ a:hover { color: var(--accent); }
  * and the theme switch rely on.
  */
 .board-icon { flex: none; opacity: 0.8; }
-.board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .board-more { font-size: 13px; color: var(--faint); }
 .board-more:hover { color: var(--accent); }
 
@@ -622,7 +622,7 @@ a:hover { color: var(--accent); }
 
 .board-split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
 
-.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(292px, 1fr)); gap: 18px; }
 /*
  * Trending and Latest, each a two-up grid inside its half of the split.
  *
@@ -640,8 +640,8 @@ a:hover { color: var(--accent); }
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
+  gap: 18px;
 }
 
 /* --- article card ---
@@ -943,7 +943,7 @@ a:hover { color: var(--accent); }
  * cloud both still use it, and `.cat-chip` survives on the category page's sort row.
  */
 
-.tag-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 9px; }
 .tag {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 11px;
@@ -957,7 +957,7 @@ a:hover { color: var(--accent); }
 /* --- empty state --- */
 
 .empty-state {
-  padding: 56px 32px;
+  padding: 72px 32px;
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   text-align: center;
