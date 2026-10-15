@@ -198,7 +198,13 @@ export function recoverNestedPosts(html: string): Map<string, EmbeddedNestedPost
   return posts;
 }
 
-const POST_CONTAINER_RE = /<div[^>]*data-href="\/([^"/]+)\/status\/(\d+)"[^>]*>/g;
+/**
+ * A post's container, in either of the two shapes X writes it: the reader's own URL
+ * (`/handle/status/<id>`) and the timeline's (`/i/web/status/<id>`, which names the
+ * post rather than its author). Keying on the id alone lets a post be identified from
+ * whichever shape the capture happened to carry.
+ */
+const POST_CONTAINER_RE = /<(?:div|article)[^>]*data-href="\/(?:i\/web\/|[^"/]+\/)status\/(\d+)"[^>]*>/g;
 
 /**
  * Who a post is, read from its own container: the avatar X drew beside the name, the
@@ -214,16 +220,17 @@ export function recoverPostIdentities(html: string): Map<string, PostIdentity> {
 
   for (let i = 0; i < containers.length; i++) {
     const container = containers[i];
-    const handle = container?.[1];
-    const id = container?.[2];
+    const id = container?.[1];
     const start = container?.index ?? 0;
     if (!id || identities.has(id)) continue;
 
     const end = containers[i + 1]?.index ?? Math.min(html.length, start + 24_000);
     const window = html.slice(start, end);
     const avatarUrl = avatar(window);
+    // The date links to the post itself; matching the id rather than the handle keeps
+    // it working for the timeline's `/i/web/` shape, which carries no handle at all.
     const dateLabel = stripTags(
-      handle ? new RegExp(`href="/${handle}/status/${id}">([^<]+)<`).exec(window)?.[1] : undefined,
+      new RegExp(`href="[^"]*status/${id}">([^<]+)<`).exec(window)?.[1],
     );
     const text = /whitespace-pre-wrap wrap-break-word" dir="auto"><span[^>]*>([\s\S]*?)<\/span>([\s\S]{0,240})/.exec(window);
 

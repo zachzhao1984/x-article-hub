@@ -157,6 +157,19 @@ describe('who a quoted post is', () => {
     });
   });
 
+
+  it('reads a timeline-shaped container, which names the post and not its author', () => {
+    const timeline =
+      '<div data-href="/i/web/status/2090546476464451907" role="link" data-timeline-entry="">' +
+      '<img src="https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg">' +
+      '<a href="/poteto/status/2090546476464451907">Aug 20</a>' +
+      '<div class="text-body whitespace-pre-wrap wrap-break-word" dir="auto"><span>x</span></div>';
+    expect(recoverPostIdentities(timeline).get('2090546476464451907')).toEqual({
+      avatarUrl: 'https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg',
+      dateLabel: 'Aug 20',
+    });
+  });
+
   it('says nothing rather than guessing when the capture has no header', () => {
     expect(recoverPostIdentities('<div data-href="/u/status/1"></div>').get('1')).toEqual({});
   });
