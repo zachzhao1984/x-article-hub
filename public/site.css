@@ -1470,36 +1470,43 @@ pre {
   border-radius: 14px;
   background: var(--panel);
 }
-.embedded-post__head { display: flex; align-items: center; gap: 10px; }
-.embedded-post__avatar {
+/* Every rule below carries the `.article-body` prefix: it is what the block is
+   rendered inside, and it is what the body's own `a`, `img` and `figure` rules are
+   written against, so a bare class here loses to them and the avatar comes out at
+   full width with the brand link underlined. */
+.article-body .embedded-post__head { display: flex; align-items: center; gap: 10px; }
+.article-body .embedded-post__avatar {
   flex: none;
   width: 40px;
   height: 40px;
+  border: 0;
   border-radius: 50%;
   object-fit: cover;
   background: var(--panel-2);
 }
-.embedded-post__identity { flex: 1; min-width: 0; }
+.article-body .embedded-post__identity { flex: 1; min-width: 0; }
 /* One row, the way X prints it: name, seal, @handle, date. Two rows repeated the
    handle and read as two different people. */
-.embedded-post__name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 15px; line-height: 1.35; }
-.embedded-post__name strong { color: var(--text); font-weight: 700; }
-.embedded-post__verified { flex: none; color: var(--verified); }
-.embedded-post__handle, .embedded-post__date { color: var(--muted); }
-.embedded-post__dot { color: var(--faint); }
-.embedded-post__brand {
+.article-body .embedded-post__name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 15px; line-height: 1.35; }
+.article-body .embedded-post__name strong { color: var(--text); font-weight: 700; }
+.article-body .embedded-post__verified { flex: none; color: var(--verified); }
+.article-body .embedded-post__handle,
+.article-body .embedded-post__date { color: var(--muted); }
+.article-body .embedded-post__dot { color: var(--faint); }
+.article-body .embedded-post__brand {
   flex: none;
   display: inline-flex;
   align-items: center;
   color: var(--faint);
+  text-decoration: none;
 }
-.embedded-post__brand:hover { color: var(--muted); }
-.embedded-post__text { margin-top: 10px; color: var(--text); font-size: 17px; line-height: 1.6; white-space: pre-wrap; }
-.embedded-post__more { display: inline-block; margin-top: 4px; color: var(--accent); font-size: 15px; line-height: 1.5; text-decoration: none; }
-.embedded-post__more:hover { text-decoration: underline; text-underline-offset: 3px; }
+.article-body .embedded-post__brand:hover { color: var(--muted); }
+.article-body .embedded-post__text { margin-top: 10px; color: var(--text); font-size: 17px; line-height: 1.6; white-space: pre-wrap; }
+.article-body .embedded-post__more { display: inline-block; margin-top: 4px; color: var(--accent); font-size: 15px; line-height: 1.5; text-decoration: none; }
+.article-body .embedded-post__more:hover { text-decoration: underline; text-underline-offset: 3px; }
 /* A post quoted inside a quoted post: X draws it as a quieter card within the first
    one, with its media running to that card's own edges. */
-.embedded-quote {
+.article-body .embedded-quote {
   margin: 14px 0 0;
   padding: 0;
   overflow: hidden;
@@ -1507,17 +1514,25 @@ pre {
   border-radius: 12px;
   background: var(--panel-2);
 }
-.embedded-quote__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 0; }
-.embedded-quote__avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--panel); }
-.embedded-quote__name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; font-size: 14px; line-height: 1.35; }
-.embedded-quote__name strong { color: var(--text); font-weight: 700; }
-.embedded-quote__text { padding: 8px 12px 12px; color: var(--text); font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
-.embedded-quote__media { display: block; background: var(--panel); }
-.embedded-quote__media img { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
+.article-body .embedded-quote__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 0; }
+.article-body .embedded-quote__avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel);
+}
+.article-body .embedded-quote__name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; font-size: 14px; line-height: 1.35; }
+.article-body .embedded-quote__name strong { color: var(--text); font-weight: 700; }
+.article-body .embedded-quote__text { padding: 8px 12px 12px; color: var(--text); font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.article-body .embedded-quote__media { display: block; background: var(--panel); text-decoration: none; }
+.article-body .embedded-quote__media img { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
 /* A quoted X Article inside a quoted post: cover and badge on the left, its own
    title and excerpt on the right — the shape the capture had flattened into a
    single Markdown link. */
-.embedded-card {
+.article-body .embedded-card {
   display: grid;
   grid-template-columns: 116px 1fr;
   gap: 12px;
@@ -1529,10 +1544,10 @@ pre {
   color: var(--text);
   text-decoration: none;
 }
-.embedded-card:hover { border-color: var(--accent-dim); }
-.embedded-card__cover { position: relative; display: block; overflow: hidden; border-radius: 8px; background: var(--panel); }
-.embedded-card__cover img { display: block; width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: cover; }
-.embedded-card__label {
+.article-body .embedded-card:hover { border-color: var(--accent-dim); }
+.article-body .embedded-card__cover { position: relative; display: block; overflow: hidden; border-radius: 8px; background: var(--panel); }
+.article-body .embedded-card__cover img { display: block; width: 100%; height: 100%; border: 0; border-radius: 0; object-fit: cover; }
+.article-body .embedded-card__label {
   position: absolute;
   left: 6px;
   bottom: 6px;
@@ -1544,9 +1559,9 @@ pre {
   line-height: 1.5;
   font-weight: 700;
 }
-.embedded-card__body { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
-.embedded-card__title { font-size: 14px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
-.embedded-card__excerpt {
+.article-body .embedded-card__body { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+.article-body .embedded-card__title { font-size: 14px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
+.article-body .embedded-card__excerpt {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1555,11 +1570,11 @@ pre {
   font-size: 13px;
   line-height: 1.5;
 }
-.embedded-post__video { display: block; width: 100%; max-height: 70vh; margin-top: 14px; border-radius: 10px; background: var(--bg); }
-.embedded-post__actions { display: flex; align-items: center; gap: 22px; margin-top: 14px; color: var(--faint); font-size: 13px; line-height: 1.4; }
-.embedded-post__actions span { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
-.embedded-post__actions a { margin-left: auto; color: var(--accent); text-decoration: none; }
-.embedded-post__actions a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.article-body .embedded-post__video { display: block; width: 100%; max-height: 70vh; margin-top: 14px; border-radius: 10px; background: var(--bg); }
+.article-body .embedded-post__actions { display: flex; align-items: center; gap: 22px; margin-top: 14px; color: var(--faint); font-size: 13px; line-height: 1.4; }
+.article-body .embedded-post__actions span { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.article-body .embedded-post__actions > a { margin-left: auto; color: var(--accent); text-decoration: none; }
+.article-body .embedded-post__actions > a:hover { text-decoration: underline; text-underline-offset: 3px; }
 /*
  * An x.ai plugin link is an app, not a citation: X shows its own Open Graph
  * banner as a card with the plugin title on it. The banner is served by x.ai
