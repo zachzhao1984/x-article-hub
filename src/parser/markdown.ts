@@ -36,6 +36,8 @@ const IMAGE_RE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/;
 /** Inline `[text](href)`, and reference-free bare autolinks. */
 const INLINE_LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/;
 const BARE_URL_RE = /(?:^|\s)(https?:\/\/[^\s<>()]+)/;
+/** A whole paragraph that is nothing but an x.ai plugin link: it renders as an app card, not a URL. */
+const APP_LINK_RE = /^https:\/\/x\.ai\/bot\/plugin\/\d+\/?$/;
 const ORDERED_ITEM_RE = /^(\d+)[.)]\s+(.*)$/;
 const UNORDERED_ITEM_RE = /^[-*+]\s+(.*)$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
@@ -388,6 +390,12 @@ function parseBlocks(
   };
 
   const pushParagraph = (raw: string) => {
+    const trimmed = raw.trim();
+    if (APP_LINK_RE.test(trimmed)) {
+      sawProse = true;
+      blocks.push({ type: 'app', url: trimmed });
+      return;
+    }
     const spans = inline(raw);
     if (spans.length > 0) {
       sawProse = true;

@@ -40,6 +40,13 @@ export type ArticleBlock =
   | { type: 'image'; imageId: string }
   | { type: 'code'; language?: string; code: string }
   | {
+      type: 'app';
+      url: string;
+      title?: string;
+      imageUrl?: string;
+      description?: string;
+    }
+  | {
       type: 'embed';
       postId: string;
       url?: string;
@@ -185,6 +192,11 @@ export function documentToPlainText(doc: ArticleDocument): string {
         break;
       case 'embed':
         if (block.text) parts.push(block.text);
+        break;
+      case 'app':
+        // The card replaces a bare URL paragraph, so the URL and the plugin title
+        // stay searchable — the text was not deleted, only moved into a block.
+        parts.push(block.title ?? '', block.url);
         break;
     }
   }

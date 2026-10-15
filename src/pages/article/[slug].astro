@@ -324,6 +324,44 @@ const jsonLd = isTakedown
                             </figure>
                           );
                         }
+                        case 'app':
+                          return (
+                            <figure class="app-card">
+                              {block.imageUrl ? (
+                                <a
+                                  class="app-card__banner"
+                                  href={block.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                >
+                                  <img
+                                    src={block.imageUrl}
+                                    alt={block.title ?? ''}
+                                    width={1200}
+                                    height={630}
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerpolicy="no-referrer"
+                                  />
+                                  {block.title && <span class="app-card__chip">{block.title}</span>}
+                                </a>
+                              ) : (
+                                <a
+                                  class="app-card__banner app-card__banner--plain"
+                                  href={block.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                >
+                                  <span class="app-card__chip">{block.title ?? block.url}</span>
+                                </a>
+                              )}
+                              <figcaption class="app-card__caption">
+                                <a href={block.url} target="_blank" rel="noopener noreferrer nofollow" {...i18nSpread('article.appFrom')}>
+                                  {TRANSLATIONS.en['article.appFrom']}
+                                </a>
+                              </figcaption>
+                            </figure>
+                          );
                         case 'paragraph':
                           return (
                             <p>

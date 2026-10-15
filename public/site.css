@@ -50,6 +50,15 @@
   --wrap: 1180px;
 
   /*
+   * The x.ai plugin banner is a dark image in both themes — it is the page's own
+   * Open Graph art — so its label keeps its own ground instead of inheriting the
+   * paper's, which would put white-on-white in light mode and black-on-black in
+   * dark mode.
+   */
+  --app-chip-bg: rgba(0, 0, 0, 0.72);
+  --app-chip-ink: #ffffff;
+
+  /*
    * Type.
    *
    * The archive is mostly Chinese, so the CJK faces are not an afterthought — they
@@ -143,6 +152,9 @@
   --warn: #d3b26a;
   --danger: #d86a52;
   --header-bg: #13191ce8;
+  /* The x.ai banner is a dark image in both themes; its label keeps its own ground. */
+  --app-chip-bg: rgba(0, 0, 0, 0.72);
+  --app-chip-ink: #ffffff;
 }
 
 :root[data-theme='light'] {
@@ -163,6 +175,8 @@
   --warn: #b8873a;
   --danger: #b3402a;
   --header-bg: #faf9f6e8;
+  --app-chip-bg: rgba(0, 0, 0, 0.72);
+  --app-chip-ink: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -1480,6 +1494,38 @@ pre {
 .embedded-post__actions span { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
 .embedded-post__actions a { margin-left: auto; color: var(--accent); text-decoration: none; }
 .embedded-post__actions a:hover { text-decoration: underline; text-underline-offset: 3px; }
+/*
+ * An x.ai plugin link is an app, not a citation: X shows its own Open Graph
+ * banner as a card with the plugin title on it. The banner is served by x.ai
+ * and cached at parse time, so the reading page makes no request to render it.
+ */
+.article-body .app-card { margin: 28px 0; }
+.app-card__banner {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-2);
+}
+.app-card__banner img { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
+.app-card__chip {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: calc(100% - 32px);
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--app-chip-bg);
+  color: var(--app-chip-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.app-card__banner--plain { display: flex; align-items: center; min-height: 84px; padding: 16px; }
+.app-card__banner--plain .app-card__chip { position: static; background: var(--panel); color: var(--text); }
+.app-card__caption { margin-top: 8px; }
+.app-card__caption a { color: var(--muted); font-size: 13px; line-height: 1.4; text-decoration: none; }
+.app-card__caption a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .fig-video video { display: block; width: 100%; max-height: 80vh; background: var(--bg); border-radius: 8px; margin-bottom: 10px; }
 .fig-video span { display: block; font-size: 12px; line-height: 1.5; color: var(--faint); }
 

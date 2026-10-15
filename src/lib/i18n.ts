@@ -190,6 +190,7 @@ export interface Translations {
   'article.imageNote': string;
   'article.embed': string;
   'article.embedView': string;
+  'article.appFrom': string;
   'article.takenDown': string;
   'article.takenDownBody': string;
   'article.reason': string;
@@ -383,6 +384,7 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'article.imageNote': 'this figure still loads from x.com and may stop working',
     'article.embed': 'Embedded X post',
     'article.embedView': 'View post on X',
+    'article.appFrom': 'From x.ai',
     'article.takenDown': 'This article has been taken down',
     'article.takenDownBody': 'The archived copy is no longer displayed. This usually means the author requested removal, or the content raised a rights concern.',
     'article.reason': 'Reason:',
@@ -565,6 +567,7 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'article.imageNote': '这张图仍从 x.com 加载，可能随时失效',
     'article.embed': '嵌入的 X 帖子',
     'article.embedView': '在 X 上查看原帖',
+    'article.appFrom': '来自 x.ai',
     'article.takenDown': '这篇文章已被下架',
     'article.takenDownBody': '归档副本不再展示。通常是作者要求移除，或内容存在版权方面的顾虑。',
     'article.reason': '原因：',
@@ -748,6 +751,7 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'article.imageNote': 'この図は x.com から読み込まれており、表示できなくなる可能性があります',
     'article.embed': '埋め込み X 投稿',
     'article.embedView': 'X で元の投稿を見る',
+    'article.appFrom': 'x.ai より',
     'article.takenDown': 'この記事は削除されました',
     'article.takenDownBody': 'アーカイブされたコピーは表示されていません。多くの場合、著者による削除の依頼か、権利上の懸念によるものです。',
     'article.reason': '理由：',
