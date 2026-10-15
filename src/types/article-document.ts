@@ -56,6 +56,10 @@ export type ArticleBlock =
       avatarUrl?: string;
       verified?: boolean;
       postedAt?: string;
+      /** The date X itself printed beside the handle ("Aug 21"). */
+      dateLabel?: string;
+      /** X hid the rest of the text behind "Show more"; the archive has what was shown. */
+      truncated?: boolean;
       replyCount?: number;
       repostCount?: number;
       likeCount?: number;
@@ -75,6 +79,7 @@ export type ArticleBlock =
         author?: string;
         handle?: string;
         avatarUrl?: string;
+        verified?: boolean;
         dateLabel?: string;
         text?: string;
         imageUrl?: string;

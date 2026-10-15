@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recoverArticleCards, recoverEmbeddedPosts, recoverNestedPosts, splitEmbeddedArticleCard, splitNestedPost } from '../../src/parser/embedded-post';
+import { recoverArticleCards, recoverEmbeddedPosts, recoverNestedPosts, recoverPostIdentities, splitEmbeddedArticleCard, splitNestedPost } from '../../src/parser/embedded-post';
 import { parseMarkdownToDocument } from '../../src/parser/markdown';
 import { documentToPlainText, inlineToText } from '../../src/types/article-document';
 
@@ -134,5 +134,30 @@ describe('a post quoted inside a quoted post', () => {
     // The flattened links and the media link are gone either way.
     expect(out.nested?.text ?? '').not.toContain('View media');
     expect(out.nested?.text ?? '').not.toContain('http');
+  });
+});
+
+const OUTER_HTML =
+  '<div data-href="/poteto/status/2090546476464451907" role="link" class="flex flex-col gap-3">' +
+  '<div class="flex items-center gap-1"><a href="/poteto"><div class="x-avatar rounded-full size-10">' +
+  '<img alt="@poteto" src="https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg"></div></a>' +
+  '<div class="text-body font-bold text-primary line-clamp-1 break-all min-w-0">lauren</div>' +
+  '<span aria-label="Verified account" role="button"></span>' +
+  '<a href="/poteto/status/2090546476464451907">Aug 21</a></div>' +
+  '<div class="text-body whitespace-pre-wrap wrap-break-word" dir="auto">' +
+  '<span>every team needs a gardener.</span> <button>Show more</button></div></div>';
+
+describe('who a quoted post is', () => {
+  it('reads the avatar, the seal, the date and the truncation from the capture', () => {
+    expect(recoverPostIdentities(OUTER_HTML).get('2090546476464451907')).toEqual({
+      avatarUrl: 'https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg',
+      verified: true,
+      dateLabel: 'Aug 21',
+      truncated: true,
+    });
+  });
+
+  it('says nothing rather than guessing when the capture has no header', () => {
+    expect(recoverPostIdentities('<div data-href="/u/status/1"></div>').get('1')).toEqual({});
   });
 });

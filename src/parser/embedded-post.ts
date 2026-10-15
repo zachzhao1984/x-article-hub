@@ -12,10 +12,18 @@ export interface EmbeddedNestedPost {
   author?: string;
   handle?: string;
   avatarUrl?: string;
+  verified?: boolean;
   dateLabel?: string;
   text?: string;
   imageUrl?: string;
   videoUrl?: string;
+}
+
+export interface PostIdentity {
+  avatarUrl?: string;
+  verified?: boolean;
+  dateLabel?: string;
+  truncated?: boolean;
 }
 
 export interface RecoveredPost {
@@ -24,6 +32,10 @@ export interface RecoveredPost {
   author: string;
   handle: string;
   text: string;
+  avatarUrl?: string;
+  verified?: boolean;
+  dateLabel?: string;
+  truncated?: boolean;
   card?: EmbeddedArticleCard;
   nested?: EmbeddedNestedPost;
 }
@@ -143,6 +155,7 @@ const NESTED_CONTAINER_RE = /<div[^>]*data-href="\/([^"/]+)\/status\/(\d+)"[^>]*
 export function recoverNestedPosts(html: string): Map<string, EmbeddedNestedPost> {
   const posts = new Map<string, EmbeddedNestedPost>();
   const containers = [...html.matchAll(NESTED_CONTAINER_RE)];
+  const identities = recoverPostIdentities(html);
 
   for (let i = 0; i < containers.length; i++) {
     const container = containers[i];
@@ -169,18 +182,59 @@ export function recoverNestedPosts(html: string): Map<string, EmbeddedNestedPost
     );
     const videoUrl = /"(https:\/\/video\.twimg\.com\/[^"]+\.mp4)"/.exec(html.slice(mediaFrom, end))?.[1];
 
+    const identity = identities.get(id);
     posts.set(id, {
       url: `https://x.com/${handle}/status/${id}`,
       ...(author ? { author } : {}),
       ...(handleText ? { handle: handleText.replace(/^@/, '') } : {}),
-      ...(avatar(window) ? { avatarUrl: avatar(window) } : {}),
-      ...(dateLabel ? { dateLabel } : {}),
+      ...(identity?.avatarUrl ? { avatarUrl: identity.avatarUrl } : {}),
+      ...(identity?.verified ? { verified: true } : {}),
+      ...(identity?.dateLabel ?? dateLabel ? { dateLabel: identity?.dateLabel ?? dateLabel } : {}),
       ...(text ? { text } : {}),
       ...(imageUrl ? { imageUrl } : {}),
       ...(videoUrl ? { videoUrl } : {}),
     });
   }
   return posts;
+}
+
+const POST_CONTAINER_RE = /<div[^>]*data-href="\/([^"/]+)\/status\/(\d+)"[^>]*>/g;
+
+/**
+ * Who a post is, read from its own container: the avatar X drew beside the name, the
+ * verified seal, the date, and whether X truncated the text behind a "Show more".
+ *
+ * The syndication endpoint sometimes answers without a profile image, and it never
+ * answers with the date X actually displayed — the capture has all four, and the post
+ * header is the one place they are read from rather than inferred.
+ */
+export function recoverPostIdentities(html: string): Map<string, PostIdentity> {
+  const identities = new Map<string, PostIdentity>();
+  const containers = [...html.matchAll(POST_CONTAINER_RE)];
+
+  for (let i = 0; i < containers.length; i++) {
+    const container = containers[i];
+    const handle = container?.[1];
+    const id = container?.[2];
+    const start = container?.index ?? 0;
+    if (!id || identities.has(id)) continue;
+
+    const end = containers[i + 1]?.index ?? Math.min(html.length, start + 24_000);
+    const window = html.slice(start, end);
+    const avatarUrl = avatar(window);
+    const dateLabel = stripTags(
+      handle ? new RegExp(`href="/${handle}/status/${id}">([^<]+)<`).exec(window)?.[1] : undefined,
+    );
+    const text = /whitespace-pre-wrap wrap-break-word" dir="auto"><span[^>]*>([\s\S]*?)<\/span>([\s\S]{0,240})/.exec(window);
+
+    identities.set(id, {
+      ...(avatarUrl ? { avatarUrl } : {}),
+      ...(window.includes('aria-label="Verified account"') ? { verified: true } : {}),
+      ...(dateLabel ? { dateLabel } : {}),
+      ...(text?.[2]?.includes('Show more') ? { truncated: true } : {}),
+    });
+  }
+  return identities;
 }
 
 const avatar = (window: string): string | undefined =>
@@ -260,6 +314,7 @@ export function recoverEmbeddedPosts(markdown: string, html: string): {
   const ids = new Set([...html.matchAll(/data-href=["']\/i\/web\/status\/(\d+)["']/g)].map((m) => m[1]));
   const cards = recoverArticleCards(html);
   const nestedPosts = recoverNestedPosts(html);
+  const identities = recoverPostIdentities(html);
   const recovered = markdown.replace(
     /\[!\[[^\]]*\]\([^\n]+\)\]\(https:\/\/x\.com\/[^\n]+\)\n\n\[([^\]]+)\]\(https:\/\/x\.com\/([^\s)]+)\)\n\n\[@[^\]]+\]\([^\n]+\)\n\n\[[^\]]+\]\(https:\/\/x\.com\/[^/]+\/status\/(\d+)\)\n\n([\s\S]*?)\n\n\[[^\]]+\]\(https:\/\/x\.com\/compose\/post\?in_reply_to=\3\)(?:\n\n[\d.,KM]+){0,4}/g,
     (whole, author: string, handle: string, postId: string, body: string) => {
@@ -267,12 +322,17 @@ export function recoverEmbeddedPosts(markdown: string, html: string): {
       const text = cleanPostText(body.replace(/\n\n\d{1,2}:\d{2}\s*$/, '').trim());
       const split = splitEmbeddedArticleCard(text, cards);
       const nested = splitNestedPost(split.text, nestedPosts);
+      const identity = identities.get(postId);
       posts.push({
         postId,
         url: `https://x.com/${handle}/status/${postId}`,
         author,
         handle,
         text: nested.text,
+        ...(identity?.avatarUrl ? { avatarUrl: identity.avatarUrl } : {}),
+        ...(identity?.verified ? { verified: true } : {}),
+        ...(identity?.dateLabel ? { dateLabel: identity.dateLabel } : {}),
+        ...(identity?.truncated ? { truncated: true } : {}),
         ...(split.card ? { card: split.card } : {}),
         ...(nested.nested ? { nested: nested.nested } : {}),
       });

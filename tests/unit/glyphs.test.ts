@@ -36,6 +36,7 @@ const header = source('src/components/SiteHeader.astro');
 const themeSwitch = source('src/components/ThemeSwitch.astro');
 const icon = source('src/components/Icon.astro');
 const card = source('src/components/ArticleCard.astro');
+const articlePage = source('src/pages/article/[slug].astro');
 const css = source('public/site.css');
 
 /** The declaration block for a selector, comments stripped. */
@@ -87,6 +88,14 @@ function cardIcons(): string[] {
   return [...card.matchAll(/\badd\(\s*'([^']+)'/g)].map((m) => m[1] ?? '');
 }
 
+/**
+ * The glyphs the reading page names when it renders a quoted post — the X mark and
+ * the verified seal, read from where they live for the same reason `cardIcons` does.
+ */
+function articleIcons(): string[] {
+  return [...articlePage.matchAll(/<Icon name="([^"]+)"/g)].map((m) => m[1] ?? '');
+}
+
 describe('the glyph set', () => {
   it('holds every icon the interface names, and nothing orphaned', () => {
     // The theme switch's glyphs come from `THEME_OPTIONS` at runtime, not from a
@@ -99,6 +108,7 @@ describe('the glyph set', () => {
       ...navIcons().map((item) => item.icon),
       ...THEME_OPTIONS.map((option) => option.icon),
       ...cardIcons(),
+      ...articleIcons(),
     ]);
     for (const name of used) {
       expect(name in ICON_PATHS, `"${name}" is used but not vendored`).toBe(true);

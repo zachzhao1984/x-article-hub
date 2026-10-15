@@ -371,6 +371,9 @@ const jsonLd = isTakedown
                         case 'embed': {
                           const handle = block.handle ?? embeddedHandle(block.url);
                           const posted = postedDate(block.postedAt);
+                          // X's own date label beats a reformat of created_at: it is what the
+                          // post said about itself, and it is the shorter of the two.
+                          const dateLabel = block.dateLabel ?? posted?.label;
                           const replyCount = compactCount(block.replyCount);
                           const repostCount = compactCount(block.repostCount);
                           const likeCount = compactCount(block.likeCount);
@@ -393,17 +396,20 @@ const jsonLd = isTakedown
                                   />
                                 )}
                                 <div class="embedded-post__identity">
+                                  {/* One line, the way X prints it: name, seal, @handle, date. */}
                                   <div class="embedded-post__name">
                                     <strong>{block.author ?? handle ?? 'X'}</strong>
+                                    {block.verified && (
+                                      <Icon name="verified" size={16} class="embedded-post__verified" />
+                                    )}
                                     {handle && <span class="embedded-post__handle">@{handle}</span>}
+                                    {dateLabel && (
+                                      <>
+                                        <span class="embedded-post__dot" aria-hidden="true">·</span>
+                                        <span class="embedded-post__date">{dateLabel}</span>
+                                      </>
+                                    )}
                                   </div>
-                                  {(handle || posted) && (
-                                    <div class="embedded-post__meta">
-                                      {handle && <span>@{handle}</span>}
-                                      {handle && posted && <span aria-hidden="true">·</span>}
-                                      {posted && <time datetime={posted.iso}>{posted.label}</time>}
-                                    </div>
-                                  )}
                                 </div>
                                 <a
                                   class="embedded-post__brand"
@@ -412,11 +418,23 @@ const jsonLd = isTakedown
                                   rel="noopener noreferrer nofollow"
                                   aria-label="X"
                                 >
-                                  X
+                                  <Icon name="x-logo" size={22} />
                                 </a>
                               </header>
 
                               {block.text && <div class="embedded-post__text">{block.text}</div>}
+
+                              {block.truncated && (
+                                <a
+                                  class="embedded-post__more"
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                  {...i18nSpread('article.embedShowMore')}
+                                >
+                                  {TRANSLATIONS.en['article.embedShowMore']}
+                                </a>
+                              )}
 
                               {block.card && (
                                 <a
@@ -456,26 +474,26 @@ const jsonLd = isTakedown
                                         class="embedded-quote__avatar"
                                         src={block.nested.avatarUrl}
                                         alt=""
-                                        width="24"
-                                        height="24"
+                                        width="32"
+                                        height="32"
                                         loading="lazy"
                                         decoding="async"
                                         referrerpolicy="no-referrer"
                                       />
                                     )}
-                                    <div class="embedded-quote__identity">
-                                      <div class="embedded-quote__name">
-                                        <strong>{block.nested.author ?? block.nested.handle ?? 'X'}</strong>
-                                        {block.nested.handle && (
-                                          <span class="embedded-quote__handle">@{block.nested.handle}</span>
-                                        )}
-                                      </div>
-                                      {block.nested.handle && block.nested.dateLabel && (
-                                        <div class="embedded-quote__meta">
-                                          <span>@{block.nested.handle}</span>
-                                          <span aria-hidden="true">·</span>
-                                          <span>{block.nested.dateLabel}</span>
-                                        </div>
+                                    <div class="embedded-quote__name">
+                                      <strong>{block.nested.author ?? block.nested.handle ?? 'X'}</strong>
+                                      {block.nested.verified && (
+                                        <Icon name="verified" size={15} class="embedded-post__verified" />
+                                      )}
+                                      {block.nested.handle && (
+                                        <span class="embedded-post__handle">@{block.nested.handle}</span>
+                                      )}
+                                      {block.nested.dateLabel && (
+                                        <>
+                                          <span class="embedded-post__dot" aria-hidden="true">·</span>
+                                          <span class="embedded-post__date">{block.nested.dateLabel}</span>
+                                        </>
                                       )}
                                     </div>
                                   </header>
@@ -495,26 +513,24 @@ const jsonLd = isTakedown
                                     />
                                   ) : (
                                     block.nested.imageUrl && (
-                                      <img
+                                      <a
                                         class="embedded-quote__media"
-                                        src={block.nested.imageUrl}
-                                        alt=""
-                                        loading="lazy"
-                                        decoding="async"
-                                        referrerpolicy="no-referrer"
-                                      />
+                                        href={block.nested.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer nofollow"
+                                        tabindex="-1"
+                                        aria-hidden="true"
+                                      >
+                                        <img
+                                          src={block.nested.imageUrl}
+                                          alt=""
+                                          loading="lazy"
+                                          decoding="async"
+                                          referrerpolicy="no-referrer"
+                                        />
+                                      </a>
                                     )
                                   )}
-
-                                  <a
-                                    class="embedded-quote__source"
-                                    href={block.nested.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer nofollow"
-                                    {...i18nSpread('article.embedView')}
-                                  >
-                                    {TRANSLATIONS.en['article.embedView']} ↗
-                                  </a>
                                 </figure>
                               )}
 

@@ -57,6 +57,8 @@
    */
   --app-chip-bg: rgba(0, 0, 0, 0.72);
   --app-chip-ink: #ffffff;
+  /* X's own seal blue, used only for the verified mark on a quoted post. */
+  --verified: #1d9bf0;
 
   /*
    * Type.
@@ -155,6 +157,7 @@
   /* The x.ai banner is a dark image in both themes; its label keeps its own ground. */
   --app-chip-bg: rgba(0, 0, 0, 0.72);
   --app-chip-ink: #ffffff;
+  --verified: #1d9bf0;
 }
 
 :root[data-theme='light'] {
@@ -177,6 +180,7 @@
   --header-bg: #faf9f6e8;
   --app-chip-bg: rgba(0, 0, 0, 0.72);
   --app-chip-ink: #ffffff;
+  --verified: #1d9bf0;
 }
 
 * { box-sizing: border-box; }
@@ -1466,52 +1470,53 @@ pre {
   border-radius: 14px;
   background: var(--panel);
 }
-.embedded-post__head { display: flex; align-items: flex-start; gap: 12px; }
+.embedded-post__head { display: flex; align-items: center; gap: 10px; }
 .embedded-post__avatar {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--panel-2);
 }
 .embedded-post__identity { flex: 1; min-width: 0; }
-.embedded-post__name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; font-size: 15px; line-height: 1.35; }
+/* One row, the way X prints it: name, seal, @handle, date. Two rows repeated the
+   handle and read as two different people. */
+.embedded-post__name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 15px; line-height: 1.35; }
 .embedded-post__name strong { color: var(--text); font-weight: 700; }
-.embedded-post__handle { color: var(--muted); }
-.embedded-post__meta { display: flex; gap: 6px; color: var(--faint); font-size: 13px; line-height: 1.45; }
+.embedded-post__verified { flex: none; color: var(--verified); }
+.embedded-post__handle, .embedded-post__date { color: var(--muted); }
+.embedded-post__dot { color: var(--faint); }
 .embedded-post__brand {
   flex: none;
-  color: var(--muted);
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  color: var(--faint);
 }
-.embedded-post__brand:hover { color: var(--text); }
+.embedded-post__brand:hover { color: var(--muted); }
 .embedded-post__text { margin-top: 10px; color: var(--text); font-size: 17px; line-height: 1.6; white-space: pre-wrap; }
-/* A quoted X Article inside a quoted post: cover and badge on the left, its own
-   title and excerpt on the right — the shape the capture had flattened into a
-   single Markdown link. */
-/* A post quoted inside a quoted post: X draws it as a quieter card within the
-   first one — no brand mark, no action strip, just who said it, when, and the media. */
+.embedded-post__more { display: inline-block; margin-top: 4px; color: var(--accent); font-size: 15px; line-height: 1.5; text-decoration: none; }
+.embedded-post__more:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* A post quoted inside a quoted post: X draws it as a quieter card within the first
+   one, with its media running to that card's own edges. */
 .embedded-quote {
   margin: 14px 0 0;
-  padding: 12px;
-  border: 1px solid var(--border-soft);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel-2);
 }
-.embedded-quote__head { display: flex; align-items: center; gap: 8px; }
-.embedded-quote__avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--panel); }
-.embedded-quote__identity { min-width: 0; }
-.embedded-quote__name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; font-size: 14px; line-height: 1.35; }
+.embedded-quote__head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 0; }
+.embedded-quote__avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--panel); }
+.embedded-quote__name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; font-size: 14px; line-height: 1.35; }
 .embedded-quote__name strong { color: var(--text); font-weight: 700; }
-.embedded-quote__handle { color: var(--muted); }
-.embedded-quote__meta { display: flex; gap: 5px; color: var(--faint); font-size: 12px; line-height: 1.4; }
-.embedded-quote__text { margin-top: 8px; color: var(--text); font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
-.embedded-quote__media { display: block; width: 100%; max-height: 70vh; margin-top: 10px; border: 0; border-radius: 10px; object-fit: cover; background: var(--panel); }
-.embedded-quote__source { display: inline-block; margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.4; text-decoration: none; }
-.embedded-quote__source:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.embedded-quote__text { padding: 8px 12px 12px; color: var(--text); font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.embedded-quote__media { display: block; background: var(--panel); }
+.embedded-quote__media img { display: block; width: 100%; height: auto; border: 0; border-radius: 0; }
+/* A quoted X Article inside a quoted post: cover and badge on the left, its own
+   title and excerpt on the right — the shape the capture had flattened into a
+   single Markdown link. */
 .embedded-card {
   display: grid;
   grid-template-columns: 116px 1fr;
