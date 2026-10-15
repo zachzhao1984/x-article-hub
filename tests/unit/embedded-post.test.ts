@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recoverArticleCards, recoverEmbeddedPosts, recoverNestedPosts, recoverPostIdentities, splitEmbeddedArticleCard, splitNestedPost } from '../../src/parser/embedded-post';
+import { extractPostMedia, recoverArticleCards, recoverEmbeddedPosts, recoverNestedPosts, recoverPostIdentities, splitEmbeddedArticleCard, splitNestedPost } from '../../src/parser/embedded-post';
 import { parseMarkdownToDocument } from '../../src/parser/markdown';
 import { documentToPlainText, inlineToText } from '../../src/types/article-document';
 
@@ -172,5 +172,33 @@ describe('who a quoted post is', () => {
 
   it('says nothing rather than guessing when the capture has no header', () => {
     expect(recoverPostIdentities('<div data-href="/u/status/1"></div>').get('1')).toEqual({});
+  });
+});
+
+describe('a photo post', () => {
+  it('lifts the pictures out and drops the labels the capture wrote', () => {
+    const flat =
+      'a card with four pictures\n\n' +
+      '![](https://pbs.twimg.com/media/AAA?format=webp&name=large)\n\n' +
+      '[View media](https://x.com/u/status/1/photo/1)\n\n' +
+      '![](https://pbs.twimg.com/media/BBB?format=webp&name=large)\n\n' +
+      '[View media](https://x.com/u/status/1/photo/2)\n\n' +
+      'Show more\n\n' +
+      '[Paid partnership](https://help.x.com/rules-and-policies/paid-partnerships-policy)';
+
+    expect(extractPostMedia(flat)).toEqual({
+      text: 'a card with four pictures',
+      images: [
+        'https://pbs.twimg.com/media/AAA?format=webp&name=large',
+        'https://pbs.twimg.com/media/BBB?format=webp&name=large',
+      ],
+    });
+  });
+
+  it('leaves a post that has no pictures exactly as it was', () => {
+    expect(extractPostMedia('just words, no pictures')).toEqual({
+      text: 'just words, no pictures',
+      images: [],
+    });
   });
 });

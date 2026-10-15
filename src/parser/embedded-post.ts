@@ -36,6 +36,7 @@ export interface RecoveredPost {
   verified?: boolean;
   dateLabel?: string;
   truncated?: boolean;
+  images?: string[];
   card?: EmbeddedArticleCard;
   nested?: EmbeddedNestedPost;
 }
@@ -313,6 +314,30 @@ function readNestedFromMarkdown(head: string, body: string, dateLabel: string, i
   };
 }
 
+/**
+ * A post's own pictures, lifted out of the flattened text.
+ *
+ * X flattens a photo post into an image link followed by a "View media" link, again
+ * and again, with a "Show more" button where it cut the caption off. Left alone that
+ * is Markdown printed at the reader, so the pictures are lifted out and the capture's
+ * own labels — which nobody typed — are dropped.
+ */
+export function extractPostMedia(text: string): { text: string; images: string[] } {
+  const images: string[] = [];
+  const rest = text
+    .replace(/!\[[^\]]*\]\((https:\/\/pbs\.twimg\.com\/media\/[^)]+)\)/g, (_whole, url: string) => {
+      images.push(decodeEntities(url));
+      return '';
+    })
+    .replace(/\[(?:View media|Paid partnership)\]\([^)]*\)/g, '')
+    .replace(/\b(?:Show more|View media)\b/g, '');
+
+  return {
+    text: rest.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim(),
+    images,
+  };
+}
+
 export function recoverEmbeddedPosts(markdown: string, html: string): {
   markdown: string;
   posts: RecoveredPost[];
@@ -329,17 +354,19 @@ export function recoverEmbeddedPosts(markdown: string, html: string): {
       const text = cleanPostText(body.replace(/\n\n\d{1,2}:\d{2}\s*$/, '').trim());
       const split = splitEmbeddedArticleCard(text, cards);
       const nested = splitNestedPost(split.text, nestedPosts);
+      const media = extractPostMedia(nested.text);
       const identity = identities.get(postId);
       posts.push({
         postId,
         url: `https://x.com/${handle}/status/${postId}`,
         author,
         handle,
-        text: nested.text,
+        text: media.text,
         ...(identity?.avatarUrl ? { avatarUrl: identity.avatarUrl } : {}),
         ...(identity?.verified ? { verified: true } : {}),
         ...(identity?.dateLabel ? { dateLabel: identity.dateLabel } : {}),
         ...(identity?.truncated ? { truncated: true } : {}),
+        ...(media.images.length > 0 ? { images: media.images } : {}),
         ...(split.card ? { card: split.card } : {}),
         ...(nested.nested ? { nested: nested.nested } : {}),
       });

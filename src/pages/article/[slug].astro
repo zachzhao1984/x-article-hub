@@ -374,6 +374,7 @@ const jsonLd = isTakedown
                           // X's own date label beats a reformat of created_at: it is what the
                           // post said about itself, and it is the shorter of the two.
                           const dateLabel = block.dateLabel ?? posted?.label;
+                          const photoCount = block.images?.length ?? 0;
                           const replyCount = compactCount(block.replyCount);
                           const repostCount = compactCount(block.repostCount);
                           const likeCount = compactCount(block.likeCount);
@@ -434,6 +435,30 @@ const jsonLd = isTakedown
                                 >
                                   {TRANSLATIONS.en['article.embedShowMore']}
                                 </a>
+                              )}
+
+                              {photoCount > 0 && (
+                                <div
+                                  class={`embedded-post__media ${
+                                    photoCount === 1
+                                      ? 'embedded-post__media--single'
+                                      : photoCount % 2 === 1
+                                        ? 'embedded-post__media--multi embedded-post__media--odd'
+                                        : 'embedded-post__media--multi'
+                                  }`}
+                                >
+                                  {(block.images ?? []).map((src) => (
+                                    <a
+                                      href={href}
+                                      target="_blank"
+                                      rel="noopener noreferrer nofollow"
+                                      tabindex="-1"
+                                      aria-hidden="true"
+                                    >
+                                      <img src={src} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                                    </a>
+                                  ))}
+                                </div>
                               )}
 
                               {block.card && (

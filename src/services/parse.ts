@@ -68,7 +68,7 @@ import { readRawArchive } from './crawl';
  *   v10 - restore ready image rows before writing rebuilt documents; a re-parse
  *     must not reset archived images to external fallbacks.
  */
-export const PARSER_VERSION = 22;
+export const PARSER_VERSION = 23;
 
 export type ParseResult = 'parsed' | 'reparsed' | 'unchanged' | 'failed';
 

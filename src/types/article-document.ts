@@ -60,6 +60,8 @@ export type ArticleBlock =
       dateLabel?: string;
       /** X hid the rest of the text behind "Show more"; the archive has what was shown. */
       truncated?: boolean;
+      /** The post's own pictures, in the order X showed them. */
+      images?: string[];
       replyCount?: number;
       repostCount?: number;
       likeCount?: number;

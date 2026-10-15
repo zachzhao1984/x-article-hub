@@ -1571,6 +1571,23 @@ pre {
   line-height: 1.5;
 }
 .article-body .embedded-post__video { display: block; width: 100%; max-height: 70vh; margin-top: 14px; border-radius: 10px; background: var(--bg); }
+/* A post's own pictures. One stands alone; the rest tile, with an odd one out given
+   the tall half of the grid the way X lays a three-photo post out. */
+.article-body .embedded-post__media {
+  display: grid;
+  gap: 2px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg);
+}
+.article-body .embedded-post__media > a { display: block; min-width: 0; text-decoration: none; }
+.article-body .embedded-post__media img { display: block; width: 100%; height: 100%; border: 0; border-radius: 0; }
+.article-body .embedded-post__media--single img { height: auto; max-height: 70vh; object-fit: contain; }
+.article-body .embedded-post__media--multi { grid-template-columns: 1fr 1fr; }
+.article-body .embedded-post__media--multi img { aspect-ratio: 1; object-fit: cover; }
+.article-body .embedded-post__media--odd > :first-child { grid-row: span 2; }
+.article-body .embedded-post__media--odd > :first-child img { aspect-ratio: auto; height: 100%; }
 .article-body .embedded-post__actions { display: flex; align-items: center; gap: 22px; margin-top: 14px; color: var(--faint); font-size: 13px; line-height: 1.4; }
 .article-body .embedded-post__actions span { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
 .article-body .embedded-post__actions > a { margin-left: auto; color: var(--accent); text-decoration: none; }
