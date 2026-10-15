@@ -1439,9 +1439,47 @@ pre {
 
 /* Video streams from the original host; the link remains available as a fallback. */
 .fig-video { margin: 20px 0; }
-.article-body .embedded-post { border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin: 24px 0; }
-.embedded-post p { white-space: pre-wrap; }
-.embedded-post video { display: block; width: 100%; max-height: 80vh; border-radius: 10px; margin: 16px 0; background: var(--bg); }
+/*
+ * An embedded post reads as a quoted post, not as a pull-quote from this article.
+ * The generic .article-body blockquote is italic, accent-ruled and margin-only, which
+ * made an embedded tweet look like the author quoting somebody. This is its own
+ * surface: neutral border, identity row, and the action strip X shows under a post.
+ */
+.article-body .embedded-post {
+  margin: 28px 0;
+  padding: 16px 18px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.embedded-post__head { display: flex; align-items: flex-start; gap: 12px; }
+.embedded-post__avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-2);
+}
+.embedded-post__identity { flex: 1; min-width: 0; }
+.embedded-post__name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; font-size: 15px; line-height: 1.35; }
+.embedded-post__name strong { color: var(--text); font-weight: 700; }
+.embedded-post__handle { color: var(--muted); }
+.embedded-post__meta { display: flex; gap: 6px; color: var(--faint); font-size: 13px; line-height: 1.45; }
+.embedded-post__brand {
+  flex: none;
+  color: var(--muted);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.embedded-post__brand:hover { color: var(--text); }
+.embedded-post__text { margin-top: 10px; color: var(--text); font-size: 17px; line-height: 1.6; white-space: pre-wrap; }
+.embedded-post__video { display: block; width: 100%; max-height: 70vh; margin-top: 14px; border-radius: 10px; background: var(--bg); }
+.embedded-post__actions { display: flex; align-items: center; gap: 22px; margin-top: 14px; color: var(--faint); font-size: 13px; line-height: 1.4; }
+.embedded-post__actions span { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.embedded-post__actions a { margin-left: auto; color: var(--accent); text-decoration: none; }
+.embedded-post__actions a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .fig-video video { display: block; width: 100%; max-height: 80vh; background: var(--bg); border-radius: 8px; margin-bottom: 10px; }
 .fig-video span { display: block; font-size: 12px; line-height: 1.5; color: var(--faint); }
 

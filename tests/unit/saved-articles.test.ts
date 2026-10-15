@@ -111,7 +111,7 @@ describe('the article page control', () => {
     // And they are in different places: one in the crumbs nav, one in the footer.
     const crumbs = article.slice(article.indexOf('article-crumbs'), article.indexOf('</nav>'));
     expect(crumbs).toMatch(/data-save-slot/);
-    const foot = article.slice(article.indexOf('<footer'), article.indexOf('</footer>'));
+    const foot = article.slice(article.indexOf('article-footer-actions'), article.indexOf('</footer>', article.indexOf('article-footer-actions')));
     expect(foot).toMatch(/data-save-slot/);
   });
 

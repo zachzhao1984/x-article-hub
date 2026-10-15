@@ -6,9 +6,10 @@ import SiteHeader from '../../components/SiteHeader.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import InlineText from '../../components/InlineText.astro';
 import CodeBlock from '../../components/CodeBlock.astro';
+import Icon from '../../components/Icon.astro';
 import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from '../../db/public';
 import { readArticleDocument } from '../../services/archive';
-import { i18nSpread } from '../../lib/i18n';
+import { i18nSpread, TRANSLATIONS } from '../../lib/i18n';
 import type { ArticleBlock } from '../../types/article-document';
 import { inlineToText } from '../../types/article-document';
 
@@ -55,6 +56,27 @@ const description =
   article.title;
 
 const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
+
+/** Old documents only stored the canonical URL; the handle is recoverable from it. */
+function embeddedHandle(url?: string): string | undefined {
+  const match = url ? /^https:\/\/x\.com\/([^/]+)\/status\//.exec(url) : null;
+  return match?.[1];
+}
+
+/** X shows compact counts; 12,400 reads as 12.4K, not 12400. */
+function compactCount(value: number | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  if (value < 1000) return String(Math.round(value));
+  if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0).replace(/\.0$/, '')}K`;
+  return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+function postedDate(iso: string | undefined): { iso: string; label: string } | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return { iso: date.toISOString(), label: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date) };
+}
 
 // SPEC §33 — canonical points at our archive; the X link is separate and explicit.
 const jsonLd = isTakedown
@@ -308,17 +330,80 @@ const jsonLd = isTakedown
                               <InlineText spans={block.spans} />
                             </p>
                           );
-                        case 'embed':
+                        case 'embed': {
+                          const handle = block.handle ?? embeddedHandle(block.url);
+                          const posted = postedDate(block.postedAt);
+                          const replyCount = compactCount(block.replyCount);
+                          const repostCount = compactCount(block.repostCount);
+                          const likeCount = compactCount(block.likeCount);
+                          const viewCount = compactCount(block.viewCount);
+                          const href = block.url ?? `https://x.com/i/web/status/${block.postId}`;
+
                           return (
-                            <blockquote class="embedded-post">
-                              {block.author && <strong>{block.author}</strong>}
-                              {block.text && <p>{block.text}</p>}
+                            <figure class="embedded-post">
+                              <header class="embedded-post__head">
+                                {block.avatarUrl && (
+                                  <img
+                                    class="embedded-post__avatar"
+                                    src={block.avatarUrl}
+                                    alt=""
+                                    width="44"
+                                    height="44"
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerpolicy="no-referrer"
+                                  />
+                                )}
+                                <div class="embedded-post__identity">
+                                  <div class="embedded-post__name">
+                                    <strong>{block.author ?? handle ?? 'X'}</strong>
+                                    {handle && <span class="embedded-post__handle">@{handle}</span>}
+                                  </div>
+                                  {(handle || posted) && (
+                                    <div class="embedded-post__meta">
+                                      {handle && <span>@{handle}</span>}
+                                      {handle && posted && <span aria-hidden="true">·</span>}
+                                      {posted && <time datetime={posted.iso}>{posted.label}</time>}
+                                    </div>
+                                  )}
+                                </div>
+                                <a
+                                  class="embedded-post__brand"
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer nofollow"
+                                  aria-label="X"
+                                >
+                                  X
+                                </a>
+                              </header>
+
+                              {block.text && <div class="embedded-post__text">{block.text}</div>}
+
                               {block.videoUrl && (
-                                <video src={block.videoUrl} poster={block.poster} controls playsinline preload="metadata" aria-label={block.author || 'X video'} />
+                                <video
+                                  class="embedded-post__video"
+                                  src={block.videoUrl}
+                                  poster={block.poster}
+                                  controls
+                                  playsinline
+                                  preload="metadata"
+                                  aria-label={block.author ?? 'X video'}
+                                />
                               )}
-                              <a href={block.url || `https://x.com/i/web/status/${block.postId}`} target="_blank" rel="noopener noreferrer nofollow">X ↗</a>
-                            </blockquote>
+
+                              <footer class="embedded-post__actions">
+                                {replyCount && <span><Icon name="chat-circle" size={17} /> {replyCount}</span>}
+                                {repostCount && <span><Icon name="repeat" size={17} /> {repostCount}</span>}
+                                {likeCount && <span><Icon name="heart" size={17} /> {likeCount}</span>}
+                                {viewCount && <span><Icon name="eye" size={17} /> {viewCount}</span>}
+                                <a href={href} target="_blank" rel="noopener noreferrer nofollow" {...i18nSpread('article.embedView')}>
+                                  {TRANSLATIONS.en['article.embedView']} ↗
+                                </a>
+                              </footer>
+                            </figure>
                           );
+                        }
                         default:
                           return null;
                       }

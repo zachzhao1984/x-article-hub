@@ -9,7 +9,7 @@ it('recovers an embedded post without its duration and engagement UI', () => {
     '[Oct 7](https://x.com/OpenAI/status/123)\n\nGPT announcement.\n\n01:08\n\n' +
     '[1.1K](https://x.com/compose/post?in_reply_to=123)\n\n1.8K\n\n23K\n\n5.8M\n\nAfter.';
   expect(recoverEmbeddedPosts(md, '<div data-href="/i/web/status/123">').posts).toEqual([
-    { postId: '123', url: 'https://x.com/OpenAI/status/123', author: 'OpenAI', text: 'GPT announcement.' },
+    { postId: '123', url: 'https://x.com/OpenAI/status/123', author: 'OpenAI', handle: 'OpenAI', text: 'GPT announcement.' },
   ]);
   expect(recoverEmbeddedPosts(md, '<div data-href="/i/web/status/123">').markdown)
     .toBe('Before.\n\n\n\nXEMBEDPOST123\n\n\n\nAfter.');
