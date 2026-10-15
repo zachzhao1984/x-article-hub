@@ -1492,6 +1492,26 @@ pre {
 /* A quoted X Article inside a quoted post: cover and badge on the left, its own
    title and excerpt on the right — the shape the capture had flattened into a
    single Markdown link. */
+/* A post quoted inside a quoted post: X draws it as a quieter card within the
+   first one — no brand mark, no action strip, just who said it, when, and the media. */
+.embedded-quote {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.embedded-quote__head { display: flex; align-items: center; gap: 8px; }
+.embedded-quote__avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--panel); }
+.embedded-quote__identity { min-width: 0; }
+.embedded-quote__name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; font-size: 14px; line-height: 1.35; }
+.embedded-quote__name strong { color: var(--text); font-weight: 700; }
+.embedded-quote__handle { color: var(--muted); }
+.embedded-quote__meta { display: flex; gap: 5px; color: var(--faint); font-size: 12px; line-height: 1.4; }
+.embedded-quote__text { margin-top: 8px; color: var(--text); font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+.embedded-quote__media { display: block; width: 100%; max-height: 70vh; margin-top: 10px; border: 0; border-radius: 10px; object-fit: cover; background: var(--panel); }
+.embedded-quote__source { display: inline-block; margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.4; text-decoration: none; }
+.embedded-quote__source:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .embedded-card {
   display: grid;
   grid-template-columns: 116px 1fr;

@@ -69,6 +69,17 @@ export type ArticleBlock =
         title: string;
         excerpt?: string;
       };
+      /** A post quoted inside this one, drawn by X as a card within the card. */
+      nested?: {
+        url: string;
+        author?: string;
+        handle?: string;
+        avatarUrl?: string;
+        dateLabel?: string;
+        text?: string;
+        imageUrl?: string;
+        videoUrl?: string;
+      };
     };
 
 /**
@@ -202,6 +213,7 @@ export function documentToPlainText(doc: ArticleDocument): string {
         // The quoted article's own words stay searchable after the Markdown that
         // carried them is lifted into a card.
         if (block.card) parts.push(block.card.title, block.card.excerpt ?? '');
+        if (block.nested) parts.push(block.nested.text ?? '', block.nested.author ?? '');
         break;
       case 'app':
         // The card replaces a bare URL paragraph, so the URL and the plugin title

@@ -448,6 +448,76 @@ const jsonLd = isTakedown
                                 </a>
                               )}
 
+                              {block.nested && (
+                                <figure class="embedded-quote">
+                                  <header class="embedded-quote__head">
+                                    {block.nested.avatarUrl && (
+                                      <img
+                                        class="embedded-quote__avatar"
+                                        src={block.nested.avatarUrl}
+                                        alt=""
+                                        width="24"
+                                        height="24"
+                                        loading="lazy"
+                                        decoding="async"
+                                        referrerpolicy="no-referrer"
+                                      />
+                                    )}
+                                    <div class="embedded-quote__identity">
+                                      <div class="embedded-quote__name">
+                                        <strong>{block.nested.author ?? block.nested.handle ?? 'X'}</strong>
+                                        {block.nested.handle && (
+                                          <span class="embedded-quote__handle">@{block.nested.handle}</span>
+                                        )}
+                                      </div>
+                                      {block.nested.handle && block.nested.dateLabel && (
+                                        <div class="embedded-quote__meta">
+                                          <span>@{block.nested.handle}</span>
+                                          <span aria-hidden="true">·</span>
+                                          <span>{block.nested.dateLabel}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </header>
+
+                                  {block.nested.text && (
+                                    <div class="embedded-quote__text">{block.nested.text}</div>
+                                  )}
+
+                                  {block.nested.videoUrl ? (
+                                    <video
+                                      class="embedded-quote__media"
+                                      src={block.nested.videoUrl}
+                                      controls
+                                      playsinline
+                                      preload="metadata"
+                                      aria-label={block.nested.author ?? 'X video'}
+                                    />
+                                  ) : (
+                                    block.nested.imageUrl && (
+                                      <img
+                                        class="embedded-quote__media"
+                                        src={block.nested.imageUrl}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                        referrerpolicy="no-referrer"
+                                      />
+                                    )
+                                  )}
+
+                                  <a
+                                    class="embedded-quote__source"
+                                    href={block.nested.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer nofollow"
+                                    {...i18nSpread('article.embedView')}
+                                  >
+                                    {TRANSLATIONS.en['article.embedView']} ↗
+                                  </a>
+                                </figure>
+                              )}
+
                               {block.videoUrl && (
                                 <video
                                   class="embedded-post__video"

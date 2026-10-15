@@ -7,6 +7,17 @@ export interface EmbeddedArticleCard {
   excerpt?: string;
 }
 
+export interface EmbeddedNestedPost {
+  url: string;
+  author?: string;
+  handle?: string;
+  avatarUrl?: string;
+  dateLabel?: string;
+  text?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+}
+
 export interface RecoveredPost {
   postId: string;
   url: string;
@@ -14,6 +25,7 @@ export interface RecoveredPost {
   handle: string;
   text: string;
   card?: EmbeddedArticleCard;
+  nested?: EmbeddedNestedPost;
 }
 
 /**
@@ -68,6 +80,16 @@ function stripTags(fragment: string | undefined): string {
   return decodeEntities(fragment.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
 }
 
+/** Post text keeps its own line breaks; only runs of spaces and blank lines collapse. */
+function readText(fragment: string | undefined): string {
+  if (!fragment) return '';
+  return decodeEntities(fragment.replace(/<[^>]*>/g, ''))
+    .replace(/\r/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function decodeEntities(value: string): string {
   return value
     .replace(/&quot;/g, '"')
@@ -109,6 +131,127 @@ export function splitEmbeddedArticleCard(
   return { text: remainder, card };
 }
 
+/**
+ * A post can quote another post. X draws the quoted one as a bordered card inside
+ * the first, and the capture flattens it into a run of Markdown links — avatar,
+ * name, handle, date, then the quoted text and its media. Only the quoted post's own
+ * container carries `data-timeline-entry`, so that attribute is what separates a
+ * nested post from the post being read.
+ */
+const NESTED_CONTAINER_RE = /<div[^>]*data-href="\/([^"/]+)\/status\/(\d+)"[^>]*data-timeline-entry[^>]*>/g;
+
+export function recoverNestedPosts(html: string): Map<string, EmbeddedNestedPost> {
+  const posts = new Map<string, EmbeddedNestedPost>();
+  const containers = [...html.matchAll(NESTED_CONTAINER_RE)];
+
+  for (let i = 0; i < containers.length; i++) {
+    const container = containers[i];
+    const handle = container?.[1];
+    const id = container?.[2];
+    const start = container?.index ?? 0;
+    if (!id || posts.has(id)) continue;
+
+    // The container is not self-terminating in the text, so the next quoted post —
+    // or the end of the document — bounds it.
+    const end = containers[i + 1]?.index ?? Math.min(html.length, start + 24_000);
+    const window = html.slice(start, end);
+
+    const author = stripTags(/font-bold text-primary line-clamp-1[^"]*">([^<]+)</.exec(window)?.[1]);
+    const handleText = stripTags(/text-secondary line-clamp-1 wrap-break-word[^"]*">([^<]+)</.exec(window)?.[1]);
+    const dateLabel = stripTags(
+      handle ? new RegExp(`href="/${handle}/status/${id}">([^<]+)<`).exec(window)?.[1] : undefined,
+    );
+    const textAt = /whitespace-pre-wrap wrap-break-word" dir="auto"><span[^>]*>([\s\S]*?)<\/span>/.exec(window);
+    const text = textAt ? readText(textAt[1]) : '';
+    const mediaFrom = textAt ? start + textAt.index : start;
+    const imageUrl = decodeEntities(
+      /src="(https:\/\/pbs\.twimg\.com\/media\/[^"]+)"/.exec(html.slice(mediaFrom, end))?.[1] ?? '',
+    );
+    const videoUrl = /"(https:\/\/video\.twimg\.com\/[^"]+\.mp4)"/.exec(html.slice(mediaFrom, end))?.[1];
+
+    posts.set(id, {
+      url: `https://x.com/${handle}/status/${id}`,
+      ...(author ? { author } : {}),
+      ...(handleText ? { handle: handleText.replace(/^@/, '') } : {}),
+      ...(avatar(window) ? { avatarUrl: avatar(window) } : {}),
+      ...(dateLabel ? { dateLabel } : {}),
+      ...(text ? { text } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(videoUrl ? { videoUrl } : {}),
+    });
+  }
+  return posts;
+}
+
+const avatar = (window: string): string | undefined =>
+  decodeEntities(/src="(https:\/\/pbs\.twimg\.com\/profile_images\/[^"]+_normal\.jpg)"/.exec(window)?.[1] ?? '') ||
+  undefined;
+
+/**
+ * The flattened form of a quoted post, used when the capture had no structured
+ * container: four links (avatar, name, handle, date), then the post's own text and
+ * media. Everything readable is kept; nothing is printed as Markdown.
+ */
+const NESTED_MARKDOWN_RE =
+  /\[!\[@[^\]]+\]\(https:\/\/pbs\.twimg\.com\/profile_images\/[^)]+\)\]\(https:\/\/x\.com\/[^/)]+\)[\s\S]*?\[([^\]]*)\]\(https:\/\/x\.com\/[^/]+\/status\/(\d+)\)/;
+
+/**
+ * X's "Show more" is a button, not part of what anybody wrote. The capture keeps
+ * the label, so it is removed — otherwise a quoted post ends with a phrase the
+ * author never typed.
+ */
+function cleanPostText(text: string): string {
+  return text.replace(/(?:\s*Show more)+\s*$/i, '').replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+export function splitNestedPost(
+  text: string,
+  posts: Map<string, EmbeddedNestedPost> = new Map(),
+): { text: string; nested?: EmbeddedNestedPost } {
+  const match = NESTED_MARKDOWN_RE.exec(text);
+  if (!match) return { text };
+
+  const id = match[2] ?? '';
+  const start = match.index;
+  const body = text.slice(start + match[0].length);
+  const structured = id ? posts.get(id) : undefined;
+  const nested = structured ?? readNestedFromMarkdown(match[0], body, match[1] ?? '', id);
+
+  return {
+    text: cleanPostText(text.slice(0, start)),
+    nested: { ...nested, ...(id ? { url: `https://x.com/${nested.handle ?? 'i'}/status/${id}` } : {}) },
+  };
+}
+
+function readNestedFromMarkdown(head: string, body: string, dateLabel: string, id: string): EmbeddedNestedPost {
+  const links = [...head.matchAll(/\[(?:!\[)?([^\]]*)\]\((https:\/\/x\.com\/[^)]+)\)/g)].map((m) => ({
+    label: m[1] ?? '',
+    href: m[2] ?? '',
+  }));
+  const avatarUrl = decodeEntities(/!\[@[^\]]*\]\((https:\/\/pbs\.twimg\.com\/profile_images\/[^)]+)\)/.exec(head)?.[1] ?? '');
+  const handle = links.find((l) => l.label.startsWith('@'))?.label.replace(/^@/, '');
+  const author = links.find((l) => !l.label.startsWith('@') && l.label !== '' && !/^\w{3} \d{1,2}$/.test(l.label))?.label;
+  const imageUrl = decodeEntities(/!\[[^\]]*\]\((https:\/\/pbs\.twimg\.com\/media\/[^)]+)\)/.exec(body)?.[1] ?? '');
+
+  const plain = body
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\bShow more\b/g, '')
+    .replace(/\bView media\b/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+
+  return {
+    url: `https://x.com/${handle ?? 'i'}/status/${id}`,
+    ...(author ? { author } : {}),
+    ...(handle ? { handle } : {}),
+    ...(avatarUrl ? { avatarUrl } : {}),
+    ...(dateLabel ? { dateLabel } : {}),
+    ...(plain ? { text: plain } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+  };
+}
+
 export function recoverEmbeddedPosts(markdown: string, html: string): {
   markdown: string;
   posts: RecoveredPost[];
@@ -116,19 +259,22 @@ export function recoverEmbeddedPosts(markdown: string, html: string): {
   const posts: RecoveredPost[] = [];
   const ids = new Set([...html.matchAll(/data-href=["']\/i\/web\/status\/(\d+)["']/g)].map((m) => m[1]));
   const cards = recoverArticleCards(html);
+  const nestedPosts = recoverNestedPosts(html);
   const recovered = markdown.replace(
     /\[!\[[^\]]*\]\([^\n]+\)\]\(https:\/\/x\.com\/[^\n]+\)\n\n\[([^\]]+)\]\(https:\/\/x\.com\/([^\s)]+)\)\n\n\[@[^\]]+\]\([^\n]+\)\n\n\[[^\]]+\]\(https:\/\/x\.com\/[^/]+\/status\/(\d+)\)\n\n([\s\S]*?)\n\n\[[^\]]+\]\(https:\/\/x\.com\/compose\/post\?in_reply_to=\3\)(?:\n\n[\d.,KM]+){0,4}/g,
     (whole, author: string, handle: string, postId: string, body: string) => {
       if (!ids.has(postId)) return whole;
-      const text = body.replace(/\n\n\d{1,2}:\d{2}\s*$/, '').trim();
+      const text = cleanPostText(body.replace(/\n\n\d{1,2}:\d{2}\s*$/, '').trim());
       const split = splitEmbeddedArticleCard(text, cards);
+      const nested = splitNestedPost(split.text, nestedPosts);
       posts.push({
         postId,
         url: `https://x.com/${handle}/status/${postId}`,
         author,
         handle,
-        text: split.text,
+        text: nested.text,
         ...(split.card ? { card: split.card } : {}),
+        ...(nested.nested ? { nested: nested.nested } : {}),
       });
       return `\n\nXEMBEDPOST${postId}\n\n`;
     },

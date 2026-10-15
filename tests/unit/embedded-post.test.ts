@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recoverArticleCards, recoverEmbeddedPosts, splitEmbeddedArticleCard } from '../../src/parser/embedded-post';
+import { recoverArticleCards, recoverEmbeddedPosts, recoverNestedPosts, splitEmbeddedArticleCard, splitNestedPost } from '../../src/parser/embedded-post';
 import { parseMarkdownToDocument } from '../../src/parser/markdown';
 import { documentToPlainText, inlineToText } from '../../src/types/article-document';
 
@@ -76,5 +76,63 @@ describe('a quoted X Article inside a quoted post', () => {
     const plain = documentToPlainText(doc);
     expect(plain).toContain('The Complete Guide to pstack Pt. 1');
     expect(plain).not.toContain('![Article cover image]');
+  });
+});
+
+const NESTED_HTML =
+  '<div data-href="/poteto/status/2078527882499150286" role="link" data-timeline-entry="" class="border">' +
+  '<article><div class="flex items-center gap-1">' +
+  '<a href="/poteto"><img alt="@poteto" src="https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg"></a>' +
+  '<div class="text-body font-bold text-primary line-clamp-1 break-all min-w-0">lauren</div>' +
+  '<span class="text-body font-normal text-secondary line-clamp-1 wrap-break-word">@poteto</span>' +
+  '<a href="/poteto/status/2078527882499150286">Jul 18</a></div>' +
+  '<div class="text-body line-clamp-5 whitespace-pre-wrap wrap-break-word" dir="auto">' +
+  '<span>organic architecture\ngood codebases have always had strong foundations.</span> ' +
+  '<button>Show more</button></div>' +
+  '<div class="mx-auto relative overflow-hidden"><img height="1920" width="1920" alt="" ' +
+  'src="https://pbs.twimg.com/media/HNhmhvcaMAA2KyA?format=webp&amp;name=large"></div>' +
+  '</article></div>';
+
+const NESTED_MARKDOWN =
+  'every team needs a gardener. someone quietly watching would engulf Show more\n\n' +
+  '[![@poteto](https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg)](https://x.com/poteto)\n' +
+  '[lauren](https://x.com/poteto)\n[@poteto](https://x.com/poteto)\n' +
+  '[Jul 18](https://x.com/poteto/status/2078527882499150286)\n' +
+  'organic architecture\ngood codebases have always had strong foundations. Show more\n' +
+  '![](https://pbs.twimg.com/media/HNhmhvcaMAA2KyA?format=webp&name=large)\n' +
+  '[View media](https://x.com/poteto/status/2078527882499150286/photo/1)';
+
+describe('a post quoted inside a quoted post', () => {
+  it('reads the quoted post out of the capture as a post of its own', () => {
+    const posts = recoverNestedPosts(NESTED_HTML);
+    expect(posts.get('2078527882499150286')).toEqual({
+      url: 'https://x.com/poteto/status/2078527882499150286',
+      author: 'lauren',
+      handle: 'poteto',
+      avatarUrl: 'https://pbs.twimg.com/profile_images/2093473719830315008/oo09g1Ov_normal.jpg',
+      dateLabel: 'Jul 18',
+      text: 'organic architecture\ngood codebases have always had strong foundations.',
+      imageUrl: 'https://pbs.twimg.com/media/HNhmhvcaMAA2KyA?format=webp&name=large',
+    });
+  });
+
+  it('keeps only the outer post words in the outer post', () => {
+    const out = splitNestedPost(NESTED_MARKDOWN, recoverNestedPosts(NESTED_HTML));
+    expect(out.text).toBe('every team needs a gardener. someone quietly watching would engulf');
+    expect(out.text).not.toContain('Show more');
+    expect(out.text).not.toContain('pbs.twimg.com');
+  });
+
+  it('still reads a quoted post when the capture had no structured container', () => {
+    const out = splitNestedPost(NESTED_MARKDOWN);
+    expect(out.nested).toMatchObject({
+      url: 'https://x.com/poteto/status/2078527882499150286',
+      handle: 'poteto',
+      dateLabel: 'Jul 18',
+      imageUrl: 'https://pbs.twimg.com/media/HNhmhvcaMAA2KyA?format=webp&name=large',
+    });
+    // The flattened links and the media link are gone either way.
+    expect(out.nested?.text ?? '').not.toContain('View media');
+    expect(out.nested?.text ?? '').not.toContain('http');
   });
 });
