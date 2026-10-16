@@ -52,7 +52,6 @@ const empty = latest.length === 0;
   description="A human-curated, machine-archived library of X Articles — organized by topic, ranked by real engagement."
   path="/"
 >
-  <link slot="head" rel="preload" href="/hero-library.jpg" as="image" fetchpriority="high" />
   <SiteHeader>
     <section class="hero">
       <div class="hero-body">
@@ -60,9 +59,6 @@ const empty = latest.length === 0;
         <p class="hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
         <a class="hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>All latest →</a>
       </div>
-      <p class="hero-credit" aria-label="Background: Rijks Museum Library, Amsterdam, CC0">
-        Background photo by Michael D Beckwith — <a href="https://commons.wikimedia.org/wiki/File:Rijks_Museum_Library_(243776563).jpeg">Rijks Museum Library, Amsterdam</a>, CC0 via Wikimedia Commons
-      </p>
     </section>
 
     {/*
