@@ -54,20 +54,14 @@ const empty = latest.length === 0;
 >
   <SiteHeader>
     <section class="hero">
-      <div class="hero-row">
-        <div class="hero-body">
-          <h1 class="hero-title" {...i18nSpread('home.heroTitle')}>The long-form, archived.</h1>
-          <p class="hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
-          <a class="hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>All latest →</a>
-        </div>
-        {
-          featured.length > 0 && featured[0].cover_image_id && (
-            <figure class="hero-cover">
-              <img src={`/media/${featured[0].cover_image_id}`} alt="" loading="eager" decoding="async" />
-            </figure>
-          )
-        }
+      <div class="hero-body">
+        <h1 class="hero-title" {...i18nSpread('home.heroTitle')}>The long-form, archived.</h1>
+        <p class="hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
+        <a class="hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>All latest →</a>
       </div>
+      <p class="hero-credit" aria-label="Background: Rijks Museum Library, Amsterdam, CC0">
+        Background photo by Michael D Beckwith — <a href="https://commons.wikimedia.org/wiki/File:Rijks_Museum_Library_(243776563).jpeg">Rijks Museum Library, Amsterdam</a>, CC0 via Wikimedia Commons
+      </p>
     </section>
 
     {/*

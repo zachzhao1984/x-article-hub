@@ -1985,45 +1985,52 @@ pre {
   white-space: nowrap;
 }
 
+
 /* --- the homepage hero ---------------------------------------------- */
 
 .hero {
-  padding: 64px 0 56px;
+  position: relative;
+  isolation: isolate;
+  padding: 72px 0 64px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: url("/hero-library.jpg") center right / cover no-repeat;
+  color: var(--text);
 }
-.hero-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 32px;
-  align-items: center;
+/* neutral scrim — the one permitted gradient, the same 82% paper veil the rank
+   numeral already uses, only stretched across the text column. */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg) 88%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 76%, transparent) 44%,
+    color-mix(in srgb, var(--bg) 12%, transparent) 72%,
+    color-mix(in srgb, var(--bg) 0%, transparent) 100%
+  );
 }
-@media (min-width: 900px) {
-  .hero-row { grid-template-columns: 7fr 5fr; gap: 48px; }
-}
+.hero > * { position: relative; z-index: 1; }
 
-.hero-body { min-width: 0; }
+.hero-body { min-width: 0; max-width: 560px; }
 
 .hero-title {
   margin: 0 0 16px;
   font-family: var(--sans);
-  font-size: clamp(30px, 5vw, 56px);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  font-size: clamp(36px, 5.2vw, 64px);
+  line-height: 1.0;
+  letter-spacing: -0.035em;
   font-weight: 400;
   color: var(--text);
-  /* Statement scale, but it is still a headline: fit in two lines (max 34 chars). */
-  max-width: 14ch;
 }
-
 .hero-line {
   margin: 0 0 22px;
   font-size: 16px;
   line-height: 1.75;
   color: var(--muted);
-  max-width: 44ch;
+  max-width: 42ch;
 }
-
 .hero-cta {
   display: inline-block;
   margin-top: 4px;
@@ -2033,16 +2040,28 @@ pre {
 }
 .hero-cta:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-.hero-cover {
-  margin: 0;
-  aspect-ratio: 5 / 6;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
+.hero-credit {
+  margin: 32px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.75;
 }
-.hero-cover img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.hero-credit a { color: inherit; text-decoration: none; }
+.hero-credit a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+
+@media (max-width: 760px) {
+  .hero { padding: 48px 0 48px; background-position: 70% center; }
+  .hero::before {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 92%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 74%, transparent) 52%,
+      color-mix(in srgb, var(--bg) 0%, transparent) 100%
+    );
+  }
+  .hero-body { max-width: none; }
+  .hero-title { font-size: clamp(30px, 8vw, 44px); max-width: none; }
 }
+
