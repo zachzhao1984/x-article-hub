@@ -104,6 +104,7 @@ const jsonLd = isTakedown
   type="article"
   publishedAt={article.published_at}
   authorName={article.author_name ?? article.author_username}
+  ogImageId={article.cover_image_id}
 >
   {jsonLd && <script type="application/ld+json" slot="head" set:html={JSON.stringify(jsonLd)} />}
   <meta name="referrer" content="no-referrer" slot="head" />
