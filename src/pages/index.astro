@@ -53,13 +53,16 @@ const empty = latest.length === 0;
   path="/"
 >
   <SiteHeader>
-    <section class="hero">
-      <div class="hero-body">
-        <h1 class="hero-title" {...i18nSpread('home.heroTitle')}>The long-form, archived.</h1>
-        <p class="hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
-        <a class="hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>All latest →</a>
+    <section class="home-hero">
+      <div class="home-hero-body">
+        <h1 class="home-hero-title" {...i18nSpread('home.heroTitle')}>The long-form, archived.</h1>
+        <p class="home-hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
+        <a class="home-hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>Read the latest →</a>
       </div>
     </section>
+    <p class="home-hero-credit">
+      Background: <a href="https://www.rawpixel.com/image/5907849/image-book-public-domain-wood">antique book spines</a> — CC0, via rawpixel
+    </p>
 
     {/*
       No hero. This block used to open with an eyebrow, a title and a count line,

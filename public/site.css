@@ -215,7 +215,10 @@
   box-shadow: var(--shadow-menu);
 }
 
-html { scroll-behavior: smooth; }
+/* `clip`, not `hidden`: it stops the homepage hero's edge-to-edge pull from ever
+   growing a horizontal scrollbar without making the root a scroll container, so
+   `position: sticky` elsewhere keeps working. */
+html { scroll-behavior: smooth; overflow-x: clip; }
 
 body {
   margin: 0;
@@ -1987,57 +1990,133 @@ pre {
 
 
 
+
 /* --- the homepage hero ---------------------------------------------- */
 
-.hero {
+/*
+ * The hero is the one block that leaves the wrap. A photograph that stops 24px short
+ * of the window on each side reads as a boxed banner rather than a place, so the
+ * section pulls itself out to both window edges with `margin-inline: calc(50% - 50vw)`
+ * and then pays the space straight back as `padding-inline`, which lands the headline
+ * on the same grid as the header above it and the cards below. `html` carries
+ * `overflow-x: clip` so the sideways pull can never grow a scrollbar.
+ *
+ * The classes are `home-hero-*`, not `hero-*`: `.hero` and `.hero h1` are the page
+ * header used by /saved, /author, /tag, /search and /category, and a homepage section
+ * that reused the name lost every one of its own declarations to that eyebrow rule —
+ * which is what turned this headline into four 13px uppercase lines.
+ */
+.home-hero {
   position: relative;
   isolation: isolate;
-  padding: 96px 0 88px;
-  border-top: 1px solid var(--border);
+  /* `margin-top` cancels the negative offset the sticky header parks over the page,
+     so the photograph starts at the header's edge instead of under it. */
+  margin: -36px calc(50% - 50%) 0;
+  padding: 80px calc(50vw - 50%) 84px;
   border-bottom: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
+  background: var(--bg) url("/hero-library.webp") center right / cover no-repeat;
+  overflow: hidden;
 }
-.hero-body { min-width: 0; max-width: 640px; }
 
-.hero-title {
+/*
+ * The scrim, and the only gradient in the stylesheet: paper poured across the
+ * photograph from the left so the headline keeps its contrast while the books come up
+ * to full strength on the right, where no text sits.
+ *
+ * The left stops are fully **opaque** `--bg`, not mixed toward transparent. They were
+ * translucent at first, and because `background` is painted under `::before`, a 3%
+ * alpha veil does not fade the photograph — it lets it straight through, so the left
+ * third of the band read as bare photo while the head claimed a paper ground. Opaque
+ * to 46% makes the claim true; only the right half is an actual mix.
+ *
+ * Every stop is the page's own `--bg`, so one rule serves both themes: the veil is the
+ * light paper in light mode and the deep ink in dark.
+ */
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    100deg,
+    var(--bg) 0%,
+    var(--bg) 46%,
+    color-mix(in srgb, var(--bg) 62%, transparent) 74%,
+    color-mix(in srgb, var(--bg) 12%, transparent) 100%
+  );
+}
+
+.home-hero-body { position: relative; z-index: 1; max-width: 34rem; }
+
+.home-hero-title {
   margin: 0 0 18px;
   font-family: var(--sans);
-  font-size: clamp(40px, 6.4vw, 76px);
-  line-height: 0.98;
+  font-size: clamp(38px, 4.6vw, 62px);
+  line-height: 1;
   letter-spacing: -0.04em;
   font-weight: 400;
   color: var(--text);
-  max-width: 12ch;
+  max-width: 15ch;
+  text-wrap: balance;
 }
-.hero-line {
-  margin: 0 0 26px;
+.home-hero-line {
+  margin: 0 0 24px;
+  max-width: 42ch;
   font-size: 17px;
   line-height: 1.7;
   color: var(--muted);
-  max-width: 46ch;
 }
-.hero-cta {
+.home-hero-cta {
   display: inline-block;
   color: var(--accent);
-  text-decoration: none;
-  font-weight: 500;
   font-size: 15px;
-  /* small uppercase tracking, kept under 16px but inheriting approved 1.4 */
+  font-weight: 500;
   line-height: 1.5;
+  text-decoration: none;
 }
-.hero-cta:hover { text-decoration: underline; text-underline-offset: 3px; }
+.home-hero-cta:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-.hero-credit {
-  margin: 40px 0 0;
-  font-size: 11px;
+/*
+ * The credit sits *under* the band, on the page's own paper, rather than over the
+ * photograph. As an inline line inside the hero it landed on whatever part of the
+ * picture happened to be beneath it — over the middle of the image on a phone, where
+ * it was unreadable over brown spines with a pale veil behind it.
+ */
+.home-hero-credit {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 26px;
+  padding-top: 10px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--faint);
 }
-.hero-credit a { color: inherit; text-decoration: none; }
-.hero-credit a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.home-hero-credit a { color: inherit; text-decoration: none; }
+.home-hero-credit a:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 
 @media (max-width: 760px) {
-  .hero { padding: 56px 0 56px; }
-  .hero-title { font-size: clamp(34px, 10vw, 50px); max-width: none; }
+  .home-hero {
+    margin-top: -24px;
+    padding: 44px calc(50vw - 50%) 46px;
+    /* A phone crops a landscape photo to its middle; the books are on the right, so
+       the window is aimed there rather than at the centre, which finds a shelf edge. */
+    background-position: 78% center;
+  }
+  /*
+   * On a phone the copy runs most of the band's height, so the photo cannot be clear
+   * *behind* the text — it is a ground rather than a backdrop. The vertical scrim
+   * therefore stays near-opaque to 62% and only lifts along the bottom fifth, which
+   * shows the shelf without ever sitting under a word.
+   */
+  .home-hero::before {
+    background: linear-gradient(
+      180deg,
+      var(--bg) 0%,
+      var(--bg) 62%,
+      color-mix(in srgb, var(--bg) 74%, transparent) 84%,
+      color-mix(in srgb, var(--bg) 34%, transparent) 100%
+    );
+  }
+  .home-hero-body { max-width: none; }
+  .home-hero-title { font-size: clamp(32px, 9vw, 44px); max-width: none; }
 }
