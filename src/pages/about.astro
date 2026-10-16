@@ -42,12 +42,12 @@ const counts = await homepageCounts(db);
 
       <h2 {...i18nSpread('about.rank')}>How articles are ranked</h2>
       <p {...i18nSpread('about.rankIntro')}>
-        Four signals are kept separate and blended with configurable weights, so no single number
-        decides what you see:
+        Three signals are kept separate and blended with configurable weights, so no single
+        number decides what you see. A fourth, time decay, favours recent articles so the
+        boards keep moving:
       </p>
       <ul>
         <li {...i18nSpread('about.rankPopularity')}><strong>Popularity</strong> — log-compressed likes, reposts, replies, quotes, bookmarks and views.</li>
-        <li {...i18nSpread('about.rankVelocity')}><strong>Velocity</strong> — how fast engagement is arriving, averaged over 1h, 6h and 24h windows.</li>
         <li {...i18nSpread('about.rankQuality')}><strong>Quality</strong> — an AI assessment that can inform ranking but never publishes anything.</li>
         <li {...i18nSpread('about.rankEditor')}><strong>Editor score</strong> — a human override.</li>
       </ul>

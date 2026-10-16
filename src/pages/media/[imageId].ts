@@ -12,9 +12,15 @@ export const GET: APIRoute = async ({ params }) => {
   const db = env.DB as unknown as D1Database;
   const imageId = params.imageId ?? '';
 
-  // A row is the proof that we own the bytes. Without one there is nothing to
-  // serve, and the request must not fall through to a fetch of X's CDN — that
-  // would re-introduce exactly the dependency this route exists to remove.
+  // The bytes at an image id are immutable — the id is content-addressed by
+  // insertion time and we never overwrite it. So the CDN can be trusted with
+  // the whole object for the full max-age the header says, which keeps the archive's
+  // covers off the Worker on the second and every subsequent view.
+  const cache = (caches as unknown as { default: Cache }).default;
+  const cacheUrl = new URL(`/media/${imageId}`, 'https://x-article-hub.zachzhao.workers.dev');
+  const cached = await cache.match(cacheUrl);
+  if (cached) return cached;
+
   const row = await db
     .prepare(`SELECT r2_key, content_type, byte_size FROM media_objects WHERE id = ?`)
     .bind(imageId)
@@ -26,8 +32,6 @@ export const GET: APIRoute = async ({ params }) => {
 
   const object = await bucket.get(row.r2_key);
   if (!object) {
-    // D1 says we have it and R2 does not. That is a real inconsistency, not a
-    // client error, and silently hotlinking X would hide it.
     return new Response('Media object missing from storage', {
       status: 500,
       headers: { 'Content-Type': 'text/plain' },
@@ -44,5 +48,7 @@ export const GET: APIRoute = async ({ params }) => {
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
 
-  return new Response(object.body, { headers });
+  const response = new Response(object.body, { headers });
+  await cache.put(cacheUrl, response.clone());
+  return response;
 };

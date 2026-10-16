@@ -185,16 +185,6 @@ const jsonLd = isTakedown
           </div>
         ) : (
           <>
-            {
-              (article.final_score !== null || article.quality_score !== null) && (
-                <div class="stat-row">
-                  {article.final_score !== null && <span><span {...i18nSpread('article.score.final')}>Final</span> <b>{article.final_score.toFixed(0)}</b></span>}
-                  {article.popularity_score !== null && <span><span {...i18nSpread('article.score.popularity')}>Popularity</span> <b>{article.popularity_score.toFixed(0)}</b></span>}
-                  {article.quality_score !== null && <span><span {...i18nSpread('article.score.quality')}>Quality</span> <b>{article.quality_score.toFixed(0)}</b></span>}
-                </div>
-              )
-            }
-
             {article.display_mode === 'link_only' ? (
               <div class="notice">
                 <h2 {...i18nSpread('article.fullTextHidden')}>Full text not displayed</h2>

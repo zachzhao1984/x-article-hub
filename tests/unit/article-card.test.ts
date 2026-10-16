@@ -96,17 +96,18 @@ describe('the article card', () => {
     expect(meta, 'contents are not centred in the fixed height').toMatch(/align-items:\s*center/);
   });
 
-  it('reserves the excerpt slot whether or not the article has a summary', () => {
-    // Only some articles have an excerpt, so a feed of mixed ones had two heights until the
-    // card rendered an empty slot of the same size.
-    expect(card, 'the card renders no reserved slot').toMatch(/card-excerpt-empty/);
-    expect(card, 'the slot is not rendered on the branch without an excerpt').toMatch(
+  it('leaves out the excerpt when there is none, and relies on the pinned foot instead', () => {
+    // The archive has no excerpts at all, so reserving two blank lines for them put an
+    // empty band the height of a sentence on every card. The reservation was load-bearing
+    // only when a feed was mixed *and* the foot was not pinned; the foot is pinned, so
+    // leaving the slot out keeps the feet level anyway.
+    expect(card, 'the card renders the empty slot').not.toMatch(/card-excerpt-empty/);
+    expect(card, 'the empty fallback branch is still there').not.toMatch(
       /article\.excerpt\s*\?[\s\S]*?card-excerpt[\s\S]*?:[\s\S]*?card-excerpt-empty/,
     );
-    const empty = ruleFor('.card-excerpt-empty');
-    expect(empty, 'the empty slot has no height').toMatch(/\bheight:/);
-    // Both used, so neither can quietly become a different size from the other.
-    expect(ruleFor('.card-excerpt')).toMatch(/-webkit-line-clamp:\s*\d/);
+    expect(card, 'a real excerpt still renders').toMatch(/article\.excerpt && <p class="card-excerpt">/);
+    // And the footer is still the thing that enforces the feet: it is pinned.
+    expect(ruleFor('.card-foot')).toMatch(/margin-top:\s*auto/);
   });
 
   it('keeps the footer on one line, so the counters cannot wrap the card taller', () => {

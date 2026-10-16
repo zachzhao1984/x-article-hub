@@ -59,7 +59,7 @@ const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
         <>
           <div class="grid-cards">
             {articles.map((a, i) => (
-              <ArticleCard article={a} rank={sort === 'latest' ? undefined : i + 1} />
+              <ArticleCard article={a} rank={sort === 'trending' ? i + 1 : undefined} />
             ))}
           </div>
 

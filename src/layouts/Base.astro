@@ -89,6 +89,7 @@ const iso = publishedAt ? new Date(publishedAt).toISOString() : undefined;
     <slot name="head" />
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <slot />
     {/*
       Applies a change from the switcher, then remembers it. Shared with the admin
