@@ -13,7 +13,7 @@
 
   "routes": [
     {
-      "pattern": "x-articles.840727.xyz",
+      "pattern": "x-article-hub.840727.xyz",
       "custom_domain": true
     }
   ],
@@ -105,7 +105,7 @@
 
   "vars": {
     "SITE_NAME": "X Article Hub",
-    "SITE_ORIGIN": "https://x-articles.840727.xyz",
+    "SITE_ORIGIN": "https://x-article-hub.840727.xyz",
     "RANKING_WEIGHTS_JSON": "{\"popularity\":0.57,\"quality\":0.29,\"editor\":0.14}",
     "MAX_IMPORT_URLS": "200",
     "CRAWL_SCREENSHOT": "false"
