@@ -95,6 +95,9 @@ export interface Translations {
 
   // --- home
   'home.eyebrow': string;
+  'home.heroTitle': string;
+  'home.heroBody': string;
+  'home.heroCta': string;
   'home.noArticles': string;
   'home.noArticlesBody': string;
   'home.importer': string;
@@ -294,6 +297,9 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'board.page': 'Page {page}',
 
     'home.eyebrow': 'X Article',
+    'home.heroTitle': 'The long-form, archived.',
+    'home.heroBody': 'A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.',
+    'home.heroCta': 'Read the latest →',
     'home.noArticles': 'No published articles yet',
     'home.noArticlesBody': 'Articles appear here after an editor publishes them. Paste X Article URLs in the',
     'home.importer': 'admin importer',
@@ -480,6 +486,9 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'board.page': '第 {page} 页',
 
     'home.eyebrow': 'X 长文',
+    'home.heroTitle': '长文，归档。',
+    'home.heroBody': '人工挑选、机器归档的 X 长文库 —— 按主题组织，按真实互动排序。',
+    'home.heroCta': '去读最新 →',
     'home.noArticles': '还没有已发布的文章',
     'home.noArticlesBody': '文章会在编辑发布后出现在这里。将 X 长文链接粘贴到',
     'home.importer': '管理后台的导入器',
@@ -666,6 +675,9 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
 
     'home.eyebrow': 'X の長文記事',
     'home.noArticles': '公開された記事はまだありません',
+    'home.heroTitle': '長文を、保存する。',
+    'home.heroBody': '人手で選んだ X の長文記事を機械で保存・索引したライブラリ —— テーマ別整理、実 Engagement による並べ替え。',
+    'home.heroCta': '最新を読む →',
     'home.noArticlesBody': '編集部が公開すると、ここに記事が表示されます。X の記事 URL を',
     'home.importer': '管理画面のインポーター',
     'home.startPipeline': 'に貼り付けると処理が始まります。',

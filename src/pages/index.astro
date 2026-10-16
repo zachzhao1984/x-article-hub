@@ -28,7 +28,6 @@ const [trending, latest, featured, tags] = await Promise.all([
   listPublishedArticles(db, { sort: 'featured', limit: 3 }),
   listTagsWithCounts(db, 24),
 ]);
-
 // SPEC §17.3 ordering: the editor's picks, then the machine boards.
 //
 // The lead row is `sort: 'featured'`, which is the human override and not a ranking —
@@ -54,17 +53,31 @@ const empty = latest.length === 0;
   path="/"
 >
   <SiteHeader>
-    {/*
-      No hero. This block used to open with an eyebrow, a title and a count line, which
-      put the first row of cards below the fold in exchange for restating what the header
-      already says. The heading is kept rather than dropped, and kept localized, because a
-      page with no `h1` is one a screen reader announces as untitled — the same `sr-only`
-      treatment the site name already gets in the header.
-    */}
-    <h1 class="sr-only" {...i18nSpread('home.eyebrow')}>X Article</h1>
+    <section class="hero">
+      <div class="hero-row">
+        <div class="hero-body">
+          <h1 class="hero-title" {...i18nSpread('home.heroTitle')}>The long-form, archived.</h1>
+          <p class="hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
+          <a class="hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>All latest →</a>
+        </div>
+        {
+          featured.length > 0 && featured[0].cover_image_id && (
+            <figure class="hero-cover">
+              <img src={`/media/${featured[0].cover_image_id}`} alt="" loading="eager" decoding="async" />
+            </figure>
+          )
+        }
+      </div>
+    </section>
 
-    {
-      empty ? (
+    {/*
+      No hero. This block used to open with an eyebrow, a title and a count line,
+      which put the first row of cards below the fold in exchange for restating what
+      the header already says. The hero is back now; what stays `sr-only` in its place
+      is the board heading shape (`<h2>`) rather than the h1, so the page still
+      announces its name.
+    */}
+      {empty ? (
         <div class="empty-state">
           <h2 {...i18nSpread('home.noArticles')}>No published articles yet</h2>
           <p>
