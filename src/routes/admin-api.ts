@@ -195,6 +195,12 @@ adminApi.get('/jobs', async (c) => {
 /** SPEC §16.2 — category list, used by the admin review forms in later phases. */
 adminApi.get('/categories', async (c) => c.json({ categories: await listCategories(c.env.DB) }));
 
+adminApi.post('/ai/classify', async (c) => {
+  const { classifyUncategorized } = await import('../services/classify');
+  const outcome = await classifyUncategorized(c.env, 50);
+  return c.json({ ok: true, ...outcome });
+});
+
 /**
  * SPEC §16.3 — curation actions.
  *
