@@ -11,6 +11,13 @@
   "workers_dev": true,
   "preview_urls": false,
 
+  "routes": [
+    {
+      "pattern": "x-articles.840727.xyz",
+      "custom_domain": true
+    }
+  ],
+
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
@@ -98,7 +105,7 @@
 
   "vars": {
     "SITE_NAME": "X Article Hub",
-    "SITE_ORIGIN": "https://x-article-hub.zachzhao.workers.dev",
+    "SITE_ORIGIN": "https://x-articles.840727.xyz",
     "RANKING_WEIGHTS_JSON": "{\"popularity\":0.57,\"quality\":0.29,\"editor\":0.14}",
     "MAX_IMPORT_URLS": "200",
     "CRAWL_SCREENSHOT": "false"

@@ -7,7 +7,7 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   const bucket = env.ARCHIVE as unknown as R2Bucket;
   const db = env.DB as unknown as D1Database;
   const imageId = params.imageId ?? '';
@@ -17,7 +17,11 @@ export const GET: APIRoute = async ({ params }) => {
   // the whole object for the full max-age the header says, which keeps the archive's
   // covers off the Worker on the second and every subsequent view.
   const cache = (caches as unknown as { default: Cache }).default;
-  const cacheUrl = new URL(`/media/${imageId}`, 'https://x-article-hub.zachzhao.workers.dev');
+  // The cache key follows whichever host answered — a cover is byte-identical
+  // across the worker.dev host and the custom domain, but keying on a fixed host
+  // would make every custom-domain request a miss.
+  const cacheUrl = new URL(`/media/${imageId}`, request.url);
+
   const cached = await cache.match(cacheUrl);
   if (cached) return cached;
 
