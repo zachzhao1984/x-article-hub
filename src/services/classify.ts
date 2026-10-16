@@ -123,7 +123,7 @@ export async function classifyArticle(env: Env, articleId: string): Promise<Clas
       },
       { role: 'user', content: prompt },
     ],
-    max_tokens: 16,
+    max_tokens: 512,
     temperature: 0,
   });
 
