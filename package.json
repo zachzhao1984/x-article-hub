@@ -23,8 +23,8 @@
     "db:query:remote": "cf d1 query 61f1e63b-4097-49fb-a99d-1f05dcb69ad9"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^14.3.3",
-    "astro": "^7.3.5",
+    "@astrojs/cloudflare": "^14.4.0",
+    "astro": "^7.4.0",
     "hono": "^4.7.0",
     "shiki": "^4.5.0"
   },
