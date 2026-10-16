@@ -152,7 +152,12 @@ export async function getPublishedArticleBySlug(
 ): Promise<PublishedArticleDetail | null> {
   const article = await db
     .prepare(
-      `SELECT a.*, c.slug AS category_slug, c.name AS category_name
+      `SELECT a.*,
+         c.slug AS category_slug, c.name AS category_name,
+         (SELECT m.id FROM media_objects m
+            WHERE m.article_id = a.id AND m.r2_key IS NOT NULL
+              AND m.kind IN ('body', 'cover')
+            ORDER BY CASE m.kind WHEN 'body' THEN 0 ELSE 1 END, m.position ASC LIMIT 1) AS cover_image_id
          FROM articles a
          LEFT JOIN categories c ON c.id = COALESCE(a.editor_category_id, a.category_id)
         WHERE a.slug = ?1`,
