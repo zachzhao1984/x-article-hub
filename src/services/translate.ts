@@ -122,12 +122,12 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
       temperature: 0.1,
       response_format: { type: 'json_object' },
     });
-    const raw = (response as { response?: string }).response ?? '';
+    const raw = (response as { response?: unknown }).response;
     let texts: unknown;
-    try { texts = (JSON.parse(raw) as { translations?: unknown }).translations; } catch { /* fail safely */ }
+    try { texts = (typeof raw === 'string' ? JSON.parse(raw) : raw as { translations?: unknown })?.translations; } catch { /* fail safely */ }
     if (!Array.isArray(texts) || texts.length !== batch.length ||
         texts.some((value) => typeof value !== 'string' || !value.trim())) {
-      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: ${raw.slice(0, 160)}`, 502);
+      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: ${JSON.stringify(response).slice(0, 250)}`, 502);
     }
     progress.texts.push(...texts as string[]);
     progress.cursor = end;
