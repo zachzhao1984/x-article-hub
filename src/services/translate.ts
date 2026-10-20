@@ -5,7 +5,9 @@ import { CLASSIFY_MODEL } from './classify';
 import { AppError } from '../lib/errors';
 
 const TRANSLATION_VERSION = 1;
-const BATCH_CHARS = 1800;
+// Qwen can stop early even with finish_reason=stop when too many JSON entries are requested.
+// Keep batches small so the entire translation fits comfortably in one response.
+const BATCH_CHARS = 500;
 
 type Progress = {
   sourceKey: string;
@@ -128,7 +130,7 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
     try { texts = (typeof raw === 'string' ? JSON.parse(raw) : raw as { translations?: unknown })?.translations; } catch { /* fail safely */ }
     if (result.choices?.[0]?.finish_reason === 'length' || !Array.isArray(texts) || texts.length !== batch.length ||
         texts.some((value) => typeof value !== 'string' || !value.trim())) {
-      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: ${JSON.stringify({ finish: result.choices?.[0]?.finish_reason, expected: batch.length, actual: Array.isArray(texts) ? texts.length : typeof texts, response: typeof raw === 'string' ? raw.slice(-350) : raw }).slice(0, 550)}`, 502);
+      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: finish=${result.choices?.[0]?.finish_reason ?? 'unknown'}, expected=${batch.length}, actual=${Array.isArray(texts) ? texts.length : typeof texts}`, 502);
     }
     progress.texts.push(...texts as string[]);
     progress.cursor = end;

@@ -139,7 +139,7 @@ const jsonLd = isTakedown
       </nav>
 
       <header class="article-head">
-        <h1 class="article-title">{article.title}</h1>
+        <h1 class="article-title" data-title-zh={chineseDocument?.title}>{article.title}</h1>
         <div class="byline">
           {
             /* SPEC §10 — the pipeline rewrites author_avatar to a local
@@ -219,6 +219,8 @@ const jsonLd = isTakedown
                 (() => {
                   const nav = document.querySelector('.article-language');
                   if (!nav) return;
+                  const title = document.querySelector('.article-title');
+                  const originalTitle = title?.textContent;
                   nav.addEventListener('click', (event) => {
                     const target = event.target.closest('[data-article-lang]');
                     if (!target) return;
@@ -228,6 +230,7 @@ const jsonLd = isTakedown
                     if (!originalBody || !chineseBody) return;
                     originalBody.hidden = chinese;
                     chineseBody.hidden = !chinese;
+                    if (title && originalTitle) title.textContent = chinese ? title.dataset.titleZh || originalTitle : originalTitle;
                     for (const button of nav.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button === target));
                   });
                 })();
