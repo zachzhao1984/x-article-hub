@@ -110,7 +110,8 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
   if (progress.cursor < units.length) {
     let end = progress.cursor;
     let chars = 0;
-    while (end < units.length && (end === progress.cursor || chars + units[end]!.text.length <= BATCH_CHARS)) {
+    while (end < units.length && (end === progress.cursor ||
+        (end - progress.cursor < 2 && chars + units[end]!.text.length <= BATCH_CHARS))) {
       chars += units[end]!.text.length;
       end++;
     }

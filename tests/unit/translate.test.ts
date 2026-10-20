@@ -54,13 +54,15 @@ describe('article translation', () => {
   it('keeps partial translation private and resumes to a complete versioned document', async () => {
     const { env, objects, calls } = harness();
     const first = await translateArticleBatch(env, articleId);
-    expect(first).toMatchObject({ done: true, translated: 4, total: 4 });
+    expect(first).toMatchObject({ done: false, translated: 2, total: 4 });
+    expect(await readTranslation(env.ARCHIVE, articleId, sourceKey)).toBeNull();
+    expect((await translateArticleBatch(env, articleId)).done).toBe(true);
     const result = await readTranslation(env.ARCHIVE, articleId, sourceKey);
     expect(result?.blocks[0]).toMatchObject({ type: 'paragraph', spans: [{ text: '中The first paragraph.' }, { text: '中Read more' }] });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(objects.has(`articles/${articleId}/translations/v1/zh.progress.json`)).toBe(false);
     await translateArticleBatch(env, articleId);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(await readTranslation(env.ARCHIVE, articleId, `articles/${articleId}/versions/v2/article.json`)).toBeNull();
   });
 
@@ -77,6 +79,7 @@ describe('article translation', () => {
       const texts = (JSON.parse(input.messages[1]!.content) as { texts: string[] }).texts;
       return { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ translations: texts.map((t) => `中${t}`) }) } }] };
     });
+    expect((await translateArticleBatch(env, articleId)).done).toBe(false);
     expect((await translateArticleBatch(env, articleId)).done).toBe(true);
   });
 
