@@ -55,8 +55,6 @@ const description =
     (firstParagraphText(document)?.slice(0, 200) ?? null) ||
   article.title;
 
-const readingMinutes = Math.max(1, Math.round(article.word_count / 220));
-
 /** Old documents only stored the canonical URL; the handle is recoverable from it. */
 function embeddedHandle(url?: string): string | undefined {
   const match = url ? /^https:\/\/x\.com\/([^/]+)\/status\//.exec(url) : null;
@@ -168,7 +166,6 @@ const jsonLd = isTakedown
               {new Date(article.published_at).toISOString().slice(0, 10)}
             </time>
           )}
-          <span class="muted">{readingMinutes} <span {...i18nSpread('card.minRead')}>min read</span></span>
         </div>
       </header>
 

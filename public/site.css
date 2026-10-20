@@ -1031,6 +1031,7 @@ a:hover { color: var(--accent); }
   font-weight: 700;
 }
 .byline { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+.byline time { margin-inline-start: auto; text-align: right; }
 .byline a { color: var(--muted); }
 .byline a:hover { color: var(--accent); }
 
