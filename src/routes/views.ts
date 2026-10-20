@@ -525,6 +525,7 @@ export interface ArticleDetailView {
     errorMessage: string | null;
     attempts: number;
   }[];
+  translation?: { done: boolean; translated: number; total: number } | null;
   notice?: string | null;
   error?: string | null;
 }
@@ -627,9 +628,9 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
         Raw archive → ArticleDocument. Reads only R2, so it is free and never touches X.
       </span>
     </form>
-    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/translate">
-      <button class="button button-secondary" type="submit"${a.status === 'published' && a.display_mode === 'full' && a.content_r2_key ? '' : ' disabled'}>Translate to Chinese / Continue</button>
-      <span class="hint">Translates one batch and saves progress. Repeat until the Chinese edition is ready.</span>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/translate" data-translate-form data-api-url="/api/admin/articles/${escapeHtml(a.id)}/translate">
+      <button class="button button-secondary" type="submit"${a.status === 'published' && a.display_mode === 'full' && a.content_r2_key && !view.translation?.done ? '' : ' disabled'}>${view.translation?.done ? 'Chinese translation ready' : view.translation ? 'Continue Chinese translation' : 'Translate to Chinese'}</button>
+      <span class="hint" data-translate-status role="status" aria-live="polite">${view.translation?.done ? 'The Chinese edition is ready on the article page.' : view.translation ? `${view.translation.translated} segments saved. Click to resume; keep this page open until complete.` : 'Click once to translate the article; keep this page open until complete.'}</span>
     </form>
     <form method="post" action="/admin/articles/${escapeHtml(a.id)}/media">
       <button class="button button-secondary" type="submit"${a.content_r2_key ? '' : ' disabled'}>Archive images</button>
@@ -643,6 +644,36 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
     </form>
   </div>
 </section>
+
+<script>
+  (() => {
+    const form = document.querySelector('[data-translate-form]');
+    if (!form) return;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('button');
+      const status = form.querySelector('[data-translate-status]');
+      if (!button || !status || button.disabled) return;
+      button.disabled = true;
+      status.textContent = 'Translating… Keep this page open.';
+      try {
+        let result;
+        do {
+          const response = await fetch(form.getAttribute('data-api-url'), { method: 'POST', credentials: 'same-origin' });
+          result = await response.json();
+          if (!response.ok) throw new Error(result.error?.message || 'Translation failed (' + response.status + ')');
+          status.textContent = result.done
+            ? 'Chinese edition ready. Open the article and choose 中文译文.'
+            : result.translated + ' of ' + result.total + ' text segments translated. Keep this page open.';
+        } while (!result.done);
+        button.textContent = 'Chinese translation ready';
+      } catch (error) {
+        status.textContent = (error.message || 'Translation failed') + '. Click to resume.';
+        button.disabled = false;
+      }
+    });
+  })();
+</script>
 
 <section class="card">
   <h2>Curation (SPEC §16.3)</h2>

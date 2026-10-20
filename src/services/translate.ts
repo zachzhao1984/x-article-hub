@@ -12,6 +12,8 @@ const BATCH_CHARS = 500;
 type Progress = {
   sourceKey: string;
   translationVersion: number;
+  parserVersion: number;
+  capturedAt: string;
   cursor: number;
   texts: string[];
 };
@@ -42,16 +44,33 @@ async function putJson(bucket: R2Bucket, key: string, value: unknown): Promise<v
 }
 
 /** Reads only a complete translation of this exact source document. */
-export async function readTranslation(bucket: R2Bucket, articleId: string, sourceKey: string): Promise<ArticleDocument | null> {
+export async function readTranslation(bucket: R2Bucket, articleId: string, sourceKey: string, source?: ArticleDocument): Promise<ArticleDocument | null> {
   const object = await bucket.get(keys(articleId, sourceKey).finished);
   if (!object) return null;
   try {
     const value = await object.json() as { sourceKey?: string; translationVersion?: number; document?: ArticleDocument };
+    const sameCapture = !source || (value.document?.source.parserVersion === source.source.parserVersion &&
+      value.document?.source.capturedAt === source.source.capturedAt &&
+      value.document?.blocks.length === source.blocks.length &&
+      value.document?.source.url === source.source.url);
     return value.sourceKey === sourceKey && value.translationVersion === TRANSLATION_VERSION &&
-      value.document?.blocks?.length ? value.document : null;
+      sameCapture && value.document?.blocks?.length ? value.document : null;
   } catch {
     return null;
   }
+}
+
+export async function translationStatus(bucket: R2Bucket, articleId: string, sourceKey: string, source: ArticleDocument): Promise<{ done: boolean; translated: number; total: number } | null> {
+  if (await readTranslation(bucket, articleId, sourceKey, source)) return { done: true, translated: 0, total: 0 };
+  const object = await bucket.get(keys(articleId, sourceKey).progress);
+  if (!object) return null;
+  try {
+    const value = await object.json() as Progress;
+    return value.sourceKey === sourceKey && value.translationVersion === TRANSLATION_VERSION &&
+      value.parserVersion === source.source.parserVersion && value.capturedAt === source.source.capturedAt &&
+      Array.isArray(value.texts) && Number.isInteger(value.cursor) && value.cursor === value.texts.length
+      ? { done: false, translated: value.cursor, total: 0 } : null;
+  } catch { return null; }
 }
 
 /** Build one stable sequence of translatable text slots; metadata and embed cards remain original. */
@@ -104,7 +123,7 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
   if (!source) throw new AppError('NOT_FOUND', 'The source document is missing from R2', 404);
   const paths = keys(articleId, sourceKey);
   const { units, translated } = translationUnits(source);
-  if (await readTranslation(env.ARCHIVE, articleId, sourceKey)) return { done: true, translated: units.length, total: units.length };
+  if (await readTranslation(env.ARCHIVE, articleId, sourceKey, source)) return { done: true, translated: units.length, total: units.length };
 
   const saved = await env.ARCHIVE.get(paths.progress);
   let progress: Progress | null = null;
@@ -112,9 +131,11 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
     try { progress = await saved.json() as Progress; } catch { /* restart corrupt checkpoint */ }
   }
   if (!progress || progress.sourceKey !== sourceKey || progress.translationVersion !== TRANSLATION_VERSION ||
+      progress.parserVersion !== source.source.parserVersion || progress.capturedAt !== source.source.capturedAt ||
       !Array.isArray(progress.texts) || progress.cursor !== progress.texts.length || progress.cursor > units.length ||
       progress.texts.some((s) => typeof s !== 'string' || !s.trim())) {
-    progress = { sourceKey, translationVersion: TRANSLATION_VERSION, cursor: 0, texts: [] };
+    progress = { sourceKey, translationVersion: TRANSLATION_VERSION,
+      parserVersion: source.source.parserVersion, capturedAt: source.source.capturedAt, cursor: 0, texts: [] };
   }
 
   if (units.length === 0) throw new AppError('BAD_REQUEST', 'Article has no text to translate', 400);

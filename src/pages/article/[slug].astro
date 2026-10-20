@@ -44,7 +44,7 @@ const [tags, document, related] = await Promise.all([
 ]);
 
 const chineseDocument = showBody && article.content_r2_key && document
-  ? await readTranslation(bucket, article.id, article.content_r2_key)
+  ? await readTranslation(bucket, article.id, article.content_r2_key, document)
   : null;
 
 const related_ = related.filter((r) => r.id !== article.id).slice(0, 3);
@@ -222,7 +222,7 @@ const jsonLd = isTakedown
                   const title = document.querySelector('.article-title');
                   const originalTitle = title?.textContent;
                   nav.addEventListener('click', (event) => {
-                    const target = event.target.closest('[data-article-lang]');
+                    const target = event.target instanceof Element ? event.target.closest('[data-article-lang]') : null;
                     if (!target) return;
                     const chinese = target.dataset.articleLang === 'zh';
                     const originalBody = document.querySelector('[data-article-body="original"]');
@@ -230,6 +230,7 @@ const jsonLd = isTakedown
                     if (!originalBody || !chineseBody) return;
                     originalBody.hidden = chinese;
                     chineseBody.hidden = !chinese;
+                    document.querySelector('.article-shell')?.setAttribute('lang', chinese ? 'zh-Hans' : 'en');
                     if (title && originalTitle) title.textContent = chinese ? title.dataset.titleZh || originalTitle : originalTitle;
                     for (const button of nav.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button === target));
                   });

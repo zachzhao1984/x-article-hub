@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readTranslation, translateArticleBatch, translationUnits } from '../../src/services/translate';
+import { readTranslation, translateArticleBatch, translationStatus, translationUnits } from '../../src/services/translate';
 import type { ArticleDocument } from '../../src/types/article-document';
 
 const article: ArticleDocument = {
@@ -55,15 +55,18 @@ describe('article translation', () => {
     const { env, objects, calls } = harness();
     const first = await translateArticleBatch(env, articleId);
     expect(first).toMatchObject({ done: false, translated: 2, total: 4 });
+    expect(await translationStatus(env.ARCHIVE, articleId, sourceKey, article)).toEqual({ done: false, translated: 2, total: 0 });
     expect(await readTranslation(env.ARCHIVE, articleId, sourceKey)).toBeNull();
     expect((await translateArticleBatch(env, articleId)).done).toBe(true);
     const result = await readTranslation(env.ARCHIVE, articleId, sourceKey);
     expect(result?.blocks[0]).toMatchObject({ type: 'paragraph', spans: [{ text: '中The first paragraph.' }, { text: '中Read more' }] });
+    expect(await translationStatus(env.ARCHIVE, articleId, sourceKey, article)).toEqual({ done: true, translated: 0, total: 0 });
     expect(calls).toHaveLength(2);
     expect(objects.has(`articles/${articleId}/translations/v1/zh.progress.json`)).toBe(false);
     await translateArticleBatch(env, articleId);
     expect(calls).toHaveLength(2);
     expect(await readTranslation(env.ARCHIVE, articleId, `articles/${articleId}/versions/v2/article.json`)).toBeNull();
+    expect(await readTranslation(env.ARCHIVE, articleId, sourceKey, { ...article, source: { ...article.source, parserVersion: 28 } })).toBeNull();
   });
 
   it('does not publish an incomplete or malformed AI response', async () => {

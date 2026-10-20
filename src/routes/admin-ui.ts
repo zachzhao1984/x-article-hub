@@ -20,7 +20,8 @@ import { listCategories } from '../db/categories';
 import { importUrls, retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle } from '../services/parse';
-import { translateArticleBatch } from '../services/translate';
+import { translateArticleBatch, translationStatus } from '../services/translate';
+import { readArticleDocument } from '../services/archive';
 import { downloadArticleMedia, listArticleMedia } from '../services/media';
 import {
   archiveArticle,
@@ -203,6 +204,10 @@ adminUi.get('/articles/:id', async (c) => {
     listCategories(c.env.DB),
   ]);
   const parsed = c.req.query('parsed');
+  const source = article.content_r2_key ? await readArticleDocument(c.env.ARCHIVE, article.content_r2_key) : null;
+  const translation = article.content_r2_key && source
+    ? await translationStatus(c.env.ARCHIVE, id, article.content_r2_key, source)
+    : null;
   const blocks = Number(c.req.query('blocks') ?? '0') || 0;
   const notice = parsed
     ? `Parsed (${parsed}) — ${blocks} blocks. Refresh the article page to read it.`
@@ -241,6 +246,7 @@ adminUi.get('/articles/:id', async (c) => {
           parserVersion: article.parser_version,
         },
         media,
+        translation,
         notice,
         error: errorMessage,
       },
