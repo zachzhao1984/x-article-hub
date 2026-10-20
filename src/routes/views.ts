@@ -117,7 +117,7 @@ ${SITE_ICONS.map(iconLinkHtml).join('\n')}
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="brand-mark" src="/logo-mark.png" width="72" height="72" alt="" decoding="async"><img class="brand-mark brand-mark-inverse" src="/logo-mark-inverse.png" width="72" height="72" alt="" decoding="async">${escapeHtml(options.siteName)} <span class="brand-tag">admin</span></div>
+  <div class="brand"><img class="brand-mark" src="/logo-mark.png" width="96" height="96" alt="" decoding="async"><img class="brand-mark brand-mark-inverse" src="/logo-mark-inverse.png" width="96" height="96" alt="" decoding="async">${escapeHtml(options.siteName)} <span class="brand-tag">admin</span></div>
   <nav class="nav">${nav}</nav>
   ${themeSwitchHtml()}
 </header>

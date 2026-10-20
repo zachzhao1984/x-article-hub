@@ -7,17 +7,9 @@
  * showing a different icon than the article pages is exactly the kind of thing
  * nobody notices until it is wrong in a screenshot.
  *
- * The artwork is `Logo.jpg` at the repo root: a near-black X folded from envelope
- * flaps with a gold star at the crossing. Every asset below is generated from it by
- * `scripts/build-logo.py`, so there is one source rather than a hand-tuned set that
- * drifts.
- *
- * That script exists because `Logo.jpg` is a JPEG, and a JPEG cannot hold
- * transparency. The mark was exported over a grey/white checkerboard, so that
- * checkerboard is real pixels in the file — and the rasters this list used to point
- * at were transparent PNGs that still had it baked in at full opacity, which is why
- * tabs and home screens drew a grey checkerboard around the mark. The script removes
- * it.
+ * The source is `Logo.png` at the repo root: a dark X behind a warm article card
+ * with a blue image. Its checkerboard is baked into RGB pixels. The build script
+ * cuts out that background and derives the light and dark marks and all icons.
  *
  * There is deliberately still no `favicon.svg`: a vector `rel="icon"` outranks every
  * raster alternative, so shipping one would silently override the artwork rather than
@@ -48,7 +40,7 @@ const DARK_SCHEME = '(prefers-color-scheme: dark)';
  * a PNG as scalable and may pick the 512 for a 16px tab, which is the blurry
  * outcome the small files exist to avoid.
  *
- * The dark-scheme pair is not a nicety. The mark is near-black *by construction*,
+ * The dark-scheme pair is not a nicety. The X is near-black *by construction*,
  * so on a dark tab bar it is not low contrast, it is absent — measured against the
  * dark theme's #13191c the body sits near a contrast ratio of 1.1. Declaring a
  * second file with `media` is cheaper than the alternative, which would be baking a
@@ -66,7 +58,7 @@ export const SITE_ICONS: IconLink[] = [
 export const MANIFEST_HREF = '/site.webmanifest';
 
 /**
- * The source artwork is a near-black mark on transparency, so the tile behind it
+ * The source artwork has a near-black X on transparency, so the tile behind it
  * has to be light or the mark disappears into a dark tab bar. The touch icon
  * already bakes in an opaque light background; this is the same value, used for
  * mobile browser chrome and the installed-app splash.

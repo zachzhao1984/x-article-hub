@@ -520,73 +520,20 @@ system scheme.
 
 ### Icons and the logo
 
-The artwork is `Logo.jpg` at the repo root: a near-black X folded from envelope flaps
-with a gold star at the crossing. Everything the site serves as a mark is generated
-from that one file by `scripts/build-logo.py` — the tab icons, the touch icon, the
-manifest icons, and the header mark. One source rather than a hand-tuned set, because
-a hand-tuned set is how the 16px and the 512 end up being different logos.
-
-The script exists because of something about the source file. `Logo.jpg` is a JPEG,
-and a JPEG cannot hold transparency. The mark was exported over a grey/white
-checkerboard, so **that checkerboard is real pixels in the file** — neutral, 209 to
-254 in luminance, and therefore indistinguishable from a light background.
-
-That was not hypothetical. Every icon the site shipped before was a transparent PNG
-that still had the checkerboard baked in at full opacity, so browser tabs, iOS home
-screens and Android launchers all drew a grey checkerboard around the mark. Nothing
-about the files said so: they declared an alpha channel, which is the first thing any
-reader checks.
-
-**How the matte separates the mark.** On two independent axes, which is why no single
-threshold works:
-
-| part | luminance | chroma (R−B) |
-| --- | --- | --- |
-| the checker's darker square | 209 | 0 |
-| the mark's body | 26–165 | 0 |
-| the gold star | up to 246 | up to 94 |
-
-The body is neutral and dark; the star is chromatic and bright. Thresholding on
-luminance swallows the star, thresholding on chroma swallows the body's highlights,
-so the rule is *chromatic **or** dark*. The artwork's brightest pixel (246) is also
-one of its most chromatic (94), and those two conditions never overlap — that is
-exactly why no single threshold can separate them.
-
-Alpha is binary by design. Every output is at most 512px from a 1712px source, so the
-silhouette is resampled by at least 3.4× on the way down, and Lanczos over a 1px-hard
-edge produces the anti-aliased edge a soft matte would have given. What is lost is
-sub-pixel *position* accuracy — at most ±1 source pixel, under 0.3px at the largest
-output. A soft matte would buy nothing visible there and would cost a per-pixel solve
-for a foreground colour the artwork does not have, since the body is a shaded gradient
-rather than one flat value. One morphological step does the part that does matter: JPEG
-chroma subsampling rings a half-tone transition along the edge, and a binary closing
-removes that fringe.
-
-Two details that are not cosmetic:
-
-- **The mark is fitted to its larger side, not its width.** It is 809×887, taller than
-  it is wide, so fitting to width leaves the small sizes with a mark so short that the
-  folds and the star disappear — which is the entire reason a separate hand-tuned raster
-  used to exist for 16px.
-- **The touch icon's tile colour is read out of `src/config/icons.ts`**, not copied. An
-  iOS icon cut from a different paper than the splash behind it reads as a rendering
-  fault, and a second copy of the value is a second place to forget to update it.
+The source artwork is `Logo.png` at the repo root: a dark X behind a white article
+card with a blue image. `scripts/build-logo.py` generates the header marks, light
+and dark favicons, touch icon, installed-app icons and Safari pinned-tab silhouette.
+The grey-and-white checkerboard in the source is opaque RGB, not transparency. The
+script separates its neutral pixels from the dark X and warm card, fills enclosed
+gaps in the page, and trims the exterior before resizing the mark. The dark-theme
+variant lightens the X while retaining the card and blue image. The touch icon has
+an opaque tile in `THEME_COLOR`; the other PNGs retain a transparent exterior.
 
 ### The mark inverts for dark surfaces
 
-The mark is a near-black silhouette by construction, so on the dark ground it is not
-low contrast, it is absent: measured against `#13191c` the body sits near a contrast
-ratio of 1.1. Two rasters ship — `logo-mark.png` and `logo-mark-inverse.png` — and one
-is shown per theme.
-
-A CSS filter is not the answer. Inverting the gold star sends it through the
-complement to teal, which on this palette *is* the accent colour, so the star would
-read as interface rather than as artwork. Two files also mean the dark variant is the
-same artwork rather than a filter's idea of it. The inverse maps the body's shading
-along the site's own paper ramp — so the emboss survives as a gradient instead of
-flattening — and leaves the star's hue alone, gaining only the headroom it loses
-against dark ink. A test asserts the star is still chromatic in the inverse, because a
-recolour that greys it out is the failure this shape invites.
+The X is near-black, so a dark header needs its own light variant. Two rasters ship
+— `logo-mark.png` and `logo-mark-inverse.png` — and one is shown per theme. The
+blue image and warm article card are preserved in both variants.
 
 The favicons get the same treatment via `media="(prefers-color-scheme: dark)"`, which is
 the only way a raster can answer a dark tab bar. The alternative — baking a light tile
@@ -631,11 +578,8 @@ Other load-bearing properties, each asserted:
   other check, because nothing in the document claims a size for it.
 
 `safari-pinned-tab.svg` is traced from the artwork rather than redrawn, so it is
-provably the same mark. Safari reads its alpha channel as a stencil and paints the
-surviving shape in the user's own toolbar colour, so it is a flat silhouette with no
-background, no gradient, and no fill colour of its own. The gold star is not
-represented: at one bit it would either vanish or become a hole, and since Safari tints
-the whole shape one colour, a cut-out star reads as a defect rather than a seal. A test
+the same silhouette. Safari reads its alpha channel as a stencil and paints the
+surviving shape in the user's own toolbar colour, so it is a flat silhouette. A test
 asserts every traced coordinate lands inside the viewBox, because SVG clips silently and
 a centring slip shows up as a pinned tab with only the top of the X and nothing
 reporting a problem.
@@ -940,14 +884,14 @@ That generated file is what gets deployed — do not point `wrangler deploy` at
 `wrangler.jsonc` directly.
 
 The logo assets in `public/` are committed, but they are *generated*: after changing
-`Logo.jpg`, regenerate them rather than editing the PNGs, since a direct edit is
+`Logo.png`, regenerate them rather than editing the PNGs, since a direct edit is
 overwritten on the next run.
 
 ```bash
 python3 scripts/build-logo.py       # needs `magick` on PATH and numpy
 ```
 
-It rewrites every icon and header mark in `public/` from `Logo.jpg` alone, so the
+It rewrites every icon and header mark in `public/` from `Logo.png` alone, so the
 source is the only thing to edit. Writing a reader that decodes those files — rather
 than trusting their headers — is what surfaced the two things this section's format
 claims were wrong: the encoder produces a **paletted** 16px favicon (correct and

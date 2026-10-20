@@ -69,7 +69,7 @@ function tokensIn(body: string): string[] {
  *
  * `--logo-bg` and `--logo-ink` used to be here, on the reasoning that a favicon
  * cannot adapt and the in-page mark had to keep matching it. They are gone with the
- * tile they described: the mark is now artwork from `Logo.jpg` and it *is* themed,
+ * tile they described: the mark is now artwork from `Logo.png` and it *is* themed,
  * because the favicon ships a matching inverse. See the mark assertion at the end.
  */
 const THEME_INVARIANT = new Set(['--radius', '--wrap', '--serif', '--sans', '--mono']);

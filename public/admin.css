@@ -127,7 +127,7 @@ code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; f
 }
 
 /*
- * The brand mark is the artwork from Logo.jpg, the same two rasters the public
+ * The brand mark is generated from Logo.png, the same two rasters the public
  * header uses, and only one of them is shown: the mark is near-black by
  * construction, so on the dark ground it is not low contrast, it is absent.
  *
@@ -138,7 +138,7 @@ code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; f
  * keep in step with this one.
  */
 .brand { font-weight: 600; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 8px; }
-.brand-mark { display: block; height: 22px; width: auto; }
+.brand-mark { display: block; height: 28px; width: auto; }
 .brand-mark-inverse { display: none; }
 
 @media (prefers-color-scheme: dark) {

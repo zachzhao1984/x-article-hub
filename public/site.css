@@ -354,23 +354,16 @@ a:hover { color: var(--accent); }
 
 .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.02em; }
 /*
- * The brand mark, as the artwork from Logo.jpg rather than a tile and a letter.
+ * The brand mark is generated from Logo.png rather than a tile and a letter.
  *
- * Two rasters ship and one is shown: the mark is near-black by construction, so on
- * the dark ground it is not low contrast, it is absent. A CSS filter is not the
- * answer either — inverting the gold star through the complement lands on teal,
- * which on this palette is the accent colour, so the star would read as interface
- * rather than as artwork. Two files also means the dark variant is the same
- * artwork, not a filter's idea of it.
+ * Two rasters ship and one is shown: the X needs a light variant against dark
+ * headers. The white article card and blue image retain their original colours.
  *
- * The intrinsic size is 809x887, so at 24px tall the mark is 22px wide. Sizing by
- * height and letting the width follow the element's own aspect ratio is what keeps
- * it undistorted; the `width`/`height` attributes on the element hold the same
- * ratio so the flex row reserves the right box before the image loads.
+ * The generated canvas is square and sized by height to fit the header row.
  */
 .logo-mark {
   display: block;
-  height: 24px;
+  height: 34px;
   width: auto;
 }
 .logo-mark-inverse { display: none; }
