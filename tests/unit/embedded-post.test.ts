@@ -22,6 +22,73 @@ it('recovers an embedded post without its duration and engagement UI', () => {
   expect(marker?.type === 'paragraph' ? inlineToText(marker.spans) : '').toBe('XEMBEDPOST123');
 });
 
+it('recovers a post when X inserts another account avatar into its header', () => {
+  // The bozhou_ai article capture places a KITE AI profile image between the
+  // poster's name and handle, even though the HTML identifies the same post.
+  const avatar = '[![@Saccc\\_c](https://pbs.twimg.com/profile_images/1/sac_normal.jpg)](https://x.com/Saccc_c)';
+  const extra = '[![KITE AI ✈️](https://pbs.twimg.com/profile_images/2/kite_normal.jpg)](https://x.com/GoKiteAI)';
+  const reply = '[1.3K](https://x.com/compose/post?in_reply_to=2109962425512734739)';
+  const md = `Intro.\n\n${avatar}\n\n[Sac](https://x.com/Saccc_c)\n\n${extra}\n\n[@Saccc\\_c](https://x.com/Saccc_c)\n\n[Oct 13](https://x.com/Saccc_c/status/2109962425512734739)\n\nThe Little Prince game.\n\n01:00\n\n${reply}\n\n1.7K\n\n16K\n\n3.7M\n\nThe article continues.`;
+  const html = '<div data-href="/i/web/status/2109962425512734739"><img src="https://pbs.twimg.com/profile_images/1/sac_normal.jpg"><a href="/Saccc_c/status/2109962425512734739">Oct 13</a></div>';
+  const recovered = recoverEmbeddedPosts(md, html);
+  expect(recovered.posts).toMatchObject([{ postId: '2109962425512734739', author: 'Sac', handle: 'Saccc_c', text: 'The Little Prince game.', dateLabel: 'Oct 13' }]);
+  expect(recovered.markdown).toContain('XEMBEDPOST2109962425512734739');
+  expect(recovered.markdown).toContain('The article continues.');
+  expect(recovered.markdown).not.toContain('KITE AI');
+  expect(recovered.markdown).not.toContain('3.7M');
+});
+
+it('allows header avatars before the name and after the handle, but keeps the post identity', () => {
+  const avatar = '[![@Ada](https://pbs.twimg.com/profile_images/1/ada_normal.jpg)](https://x.com/Ada)';
+  const badge = '[![Badge](https://pbs.twimg.com/profile_images/2/badge_normal.jpg)](https://x.com/badge)';
+  const md = `${avatar}\n\n${badge}\n\n[Ada](https://x.com/ada)\n\n` +
+    `[@ada](https://x.com/ada)\n\n${badge}\n\n[Oct 1](https://x.com/ada/status/123)\n\n` +
+    'The post.\n\n[1](https://x.com/compose/post?in_reply_to=123)';
+  const html = '<div data-href="/i/web/status/123"></div>';
+  expect(recoverEmbeddedPosts(md, html).posts).toMatchObject([{ postId: '123', handle: 'Ada', text: 'The post.' }]);
+});
+
+it('does not merge unrelated links or a post absent from the HTML capture', () => {
+  const md = '[![@Ada](https://pbs.twimg.com/profile_images/1/a_normal.jpg)](https://x.com/ada)\n\n' +
+    '[Ada](https://x.com/ada)\n\n' +
+    '[A different author](https://x.com/other)\n\n' +
+    '[@ada](https://x.com/ada)\n\n' +
+    '[Oct 1](https://x.com/ada/status/123)\n\nPost text.\n\n' +
+    '[1](https://x.com/compose/post?in_reply_to=123)';
+  expect(recoverEmbeddedPosts(md, '<div data-href="/i/web/status/123">').posts).toEqual([]);
+  expect(recoverEmbeddedPosts(md, '').markdown).toBe(md);
+});
+
+it('keeps a second embedded post intact when the first has no matching reply link', () => {
+  const first = '[![@Ada](https://pbs.twimg.com/profile_images/1/a_normal.jpg)](https://x.com/ada)\n\n' +
+    '[Ada](https://x.com/ada)\n\n[@ada](https://x.com/ada)\n\n' +
+    '[Oct 1](https://x.com/ada/status/123)\n\nFirst post without its reply controls.';
+  const second = '[![@Bob](https://pbs.twimg.com/profile_images/2/b_normal.jpg)](https://x.com/bob)\n\n' +
+    '[Bob](https://x.com/bob)\n\n[@bob](https://x.com/bob)\n\n' +
+    '[Oct 2](https://x.com/bob/status/456)\n\nSecond post.\n\n' +
+    '[2](https://x.com/compose/post?in_reply_to=456)\n\n4\n\n6\n\n8';
+  const md = `${first}\n\n${second}\n\nArticle ending.`;
+  const html = '<div data-href="/i/web/status/123"></div><div data-href="/i/web/status/456"></div>';
+  const recovered = recoverEmbeddedPosts(md, html);
+  expect(recovered.posts).toMatchObject([{ postId: '456', text: 'Second post.' }]);
+  expect(recovered.markdown).toContain(first);
+  expect(recovered.markdown).toContain('Article ending.');
+});
+
+it('recovers two complete posts without swallowing the prose between them', () => {
+  const post = (name: string, id: string) =>
+    `[![@${name}](https://pbs.twimg.com/profile_images/${id}/a_normal.jpg)](https://x.com/${name})\n\n` +
+    `[${name}](https://x.com/${name})\n\n[@${name}](https://x.com/${name})\n\n` +
+    `[Oct 1](https://x.com/${name}/status/${id})\n\nPost by ${name}.\n\n` +
+    `[3](https://x.com/compose/post?in_reply_to=${id})\n\n4\n\n5\n\n6`;
+  const md = `${post('Ada', '123')}\n\nBetween posts.\n\n${post('Bob', '456')}\n\nAfter posts.`;
+  const html = '<div data-href="/i/web/status/123"></div><div data-href="/i/web/status/456"></div>';
+  const recovered = recoverEmbeddedPosts(md, html);
+  expect(recovered.posts.map((p) => [p.postId, p.text])).toEqual([['123', 'Post by Ada.'], ['456', 'Post by Bob.']]);
+  expect(recovered.markdown).toContain('Between posts.');
+  expect(recovered.markdown).toContain('After posts.');
+});
+
 const CARD_MARKDOWN =
   "I'm writing a guide to pstack! Here's part one.\n\n" +
   '[![Article cover image](https://pbs.twimg.com/media/HQ_0MA_aMAA9zMt?format=webp&name=medium) ' +

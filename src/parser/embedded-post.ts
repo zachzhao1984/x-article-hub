@@ -359,6 +359,36 @@ export function extractPostMedia(text: string): { text: string; images: string[]
   };
 }
 
+/** Paragraph offsets let us replace a whole post without rewriting surrounding prose. */
+function paragraphs(markdown: string): Array<{ text: string; start: number; end: number }> {
+  return [...markdown.matchAll(/[^\n]+(?:\n(?!\n)[^\n]+)*/g)].map((match) => ({
+    text: match[0], start: match.index, end: match.index + match[0].length,
+  }));
+}
+
+const POST_AVATAR_RE = /^\[!\[@[^\]]*\]\(https:\/\/pbs\.twimg\.com\/[^)\n]+\)\]\(https:\/\/x\.com\/([^/)\n]+)\)$/;
+const HEADER_IMAGE_RE = /^\[!\[[^\]]*\]\(https:\/\/pbs\.twimg\.com\/profile_images\/[^)\n]+\)\]\(https:\/\/x\.com\/[^/)\n]+\)$/;
+const POST_NAME_RE = /^\[([^\]\n]+)\]\(https:\/\/x\.com\/([^/)\n]+)\)$/;
+const POST_HANDLE_RE = /^\[@([^\]\n]+)\]\(https:\/\/x\.com\/([^/)\n]+)\)$/;
+const POST_DATE_RE = /^\[[^\]\n]+\]\(https:\/\/x\.com\/([^/)\n]+)\/status\/(\d+)\)$/;
+const POST_REPLY_RE = /^\[[^\]\n]+\]\(https:\/\/x\.com\/compose\/post\?in_reply_to=(\d+)\)$/;
+const POST_COUNT_RE = /^[\d.,]+[KMB]?$/i;
+const POST_VIDEO_DURATION_RE = /^\d{1,2}:\d{2}$/;
+
+function sameHandle(a: string, b: string): boolean {
+  return a.toLowerCase() === b.replace(/\\([_])/g, '$1').toLowerCase();
+}
+
+/** X sometimes inserts a badge or a second account avatar inside a post header. */
+function skipHeaderAvatars(parts: ReturnType<typeof paragraphs>, index: number): number {
+  let skipped = 0;
+  while (skipped < 4 && HEADER_IMAGE_RE.test(parts[index]?.text ?? '')) {
+    index++;
+    skipped++;
+  }
+  return index;
+}
+
 export function recoverEmbeddedPosts(markdown: string, html: string): {
   markdown: string;
   posts: RecoveredPost[];
@@ -368,31 +398,65 @@ export function recoverEmbeddedPosts(markdown: string, html: string): {
   const cards = recoverArticleCards(html);
   const nestedPosts = recoverNestedPosts(html);
   const identities = recoverPostIdentities(html);
-  const recovered = markdown.replace(
-    /\[!\[[^\]]*\]\([^\n]+\)\]\(https:\/\/x\.com\/[^\n]+\)\n\n\[([^\]]+)\]\(https:\/\/x\.com\/([^\s)]+)\)\n\n\[@[^\]]+\]\([^\n]+\)\n\n\[[^\]]+\]\(https:\/\/x\.com\/[^/]+\/status\/(\d+)\)\n\n([\s\S]*?)\n\n\[[^\]]+\]\(https:\/\/x\.com\/compose\/post\?in_reply_to=\3\)(?:\n\n[\d.,KM]+){0,4}/g,
-    (whole, author: string, handle: string, postId: string, body: string) => {
-      if (!ids.has(postId)) return whole;
-      const text = cleanPostText(body.replace(/\n\n\d{1,2}:\d{2}\s*$/, '').trim());
-      const split = splitEmbeddedArticleCard(text, cards);
-      const nested = splitNestedPost(split.text, nestedPosts);
-      const media = extractPostMedia(nested.text);
-      const identity = identities.get(postId);
-      posts.push({
-        postId,
-        url: `https://x.com/${handle}/status/${postId}`,
-        author,
-        handle,
-        text: media.text,
-        ...(identity?.avatarUrl ? { avatarUrl: identity.avatarUrl } : {}),
-        ...(identity?.verified ? { verified: true } : {}),
-        ...(identity?.dateLabel ? { dateLabel: identity.dateLabel } : {}),
-        ...(identity?.truncated ? { truncated: true } : {}),
-        ...(media.images.length > 0 ? { images: media.images } : {}),
-        ...(split.card ? { card: split.card } : {}),
-        ...(nested.nested ? { nested: nested.nested } : {}),
-      });
-      return `\n\nXEMBEDPOST${postId}\n\n`;
-    },
-  );
-  return { markdown: recovered, posts };
+  const parts = paragraphs(markdown);
+  let recovered = '';
+  let cursor = 0;
+
+  for (let i = 0; i < parts.length; i++) {
+    const avatarHandle = POST_AVATAR_RE.exec(parts[i]?.text ?? '')?.[1];
+    if (!avatarHandle) continue;
+
+    const nameIndex = skipHeaderAvatars(parts, i + 1);
+    const author = POST_NAME_RE.exec(parts[nameIndex]?.text ?? '');
+    if (!author || !sameHandle(avatarHandle, author[2] ?? '')) continue;
+    let next = skipHeaderAvatars(parts, nameIndex + 1);
+    const handle = POST_HANDLE_RE.exec(parts[next]?.text ?? '');
+    if (!handle || !sameHandle(avatarHandle, handle[2] ?? '') || !sameHandle(avatarHandle, handle[1] ?? '')) continue;
+    next = skipHeaderAvatars(parts, next + 1);
+    const date = POST_DATE_RE.exec(parts[next]?.text ?? '');
+    const postId = date?.[2];
+    if (!postId || !ids.has(postId) || !sameHandle(avatarHandle, date[1] ?? '')) continue;
+
+    const bodyStart = next + 1;
+    let reply = bodyStart;
+    // The reply link is the end of this post's content. A bounded search means a
+    // malformed capture cannot consume the rest of a long article or a later post.
+    while (reply < parts.length && reply - bodyStart < 60 && parts[reply]!.end - parts[bodyStart]!.start < 24_000) {
+      if (POST_REPLY_RE.exec(parts[reply]!.text)?.[1] === postId) break;
+      if (POST_AVATAR_RE.test(parts[reply]!.text)) break;
+      reply++;
+    }
+    if (reply === bodyStart || reply >= parts.length || POST_REPLY_RE.exec(parts[reply]!.text)?.[1] !== postId) continue;
+
+    let end = reply;
+    for (let count = 0; count < 4 && POST_COUNT_RE.test(parts[end + 1]?.text ?? ''); count++) end++;
+    // A duration next to engagement controls is video UI, not the author's prose.
+    let contentEnd = reply - 1;
+    if (POST_VIDEO_DURATION_RE.test(parts[contentEnd]?.text ?? '')) contentEnd--;
+    const postBody = contentEnd >= bodyStart
+      ? markdown.slice(parts[bodyStart]!.start, parts[contentEnd]!.end)
+      : '';
+    const split = splitEmbeddedArticleCard(cleanPostText(postBody), cards);
+    const nested = splitNestedPost(split.text, nestedPosts);
+    const media = extractPostMedia(nested.text);
+    const identity = identities.get(postId);
+    posts.push({
+      postId,
+      url: `https://x.com/${avatarHandle}/status/${postId}`,
+      author: author[1] ?? '',
+      handle: avatarHandle,
+      text: media.text,
+      ...(identity?.avatarUrl ? { avatarUrl: identity.avatarUrl } : {}),
+      ...(identity?.verified ? { verified: true } : {}),
+      ...(identity?.dateLabel ? { dateLabel: identity.dateLabel } : {}),
+      ...(identity?.truncated ? { truncated: true } : {}),
+      ...(media.images.length > 0 ? { images: media.images } : {}),
+      ...(split.card ? { card: split.card } : {}),
+      ...(nested.nested ? { nested: nested.nested } : {}),
+    });
+    recovered += markdown.slice(cursor, parts[i]!.start) + `\n\nXEMBEDPOST${postId}\n\n`;
+    cursor = parts[end]!.end;
+    i = end;
+  }
+  return { markdown: recovered + markdown.slice(cursor), posts };
 }
