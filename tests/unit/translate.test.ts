@@ -71,6 +71,15 @@ describe('article translation', () => {
     expect([...objects.keys()].filter((key) => key.includes('/translations/'))).toEqual([]);
   });
 
+  it('accepts the production chat completion response shape', async () => {
+    const { env } = harness();
+    (env.AI.run as ReturnType<typeof vi.fn>).mockImplementation(async (_model: string, input: { messages: Array<{ content: string }> }) => {
+      const texts = (JSON.parse(input.messages[1]!.content) as { texts: string[] }).texts;
+      return { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ translations: texts.map((t) => `中${t}`) }) } }] };
+    });
+    expect((await translateArticleBatch(env, articleId)).done).toBe(true);
+  });
+
   it('resumes a long article after the first batch without publishing half a translation', async () => {
     const { env, objects, calls } = harness();
     const long = structuredClone(article);
