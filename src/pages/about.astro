@@ -36,8 +36,8 @@ const counts = await homepageCounts(db);
         <li {...i18nSpread('about.step2')}>The URL is normalized and de-duplicated by its canonical form.</li>
         <li {...i18nSpread('about.step3')}>A crawl job fetches the rendered page and archives the raw HTML and Markdown.</li>
         <li {...i18nSpread('about.step4')}>A parser converts that into a structured document, preserving the author's structure.</li>
-        <li {...i18nSpread('about.step5')}>AI produces a summary, a suggested category and tags — all treated as suggestions.</li>
-        <li {...i18nSpread('about.step6')}>An editor reviews, overrides what it disagrees with, and publishes.</li>
+        <li {...i18nSpread('about.step5')}>A successfully parsed article is published automatically.</li>
+        <li {...i18nSpread('about.step6')}>AI suggests a category; editors can adjust it or remove an article.</li>
       </ol>
 
       <h2 {...i18nSpread('about.rank')}>How articles are ranked</h2>
@@ -60,10 +60,8 @@ const counts = await homepageCounts(db);
       <h2 {...i18nSpread('about.rights')}>Content and rights</h2>
       <p {...i18nSpread('about.rightsBody')}>
         Articles here are archived copies of work written by other people. Each reading page links
-        back to the original. Some articles are shown as an excerpt or as a link only, depending on
-        the editorial and rights decision recorded for that article — archived does not automatically
-        mean republished. Articles can be taken down at any time, and a taken-down page says so
-        rather than pretending the link never existed.
+        back to the original. Successfully parsed imports are published automatically. Editors can
+        limit an article to an excerpt or link, or take it down at any time.
       </p>
 
       <h2 {...i18nSpread('about.built')}>Built on Cloudflare</h2>

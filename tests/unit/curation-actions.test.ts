@@ -219,9 +219,12 @@ describe('every curation action is reachable from a surface', () => {
   it('renders a form for every action the UI registers', () => {
     // The other direction: a route with no form is a handler only a script can reach,
     // which is how `overrideCategory` sat unused for the length of a phase.
+    // Publishing now happens after parsing; its old route is kept for API
+    // compatibility and guarded against publishing an unparsed capture.
     const routes = [...adminUi.matchAll(/adminUi\.post\('\/articles\/:id\/(\w+)'/g)].map((m) => m[1] ?? '');
     expect(routes.length).toBeGreaterThan(8);
     for (const route of routes) {
+      if (route === 'publish') continue;
       expect(views, `POST /articles/:id/${route} has no form in the article page`).toContain(`/${route}"`);
     }
   });

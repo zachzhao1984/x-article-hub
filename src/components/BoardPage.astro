@@ -50,7 +50,7 @@ const nextHref = hasMore ? `${basePath}?page=${page + 1}` : null;
         <div class="empty-state">
           <h2 {...i18nSpread('board.empty')}>Nothing here yet</h2>
           <p>
-            <span {...i18nSpread('board.emptyBody')}>No published articles match this board. Import and publish some from the</span>{' '}
+            <span {...i18nSpread('board.emptyBody')}>No published articles match this board. Import an X Article from the</span>{' '}
             <a href="/admin" {...i18nSpread('board.admin')}>admin</a>
             <span {...i18nSpread('board.orCheck')}>, or check</span> <a href="/latest" {...i18nSpread('board.latest')}>Latest</a>.
           </p>

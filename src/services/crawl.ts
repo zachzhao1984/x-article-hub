@@ -9,9 +9,8 @@
  *   - Markdown archived
  *   - retry works
  *
- * Deliberately stops at article status `fetched`. Converting the capture into an
- * ArticleDocument is Phase 3; SPEC §27's whole reason for keeping the raw
- * archive is that Phase 3 must never need to touch X again.
+ * Leaves the new import in `review` until the parser has written a readable
+ * ArticleDocument; successful parsing then publishes it automatically.
  */
 
 import type { CrawlErrorCode } from '../lib/errors';
@@ -19,7 +18,7 @@ import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { newId } from '../lib/ids';
 import { recordEvent } from '../db/events';
-import { getArticleById, setArticleStatus } from '../db/articles';
+import { getArticleById } from '../db/articles';
 import { classifyContent, extractAvatarUrl, extractMetadata } from '../jobs/x-selectors';
 import type { CrawlMetadata, EngagementMetrics } from '../jobs/x-selectors';
 import { segmentCjk } from '../lib/cjk';
@@ -29,26 +28,22 @@ import { runQuickAction, runSnapshot, SCREENSHOT_FORMAT } from './browser';
 export const PARSER_VERSION = 1;
 
 /**
- * SPEC §6 routes `fetched → parsing → parsed → enriching → ai_ready → review`,
- * and §16.3 puts publishing in the review queue.
+ * A completed crawl enters `review` while the parse job builds the readable
+ * document. The parse service publishes it once that document is available.
  *
- * Parsing (Phase 3) and AI enrichment (Phase 4) do not exist yet, so those
- * intermediate states would be fiction. Handing the article straight to `review`
- * keeps the machine honest: an editor is looking at a real archive and decides.
- * Landing on `fetched` instead would be a dead end — `fetched` cannot reach
- * `published`, so nothing could ever be published until Phase 3 shipped.
+ * This intermediate state prevents a successful capture without a document from
+ * showing up on the public site.
  */
 export const CRAWL_TERMINAL_STATUS = 'review' as const;
 
 /**
- * A crawl is a content operation, never an editorial one.
- *
- * SPEC §4.7 gives the editor the final say on publication, so a re-crawl must not
- * quietly un-publish something a human published. A published article keeps its
- * status; everything else advances to the review queue.
+ * A re-crawl must not undo an editorial decision. Only a new or previously
+ * failed import may enter the automatic publication path.
  */
-function nextStatusAfterCrawl(current: string): string {
-  return current === 'published' ? 'published' : CRAWL_TERMINAL_STATUS;
+export function nextStatusAfterCrawl(current: string): string {
+  return ['published', 'rejected', 'archived', 'takedown'].includes(current)
+    ? current
+    : CRAWL_TERMINAL_STATUS;
 }
 
 export type CrawlResultKind = 'archived' | 'unchanged' | 'failed';
@@ -78,15 +73,15 @@ export interface CrawlInput {
 export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOutcome> {
   const { articleId, url } = input;
 
-  // Read before mutating. A published article stays published for the whole
-  // crawl: dropping it to `fetching` would make its public URL 404 for the
-  // duration of a background job, which is not a trade any reader should pay.
+  // A published article stays published during a re-crawl. An editorial action
+  // can also arrive while the crawl is running, so guard the update in SQL.
   const existing = await getArticleById(env.DB, articleId);
   const startStatus = existing?.status ?? 'pending';
 
-  if (startStatus !== 'published') {
-    await setArticleStatus(env.DB, articleId, 'fetching');
-  }
+  await env.DB.prepare(
+    `UPDATE articles SET status = 'fetching', updated_at = ?2
+       WHERE id = ?1 AND status NOT IN ('published', 'rejected', 'archived', 'takedown')`,
+  ).bind(articleId, Date.now()).run();
 
   const cookies = readCookies(env);
 
@@ -238,6 +233,11 @@ export async function crawlArticle(env: Env, input: CrawlInput): Promise<CrawlOu
     // that are still moving, leaving the ones that are not as the only thing the ranking
     // ever learned about.
     const metricsFields = await recordMetrics(env, articleId, metadata.metrics, capturedAt);
+
+    // An identical capture may belong to an import whose earlier parse message
+    // failed or was lost. It still needs a document and the automatic publish
+    // step; otherwise this success leaves the row waiting in review forever.
+    await enqueueParseJob(env, articleId, input.actor);
 
     log.info('crawl_success', {
       article_id: articleId,
@@ -405,7 +405,8 @@ async function applyCrawlMetadata(
             author_avatar = COALESCE(?5, author_avatar),
             raw_r2_key = ?6,
             published_at = COALESCE(?7, published_at),
-            status = ?8,
+            status = CASE WHEN status IN ('published', 'rejected', 'archived', 'takedown')
+                          THEN status ELSE ?8 END,
             updated_at = ?9,
             -- SPEC §12 — the CJK-segmented twins of the three columns above. A crawl is
             -- what first learns the title and the author, so without these the index
@@ -584,7 +585,12 @@ async function failCrawl(
   message: string,
   rateLimited = false,
 ): Promise<CrawlOutcome> {
-  await setArticleStatus(env.DB, input.articleId, 'failed');
+  // Conditional in SQL: an editor can reject or take down the article while the
+  // crawl is in flight. Checking its status before this UPDATE would race them.
+  await env.DB.prepare(
+    `UPDATE articles SET status = 'failed', updated_at = ?2
+       WHERE id = ?1 AND status NOT IN ('published', 'rejected', 'archived', 'takedown')`,
+  ).bind(input.articleId, Date.now()).run();
   log.error('crawl_failed', {
     article_id: input.articleId,
     error_code: code,

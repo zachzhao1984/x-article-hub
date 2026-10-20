@@ -28,7 +28,7 @@ import { detectLanguage, languageSample } from '../lib/language';
 import { log } from '../lib/logger';
 import { sha256Hex } from '../lib/hash';
 import { newId } from '../lib/ids';
-import { getArticleById, setArticleStatus } from '../db/articles';
+import { getArticleById } from '../db/articles';
 import { writeArticleDocument } from '../services/archive';
 import { readRawArchive } from './crawl';
 
@@ -99,16 +99,15 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     };
   }
 
-  // SPEC §27 — an unchanged parser version over an already-parsed article is a
-  // no-op. Comparing parser_version is what makes a re-parse idempotent.
-  if (article.parser_version === PARSER_VERSION && article.content_r2_key) {
+  // A new crawl can change the raw capture without changing the parser version.
+  // Only skip when the stored document belongs to the latest crawl version.
+  const crawlVersion = await currentCrawlVersion(env, articleId);
+  const documentKey = R2_PATHS.versionJson(articleId, crawlVersion);
+  if (article.parser_version === PARSER_VERSION && article.content_r2_key === documentKey) {
     const existing = await env.ARCHIVE.head(article.content_r2_key);
     if (existing) {
-      // The document is current, but the article may still be stranded at `failed` from a
-      // crawl that failed after writing its capture. Nothing else moves it, so the promotion
-      // happens here too — an idempotent no-op parse is still the moment an editor is asking
-      // for the article to be usable.
-      await promoteIfStranded(env, article);
+      // The document exists, but a prior publish attempt may have been interrupted.
+      await publishParsedArticle(env, articleId);
       return {
         ok: true,
         result: 'unchanged',
@@ -168,10 +167,19 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
   const plainText = documentToPlainText(document);
   const words = countWords(plainText);
 
-  // ---- write the versioned document (SPEC §8) --------------------------------
-  const crawlVersion = await currentCrawlVersion(env, articleId);
-  const documentKey = R2_PATHS.versionJson(articleId, crawlVersion);
+  // A capture that parses into no readable blocks must not go public. Keep the
+  // prior document intact on a re-parse; a new import stays in review for
+  // inspection and can be retried after the source or parser is fixed.
+  if (document.blocks.length === 0 || !document.title.trim() || document.title === 'Untitled') {
+    return {
+      ok: false,
+      result: 'failed',
+      errorCode: 'PARSER_FAILED',
+      errorMessage: 'The capture contains no readable article body or title.',
+    };
+  }
 
+  // ---- write the versioned document (SPEC §8) --------------------------------
   const body = stripFrontmatterForMirror(document);
   await writeArticleDocument(env.ARCHIVE, documentKey, document);
   await env.ARCHIVE.put(R2_PATHS.versionMarkdown(articleId, crawlVersion), body, {
@@ -233,7 +241,7 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
             fts_author_username = COALESCE(?10, fts_author_username),
             lang = ?14,
             updated_at = ?12
-      WHERE id = ?1`,
+       WHERE id = ?1 AND raw_r2_key = ?15`,
   )
     .bind(
       articleId,
@@ -267,7 +275,8 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
       // Japanese article can have an English title and the body is where the script is
       // unambiguous. `plainText` is already in hand from the FTS binding above, so this
       // costs one scan of text the parser has produced anyway.
-      detectLanguage(languageSample(document.title, plainText)),
+       detectLanguage(languageSample(document.title, plainText)),
+       article.raw_r2_key,
     )
     .run();
 
@@ -285,7 +294,7 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
     warnings: warnings.length,
   });
 
-  await promoteIfStranded(env, article);
+  await publishParsedArticle(env, articleId);
 
   return {
     ok: true,
@@ -299,42 +308,55 @@ export async function parseArticle(env: Env, articleId: string): Promise<ParseOu
 }
 
 /**
- * Move an article out of `failed` now that it has a document.
+ * Publish a successfully parsed import once it has a readable document.
  *
  * ## Why this lives in the service rather than the job handler
  *
- * The status belongs to the crawl, and a parse is not an editorial decision — but a crawl can
- * fail *after* writing its capture (a `PAGE_BLOCKED` on a retry, a partial-then-complete
- * fetch), and the article is then stranded at `failed` with a complete document in R2. Nothing
- * else moves it: it is invisible to the editor and unreachable by every public query, so the
- * import reads as broken for content that is already archived. Measured on production: 13 of
- * 100 articles were in this state, and the same 13 stayed stuck when the admin's own re-parse
- * endpoint was used, because the promotion lived in the queue handler that endpoint does not
- * call.
+ * The crawl archives raw content and hands it to the parser in `review`. The
+ * parser is the first point where a readable ArticleDocument exists. A crawl
+ * that failed after archiving can also leave a complete document in `failed`;
+ * a successful re-parse recovers it without requiring a second manual action.
  *
  * So it belongs here, on both success paths, where every caller gets it.
  *
  * ## The guard
  *
- * Only `failed` is promoted. `pending` and `fetching` mean a crawl is still in flight and
- * racing it would put an article in review before its capture settled; `published`,
- * `takedown`, `archived` and `rejected` are editorial decisions a machine step must not
- * overwrite — the same rule `nextStatusAfterCrawl` follows. The `raw_r2_key` guard is
- * defensive: a parse cannot reach either success path without a capture, but the condition is
- * what makes that a property of the code rather than of the caller.
+ * The conditional UPDATE makes retries idempotent and protects any editorial
+ * change made while parsing. `pending` / `fetching` remain private until a crawl
+ * settles; rejected, archived and taken-down articles never become public here.
  */
-export async function promoteIfStranded(
-  env: Env,
-  article: { id: string; status: string; raw_r2_key: string | null },
-): Promise<boolean> {
-  if (article.status !== 'failed' || !article.raw_r2_key) return false;
+export async function publishParsedArticle(env: Env, articleId: string): Promise<boolean> {
+  const now = Date.now();
+  // D1 batches execute in a transaction. Write the audit row only if the
+  // article still qualifies, then change its status under the same guard.
+  // Retries and concurrent editorial changes cannot publish twice or leave an
+  // unaudited publication behind.
+  const [, result] = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO curation_events (id, article_id, action, actor, note, created_at)
+       SELECT ?2, id, 'publish', 'system:parse',
+              'Published automatically after successful import and parse.', ?3
+         FROM articles WHERE id = ?1 AND status IN ('review', 'failed')
+           AND raw_r2_key IS NOT NULL AND content_r2_key IS NOT NULL AND block_count > 0
+           AND content_r2_key = 'articles/' || id || '/versions/v' ||
+               (SELECT MAX(version) FROM article_versions WHERE article_id = ?1) || '/article.json'
+           AND display_mode != 'takedown'`,
+    ).bind(articleId, newId('evt'), now),
+    env.DB.prepare(
+      `UPDATE articles SET status = 'published', updated_at = ?2
+         WHERE id = ?1 AND status IN ('review', 'failed')
+           AND raw_r2_key IS NOT NULL AND content_r2_key IS NOT NULL AND block_count > 0
+           AND content_r2_key = 'articles/' || id || '/versions/v' ||
+               (SELECT MAX(version) FROM article_versions WHERE article_id = ?1) || '/article.json'
+           AND display_mode != 'takedown'`,
+    ).bind(articleId, now),
+  ]);
+  if ((result?.meta.changes ?? 0) === 0) return false;
 
-  await setArticleStatus(env.DB, article.id, 'review');
   log.info('publish', {
-    article_id: article.id,
+    article_id: articleId,
     actor: 'system:parse',
-    action: 'promoted_to_review',
-    status: 'failed',
+    action: 'auto_published',
   });
   return true;
 }

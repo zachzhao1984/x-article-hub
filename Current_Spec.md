@@ -35,7 +35,7 @@
 
 ## 1. 一句话概括
 
-一个 Cloudflare Worker 上的 Astro SSR 站点：**人工粘贴 X Article 链接 → 抓取归档到 R2 → 解析成结构化文档 → 人工审核发布 → 公开可搜索阅读**。
+一个 Cloudflare Worker 上的 Astro SSR 站点：**人工粘贴 X Article 链接 → 抓取归档到 R2 → 解析成结构化文档 → 自动发布 → 公开可搜索阅读**。编辑仍可拒绝、归档或下架文章。
 
 生产地址 `https://x-article-hub.zachzhao.workers.dev`，约 19,200 行代码，30 次提交。
 
@@ -290,6 +290,8 @@ pending → fetching → fetched → parsing → review → published
                                                      ↓
                         rejected / archived / takedown / failed
 ```
+
+新导入的文章在抓取后短暂进入 `review`，解析生成可读文档后自动转为 `published`，不再需要人工 Publish。解析失败仍保持非公开状态；重抓或重解析不得覆盖人工 `rejected`、`archived`、`takedown` 状态。自动发布记录 `actor=system:parse` 的 `publish` 审计事件。
 
 **JobStatus（8 态）**
 ```

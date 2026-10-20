@@ -46,6 +46,9 @@ async function loadArticle(env: Env, articleId: string) {
 export async function publishArticle(env: Env, articleId: string, actor: string, note?: string): Promise<void> {
   const article = await loadArticle(env, articleId);
   assertTransition(article.status as ArticleStatus, 'published');
+  if (!article.raw_r2_key || !article.content_r2_key || article.block_count < 1 || article.display_mode === 'takedown') {
+    throw new AppError('BAD_REQUEST', 'Article must have a parsed body before publication.', 409);
+  }
 
   await setArticleStatus(env.DB, articleId, 'published');
   await recordEvent(env.DB, articleId, 'publish', actor, note);

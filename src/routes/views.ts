@@ -383,34 +383,6 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
     }`;
 
   /**
-   * SPEC §16.3 — a one-click publish for the rows that are waiting on it.
-   *
-   * Only `review` gets the button. That is the state an editor has actually looked at and
-   * decided on — the article has been fetched and parsed and is sitting there asking to go
-   * out. Every other state either has nothing to publish yet (`pending`/`fetching`/
-   * `fetched`/`parsing`), is already out (`published`), or was deliberately stopped
-   * (`rejected`/`archived`/`takedown`/`failed`), and offering publish on those would be
-   * offering a transition the state machine does not have.
-   *
-   * A `<form>`, not a link: publishing is a state change, and a GET that changes state is
-   * what lets a prefetch or a link preview publish something. The detail page's Publish is
-   * a form for the same reason.
-   *
-   * `from=list` travels with it so the handler can send the editor back to the row they
-   * were looking at. Without it the redirect goes to the article detail page, which is the
-   * right destination for the detail page's own buttons and the wrong one here — clicking
-   * publish on row 7 of a filtered list should leave you on row 7 of that list, not on a
-   * different page with no way back to where you were.
-   */
-  const publishCell = (status: string, id: string, filter: string | null) =>
-    status === 'review'
-      ? `<form method="post" action="/admin/articles/${escapeHtml(id)}/publish" class="row-action">
-      ${listReturnFields(filter)}
-      <button class="button button-small" type="submit" title="Publish this article">Publish</button>
-    </form>`
-      : '';
-
-  /**
    * SPEC §16.3 — the editor's-pick toggle.
    *
    * On every row, and the label reports the current state rather than the action: a
@@ -434,7 +406,7 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
   /**
    * SPEC §16 — the row's delete button.
    *
-   * Every row gets one, unlike Publish, because delete is not a state transition: any
+   * Every row gets one because delete is not a state transition: any
    * article can be removed regardless of where it is in the pipeline, and refusing on
    * `published` would mean the only way to remove a bad import is to archive it first.
    *
@@ -460,20 +432,12 @@ export function articleListView(view: ArticleListView, siteName: string = FALLBA
       <td class="num">${escapeHtml(new Date(a.imported_at).toISOString().replace('T', ' ').slice(0, 16))}</td>
       <td class="wrap"><a href="${escapeHtml(a.canonical_url)}" target="_blank" rel="noreferrer noopener">source</a></td>
       <td class="num">${featuredCell(a.featured, a.id, view.status)}</td>
-      <td class="num">${publishCell(a.status, a.id, view.status)}</td>
       <td class="num">${deleteCell(a.id, a.title || a.canonical_url, a.slug)}</td>
     </tr>`,
     )
     .join('');
 
-  /**
-   * SPEC §16.3 — what the quick action did.
-   *
-   * Without this the redirect lands on the list with the row's pill changed from `review`
-   * to `published` and nothing else, which is easy to miss when the list is filtered to
-   * `review`: the row is simply gone, and a row disappearing is indistinguishable from a
-   * filter being wrong or the page reloading to something unexpected.
-   */
+  /** Feedback for the row's delete action. */
   const deleteBanner = view.deleted
     ? `<div class="banner banner-ok">
         Deleted${view.deleted.slug ? ` <code>${escapeHtml(view.deleted.slug)}</code>` : ''} —
@@ -508,7 +472,7 @@ ${
   view.articles.length === 0
     ? '<div class="card empty">No articles match this filter. <a href="/admin/import">Import some URLs</a> to get started.</div>'
     : `<table class="table">
-  <thead><tr><th>Status</th><th>Pick</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th><th></th></tr></thead>
+  <thead><tr><th>Status</th><th>Pick</th><th>Title</th><th>Author</th><th class="num">Imported</th><th></th><th></th></tr></thead>
   <tbody>${rows}</tbody>
 </table>`
 }
@@ -681,13 +645,11 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
   ${
     view.error
       ? `<div class="banner banner-error">${escapeHtml(view.error)}</div>`
-      : `<div class="banner">Archived copy only. Publishing is the editor's call — the AI never publishes (§4.7).</div>`
+      : a.status === 'published'
+        ? `<div class="banner">This article is public. New imports publish automatically after parsing succeeds.</div>`
+        : `<div class="banner">A successfully parsed import publishes automatically. You can still reject, archive or take it down.</div>`
   }
   <div class="action-grid">
-    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/publish">
-      <button class="button" type="submit"${a.status === 'published' ? ' disabled' : ''}>Publish</button>
-      <span class="hint">Makes it public at /article/${escapeHtml(a.slug ?? '')}</span>
-    </form>
     <form method="post" action="/admin/articles/${escapeHtml(a.id)}/reject">
       <button class="button button-secondary" type="submit">Reject</button>
       <span class="hint">Not worth archiving.</span>
