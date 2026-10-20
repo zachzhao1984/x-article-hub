@@ -1021,7 +1021,6 @@ a:hover { color: var(--accent); }
 .article-crumbs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 20px; }
 .article-title {
   margin: 0 0 16px;
-  max-width: 24ch;
   font-family: var(--sans);
   font-size: clamp(26px, 4.8vw, 38px);
   line-height: 1.28;
