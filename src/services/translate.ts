@@ -128,7 +128,7 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
     try { texts = (typeof raw === 'string' ? JSON.parse(raw) : raw as { translations?: unknown })?.translations; } catch { /* fail safely */ }
     if (result.choices?.[0]?.finish_reason === 'length' || !Array.isArray(texts) || texts.length !== batch.length ||
         texts.some((value) => typeof value !== 'string' || !value.trim())) {
-      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: ${JSON.stringify(response).slice(0, 250)}`, 502);
+      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: ${JSON.stringify({ finish: result.choices?.[0]?.finish_reason, expected: batch.length, actual: Array.isArray(texts) ? texts.length : typeof texts, response: typeof raw === 'string' ? raw.slice(-350) : raw }).slice(0, 550)}`, 502);
     }
     progress.texts.push(...texts as string[]);
     progress.cursor = end;
