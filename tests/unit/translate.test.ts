@@ -68,9 +68,23 @@ describe('article translation', () => {
 
   it('does not publish an incomplete or malformed AI response', async () => {
     const { env, objects } = harness();
-    (env.AI.run as ReturnType<typeof vi.fn>).mockResolvedValue({ response: '{"translations":["one"]}' });
-    await expect(translateArticleBatch(env, articleId)).rejects.toThrow('invalid translation batch');
+    (env.AI.run as ReturnType<typeof vi.fn>).mockResolvedValue({ response: '{"translations":[]}' });
+    await expect(translateArticleBatch(env, articleId)).rejects.toThrow('invalid translation');
     expect([...objects.keys()].filter((key) => key.includes('/translations/'))).toEqual([]);
+  });
+
+  it('retries a partial two-item response as singles and checkpoints both', async () => {
+    const { env, calls } = harness();
+    const run = env.AI.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async (_model: string, input: { messages: Array<{ content: string }> }) => {
+      const texts = (JSON.parse(input.messages[1]!.content) as { texts: string[] }).texts;
+      calls.push(texts);
+      return { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ translations: texts.length === 2 ? [`中${texts[0]}`] : texts.map((t) => `中${t}`) }) } }] };
+    });
+    expect((await translateArticleBatch(env, articleId)).translated).toBe(2);
+    expect(calls.map((batch) => batch.length)).toEqual([2, 1, 1]);
+    expect((await translateArticleBatch(env, articleId)).done).toBe(true);
+    expect((await readTranslation(env.ARCHIVE, articleId, sourceKey))?.title).toBe('中A useful guide');
   });
 
   it('accepts the production chat completion response shape', async () => {

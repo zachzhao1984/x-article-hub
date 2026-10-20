@@ -18,6 +18,18 @@ type Progress = {
 
 type Unit = { text: string; assign: (translated: string) => void };
 
+function parseTranslations(response: unknown, expected: number): string[] | null {
+  const result = response as { response?: unknown; choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
+  if (result.choices?.[0]?.finish_reason === 'length') return null;
+  const raw = result.response ?? result.choices?.[0]?.message?.content;
+  try {
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const texts = (value as { translations?: unknown })?.translations;
+    return Array.isArray(texts) && texts.length === expected &&
+      texts.every((text) => typeof text === 'string' && text.trim()) ? texts as string[] : null;
+  } catch { return null; }
+}
+
 function keys(articleId: string, sourceKey: string) {
   const version = /\/versions\/v(\d+)\/article\.json$/.exec(sourceKey)?.[1];
   if (!version) throw new AppError('BAD_REQUEST', 'Article document has no version', 400);
@@ -108,13 +120,10 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
   if (units.length === 0) throw new AppError('BAD_REQUEST', 'Article has no text to translate', 400);
 
   if (progress.cursor < units.length) {
-    let end = progress.cursor;
-    let chars = 0;
-    while (end < units.length && (end === progress.cursor ||
-        (end - progress.cursor < 2 && chars + units[end]!.text.length <= BATCH_CHARS))) {
-      chars += units[end]!.text.length;
-      end++;
-    }
+    // Long input segments are sent alone; this model sometimes stops after one
+    // translation despite reporting finish_reason=stop on longer two-item batches.
+    let end = progress.cursor + 1;
+    if (end < units.length && units[progress.cursor]!.text.length + units[end]!.text.length <= BATCH_CHARS) end++;
     const batch = units.slice(progress.cursor, end);
     const response = await env.AI.run(CLASSIFY_MODEL, {
       messages: [
@@ -125,15 +134,26 @@ export async function translateArticleBatch(env: Env, articleId: string): Promis
       temperature: 0.1,
       response_format: { type: 'json_object' },
     });
-    const result = response as { response?: unknown; choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
-    const raw = result.response ?? result.choices?.[0]?.message?.content;
-    let texts: unknown;
-    try { texts = (typeof raw === 'string' ? JSON.parse(raw) : raw as { translations?: unknown })?.translations; } catch { /* fail safely */ }
-    if (result.choices?.[0]?.finish_reason === 'length' || !Array.isArray(texts) || texts.length !== batch.length ||
-        texts.some((value) => typeof value !== 'string' || !value.trim())) {
-      throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation batch at item ${progress.cursor}: finish=${result.choices?.[0]?.finish_reason ?? 'unknown'}, expected=${batch.length}, actual=${Array.isArray(texts) ? texts.length : typeof texts}`, 502);
+    let texts = parseTranslations(response, batch.length);
+    if (!texts && batch.length > 1) {
+      // A partial two-item answer is not publishable. Retry both items separately;
+      // only checkpoint after all the text for this batch has been validated.
+      const singles: string[] = [];
+      for (const unit of batch) {
+        const single = await env.AI.run(CLASSIFY_MODEL, {
+          messages: [
+            { role: 'system', content: 'Translate this text faithfully into natural Simplified Chinese. Preserve code identifiers, names, links and technical terms. Return only a JSON object with a "translations" array containing exactly one string. /no_think' },
+            { role: 'user', content: JSON.stringify({ texts: [unit.text] }) },
+          ], max_tokens: 2500, temperature: 0.1, response_format: { type: 'json_object' },
+        });
+        const value = parseTranslations(single, 1)?.[0];
+        if (!value) throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation at item ${progress.cursor + singles.length}`, 502);
+        singles.push(value);
+      }
+      texts = singles;
     }
-    progress.texts.push(...texts as string[]);
+    if (!texts) throw new AppError('SCHEMA_MISMATCH', `Model returned an invalid translation at item ${progress.cursor}`, 502);
+    progress.texts.push(...texts);
     progress.cursor = end;
     await putJson(env.ARCHIVE, paths.progress, progress);
   }
