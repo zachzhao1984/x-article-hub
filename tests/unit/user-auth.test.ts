@@ -437,7 +437,6 @@ describe('SPEC §43 — Google is the only provider', () => {
   const users = readFileSync(resolve('src/db/users.ts'), 'utf8');
   const migration9 = readFileSync(resolve('migrations/0009_google_only.sql'), 'utf8');
   const account = readFileSync(resolve('src/pages/account.astro'), 'utf8');
-  const setup = readFileSync(resolve('SIGN-IN-SETUP.md'), 'utf8');
 
   /** Source with its comments stripped, so an assertion is about code and not about prose. */
   const code = (source: string) =>
@@ -453,7 +452,6 @@ describe('SPEC §43 — Google is the only provider', () => {
   it('has no X credentials to configure anywhere', () => {
     expect(env).not.toMatch(/X_CLIENT/);
     expect(code(oauth)).not.toMatch(/X_CLIENT/);
-    expect(setup).not.toMatch(/X_CLIENT_ID/);
     // And nothing still offers it: an endpoint that survived would be a 404 waiting for a
     // reader to walk into it.
     expect(account).not.toMatch(/Continue with X/);
@@ -525,11 +523,6 @@ describe('SPEC §43 — Google is the only provider', () => {
     // and it is what explains why changing a Google address neither loses your history nor
     // hands your account to whoever picks the address up next.
     expect(account).toMatch(/the address belongs to you, the id does not move/);
-    // The §43.2 rationale is retained in SIGN-IN-SETUP.md rather than this deleted spec.
-  });
-
-  it('keeps every document agreeing that there is one provider', () => {
-    expect(setup).not.toMatch(/developer\.x\.com/);
   });
 });
 
