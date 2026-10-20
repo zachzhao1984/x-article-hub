@@ -9,6 +9,7 @@ import CodeBlock from '../../components/CodeBlock.astro';
 import Icon from '../../components/Icon.astro';
 import { getPublishedArticleBySlug, getArticleTags, listPublishedArticles } from '../../db/public';
 import { readArticleDocument } from '../../services/archive';
+import { readTranslation } from '../../services/translate';
 import { i18nSpread, TRANSLATIONS } from '../../lib/i18n';
 import type { ArticleBlock } from '../../types/article-document';
 import { inlineToText } from '../../types/article-document';
@@ -41,6 +42,10 @@ const [tags, document, related] = await Promise.all([
     limit: 4,
   }),
 ]);
+
+const chineseDocument = showBody && article.content_r2_key && document
+  ? await readTranslation(bucket, article.id, article.content_r2_key)
+  : null;
 
 const related_ = related.filter((r) => r.id !== article.id).slice(0, 3);
 
@@ -167,6 +172,12 @@ const jsonLd = isTakedown
             </time>
           )}
         </div>
+        {chineseDocument && (
+          <nav class="article-language" aria-label="Article language">
+            <button type="button" data-article-lang="original" aria-pressed="true">Original</button>
+            <button type="button" data-article-lang="zh" aria-pressed="false">中文译文</button>
+          </nav>
+        )}
       </header>
 
       {
@@ -203,10 +214,29 @@ const jsonLd = isTakedown
               )
             }
 
-            <div class="article-body">
+            {chineseDocument && (
+              <script is:inline>
+                (() => {
+                  const nav = document.querySelector('.article-language');
+                  if (!nav) return;
+                  nav.addEventListener('click', (event) => {
+                    const target = event.target.closest('[data-article-lang]');
+                    if (!target) return;
+                    const chinese = target.dataset.articleLang === 'zh';
+                    const originalBody = document.querySelector('[data-article-body="original"]');
+                    const chineseBody = document.querySelector('[data-article-body="zh"]');
+                    if (!originalBody || !chineseBody) return;
+                    originalBody.hidden = chinese;
+                    chineseBody.hidden = !chinese;
+                    for (const button of nav.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button === target));
+                  });
+                })();
+              </script>
+            )}
+            {[{ doc: document, language: 'original' }, ...(chineseDocument ? [{ doc: chineseDocument, language: 'zh' }] : [])].map(({ doc, language }) => <div class="article-body" data-article-body={language} hidden={language === 'zh'}>
               {
-                showBody && document
-                  ? document.blocks.map((block: ArticleBlock) => {
+                showBody && doc
+                  ? doc.blocks.map((block: ArticleBlock) => {
                       switch (block.type) {
                         case 'heading':
                           const Tag = `h${Math.max(1, block.level - 1)}` as 'h1' | 'h2';
@@ -230,7 +260,7 @@ const jsonLd = isTakedown
                         case 'code':
                           return <CodeBlock code={block.code} language={block.language} />;
                         case 'image': {
-                          const img = document.images.find((i) => i.imageId === block.imageId);
+                           const img = doc.images.find((i) => i.imageId === block.imageId);
                           if (!img) return null;
 
                           // Play video directly from its original host, with a fallback link.
@@ -578,13 +608,13 @@ const jsonLd = isTakedown
                   : null
               }
               {
-                showBody && !document && (
+                 showBody && !doc && (
                   <div class="notice">
                     <p {...i18nSpread('article.noDocument')}>The archived document for this article is not available yet.</p>
                   </div>
                 )
               }
-            </div>
+            </div>)}
 
             <footer class="article-footer">
               {

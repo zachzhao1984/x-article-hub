@@ -627,6 +627,10 @@ export function articleDetailView(view: ArticleDetailView, siteName: string = FA
         Raw archive → ArticleDocument. Reads only R2, so it is free and never touches X.
       </span>
     </form>
+    <form method="post" action="/admin/articles/${escapeHtml(a.id)}/translate">
+      <button class="button button-secondary" type="submit"${a.status === 'published' && a.display_mode === 'full' && a.content_r2_key ? '' : ' disabled'}>Translate to Chinese / Continue</button>
+      <span class="hint">Translates one batch and saves progress. Repeat until the Chinese edition is ready.</span>
+    </form>
     <form method="post" action="/admin/articles/${escapeHtml(a.id)}/media">
       <button class="button button-secondary" type="submit"${a.content_r2_key ? '' : ' disabled'}>Archive images</button>
       <span class="hint">

@@ -1051,6 +1051,22 @@ a:hover { color: var(--accent); }
  * neighbouring lines appearing to touch.
  */
 .article-body { font-family: var(--sans); font-size: 17.5px; line-height: 1.75; }
+.article-body[hidden] { display: none; }
+.article-language { display: flex; gap: 6px; margin-top: 18px; }
+.article-language button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.article-language button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .article-body p { margin: 0 0 1.15em; }
 .article-body h1, .article-body h2, .article-body h3 {
   font-family: var(--sans);

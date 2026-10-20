@@ -20,6 +20,7 @@ import { listCategories } from '../db/categories';
 import { importUrls, retryCrawl } from '../services/import';
 import { crawlArticle, readRawArchive } from '../services/crawl';
 import { parseArticle } from '../services/parse';
+import { translateArticleBatch } from '../services/translate';
 import { downloadArticleMedia, listArticleMedia } from '../services/media';
 import {
   archiveArticle,
@@ -205,6 +206,10 @@ adminUi.get('/articles/:id', async (c) => {
   const blocks = Number(c.req.query('blocks') ?? '0') || 0;
   const notice = parsed
     ? `Parsed (${parsed}) — ${blocks} blocks. Refresh the article page to read it.`
+    : c.req.query('translated')
+      ? c.req.query('translated') === 'complete'
+        ? 'Chinese translation is ready. Open the article and choose 中文.'
+        : `Chinese translation in progress: ${clampInt(c.req.query('count'), 0, 0, 10000)} of ${clampInt(c.req.query('total'), 0, 0, 10000)} text segments. Continue translating to resume.`
     : c.req.query('media')
       ? `Media run ${c.req.query('media')} — ${c.req.query('ready') ?? 0} archived, ${c.req.query('failed') ?? 0} still on X's CDN.`
       : c.req.query('notice') === 'category-saved'
@@ -303,6 +308,18 @@ adminUi.post('/articles/:id/parse', async (c) => {
       : `/admin/articles/${id}?error=${encodeURIComponent(outcome.errorMessage ?? 'parse failed')}`,
   });
   return new Response(null, { status: 303, headers });
+});
+
+adminUi.post('/articles/:id/translate', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const result = await translateArticleBatch(c.env, id);
+    const query = new URLSearchParams({ translated: result.done ? 'complete' : 'progress', count: String(result.translated), total: String(result.total) });
+    return c.redirect(`/admin/articles/${id}?${query}`, 303);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.redirect(`/admin/articles/${id}?error=${encodeURIComponent(message)}`, 303);
+  }
 });
 
 /**

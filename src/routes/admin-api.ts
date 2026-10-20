@@ -22,6 +22,7 @@ import { downloadArticleMedia, findOrphanedPrefixes, mediaSummary } from '../ser
 import { summarizeTeardown, teardownArchive } from '../services/teardown';
 import { generateCover, generateMissingCovers } from '../services/cover';
 import { readArticleDocument } from '../services/archive';
+import { translateArticleBatch } from '../services/translate';
 import { documentToPlainText } from '../types/article-document';
 import { detectLanguage, languageSample } from '../lib/language';
 import { removeDemoArticles, seedDemoArticles } from '../services/seed-demo';
@@ -349,6 +350,14 @@ adminApi.post('/articles/:id/parse', async (c) => {
   log.info('publish', { article_id: id, actor, action: 'parsed', blocks: outcome.blockCount });
   const { ok, ...rest } = outcome;
   return c.json({ articleId: id, ok, ...rest, contentR2Key: article?.content_r2_key ?? null });
+});
+
+/** Translate one bounded batch; the R2 checkpoint lets the operator resume safely. */
+adminApi.post('/articles/:id/translate', async (c) => {
+  const articleId = c.req.param('id');
+  const result = await translateArticleBatch(c.env, articleId);
+  log.info('ai_success', { article_id: articleId, actor: c.get('adminIdentity').actor, ...result });
+  return c.json({ articleId, language: 'zh', ...result });
 });
 
 /**
