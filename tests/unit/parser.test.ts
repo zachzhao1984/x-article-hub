@@ -84,6 +84,56 @@ describe('parseMarkdownToDocument — the real capture (SPEC §39)', () => {
     expect(document.author.avatar).toMatch(/pbs\.twimg\.com\/profile_images\//);
   });
 
+  it('lifts a byline even when X appends the handle, date and read time outside its avatar link', () => {
+    const markdown = `---\n"og:title": A useful article\n---\n# A useful article\n\n` +
+      '[![泊舟](https://pbs.twimg.com/profile_images/2040464227811590144/r1-3gG2y_normal.jpg)泊舟]' +
+      '(https://x.com/bozhou_ai)@bozhou\\_aiOct 1611 min read\n\n' +
+      'The first paragraph is real prose.';
+    const { document } = parseMarkdownToDocument(markdown, {
+      url: 'https://x.com/bozhou_ai/article/2110909395135770765',
+      parserVersion: 26, capturedAt: '2026-10-20',
+    });
+    expect(document.author.avatar).toContain('/profile_images/');
+    expect(document.author.name).toBe('泊舟');
+    expect(document.blocks).toEqual([{ type: 'paragraph', spans: [{ type: 'text', text: 'The first paragraph is real prose.' }] }]);
+    expect(document.links).toEqual([]);
+    expect(documentToPlainText(document)).not.toContain('min read');
+  });
+
+  it('recognizes spaced byline handles without consuming a nearby author link in the body', () => {
+    const markdown = `---\n"og:title": A useful article\n---\n# A useful article\n\n` +
+      '[![小墨同学](https://pbs.twimg.com/profile_images/1/avatar_normal.jpg)小墨同学]' +
+      '(https://x.com/xiaomovps)@ xiaomovpsOct 2018 min read\n\n' +
+      'This paragraph links to [小墨同学](https://x.com/xiaomovps) as part of the story.';
+    const { document } = parseMarkdownToDocument(markdown, {
+      url: 'https://x.com/xiaomovps/article/1', parserVersion: 26, capturedAt: '2026-10-20',
+    });
+    expect(document.blocks).toHaveLength(1);
+    expect(document.links).toEqual([{ href: 'https://x.com/xiaomovps', text: '小墨同学' }]);
+  });
+
+  it('leaves an avatar link intact when its tail is not X reading metadata', () => {
+    const markdown = `---\n"og:title": A useful article\n---\n# A useful article\n\n` +
+      '[![泊舟](https://pbs.twimg.com/profile_images/1/avatar_normal.jpg)泊舟]' +
+      '(https://x.com/bozhou_ai) wrote this passage, which is part of the story.';
+    const { document } = parseMarkdownToDocument(markdown, {
+      url: 'https://x.com/bozhou_ai/article/1', parserVersion: 26, capturedAt: '2026-10-20',
+    });
+    expect(document.blocks).toHaveLength(1);
+    expect(documentToPlainText(document)).toContain('wrote this passage');
+  });
+
+  it('retains a matching profile and read time when they occur after the article has begun', () => {
+    const byline = '[![泊舟](https://pbs.twimg.com/profile_images/1/avatar_normal.jpg)泊舟]' +
+      '(https://x.com/bozhou_ai)@bozhou\\_aiOct 1611 min read';
+    const markdown = `---\n"og:title": A useful article\n---\n# A useful article\n\n` +
+      `The article begins here.\n\n${byline}`;
+    const { document } = parseMarkdownToDocument(markdown, {
+      url: 'https://x.com/bozhou_ai/article/1', parserVersion: 26, capturedAt: '2026-10-20',
+    });
+    expect(documentToPlainText(document)).toContain('min read');
+  });
+
   it('prefers the chip name over a handle-only fallback', () => {
     const { document } = parse();
     expect(document.author.name).toBe('灰原学姐');

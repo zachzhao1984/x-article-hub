@@ -178,6 +178,27 @@ function parseInline(text: string): InlineSpan[] {
 const PROFILE_LINK_RE = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/?$/i;
 const AVATAR_CDN_RE = /\/profile_images\//i;
 
+/** Recent X captures put @handle, date and reading time after the avatar link. */
+const EXTENDED_BYLINE_RE = /^\[!\[([^\]]*)\]\((https:\/\/pbs\.twimg\.com\/profile_images\/[^)\s]+)\)([^\]]*)\]\(https:\/\/x\.com\/([A-Za-z0-9_]{1,15})\)(.+)$/i;
+
+function readExtendedByline(line: string, articleScope: string): { avatarUrl: string; name: string } | null {
+  const match = EXTENDED_BYLINE_RE.exec(line);
+  if (!match) return null;
+  const [, alt, avatarUrl, label, profile, tail] = match;
+  const articleHandle = /x\.com\/([A-Za-z0-9_]{1,15})\/article\//i.exec(articleScope)?.[1];
+  if (!articleHandle || profile?.toLowerCase() !== articleHandle.toLowerCase()) return null;
+  const normalizedTail = (tail ?? '').replace(/\\_/g, '_');
+  const readTime = /^@\s*([A-Za-z0-9_]{1,15})(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s*\d+\s+min read$/i;
+  if (readTime.exec(normalizedTail)?.[1]?.toLowerCase() !== profile.toLowerCase()) return null;
+  return { avatarUrl: avatarUrl ?? '', name: (label || alt || '').trim() };
+}
+
+/** The author chip can be read near the top of the article, before body prose. */
+function isLeadingByline(blocks: ArticleBlock[], documentTitle: string): boolean {
+  return blocks.every((block) => block.type === 'image' ||
+    (block.type === 'heading' && block.spans.map((span) => span.text).join('') === documentTitle));
+}
+
 /**
  * Hosts that serve X video, and the container extensions X serves.
  *
@@ -405,6 +426,14 @@ function parseBlocks(
 
   while (index < lines.length) {
     const line = lines[index] ?? '';
+
+    const byline = isLeadingByline(blocks, documentTitle) ? readExtendedByline(line.trim(), articleScope) : null;
+    if (byline) {
+      flushList();
+      authorChip = { avatarUrl: byline.avatarUrl, name: byline.name || null, dateHint: null };
+      index += 1;
+      continue;
+    }
 
     // --- fenced code (SPEC §9.2 code, §9.3 "尽量保留代码块") ------------------
     const fence = FENCE_RE.exec(line.trim());
