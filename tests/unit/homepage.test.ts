@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * The homepage's data fetching.
+ * The homepage's data fetching and its shelf.
  *
  * The homepage is the most-hit page in the archive and the only one that runs a
  * `Promise.all` of several D1 reads in parallel, so it is the page where a query nobody
@@ -11,9 +11,10 @@ import { resolve } from 'node:path';
  * grid at the foot of the page needed `listCategoriesWithCounts`, the grid was removed,
  * and the query stayed — a D1 read on every homepage load for a result nothing displayed.
  *
- * The rule is general rather than about that one call. Every name bound from the
- * `Promise.all` has to appear in the template, so the next section to be deleted cannot
- * quietly leave its query behind.
+ * The rule is general rather than about that one call, which is why `renders everything it
+ * fetches` is written against the template instead of against a list of the sections that
+ * currently exist: the sections changed (three boards became a rack and a strip) and the
+ * rule did not.
  */
 
 const homepage = readFileSync(resolve('src/pages/index.astro'), 'utf8');
@@ -52,10 +53,26 @@ function boundNames(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Bindings that are consumed by a later `const`, not read by the template directly.
+ *
+ * `lead` becomes `feature`/`rest` and `cats` becomes `topics` on the next lines, so
+ * searching the template for the original name is the wrong test — the query is used.
+ */
+const ALIASES: Record<string, string> = {
+  lead: 'feature',
+  cats: 'topics',
+  authors: 'authorCount',
+  newCount: 'articleCount',
+  newest: 'justArchived',
+};
+
 describe('the homepage', () => {
   it('renders everything it fetches', () => {
     const body = code(template());
-    const unused = boundNames().filter((name) => !body.includes(name));
+    const unused = boundNames().filter(
+      (name) => !body.includes(name) && !(name in ALIASES && body.includes(ALIASES[name]!)),
+    );
     expect(unused, `fetched and never rendered: ${unused.join(', ')}`).toEqual([]);
   });
 
@@ -72,7 +89,6 @@ describe('the homepage', () => {
     // the section back, but it would read as though it were still coming.
     expect(code(homepage)).not.toContain('Browse by category');
     expect(code(homepage)).not.toContain('cat-grid');
-    expect(code(homepage)).not.toContain('listCategoriesWithCounts');
   });
 
   it('keeps categories reachable from the header', () => {
@@ -94,88 +110,87 @@ describe('the homepage', () => {
     expect(readFileSync(resolve('src/pages/sitemap.xml.ts'), 'utf8')).toContain('/category/${c.slug}');
   });
 
-  it('leads with the editor\'s picks, not the trending board\'s top three', () => {
-    // The row was `trending.slice(0, 3)` under the title "Today's Selection", which is
-    // the trending board's own first three shown a second time on the same page. It is
-    // now the `featured` query — the human override, and the same query `/featured` runs,
-    // so the row and the board it links to cannot disagree about what a pick is.
+  it('shows each article on the page exactly once', () => {
+    // The defect the shelf was built to end. The three-board version rendered 13 cards in
+    // three sections and only 9 distinct articles: Latest's first three were Editor's
+    // Pick's three in the same order, and one more was already in Trending. 26 links
+    // pointed at 9 URLs, so a reader scrolling the page met the same article up to three
+    // times and three of the thirteen slots taught them nothing.
     //
-    // Asserted on the query, not the title: renaming the heading while leaving the
-    // trending query underneath would satisfy every check that only looked at wording,
-    // and would be a heading that lies about its own contents.
-    expect(code(homepage)).toContain("listPublishedArticles(db, { sort: 'featured', limit: 3 })");
-    expect(code(homepage)).not.toContain('trending.slice');
-    expect(code(homepage)).not.toContain("Today's Selection");
-    // And the row links to the board, so the new nav entry is reachable from the page
-    // that features its content.
-    expect(code(homepage)).toContain('href="/featured"');
+    // Asserted structurally: the rack takes one ordered slice, and the strip filters that
+    // slice out by slug before rendering. Re-introducing a second query drawn from a
+    // different ordering would have to defeat the filter in order to duplicate.
+    // The slice and the filter live in the frontmatter, so both halves are read from it.
+    const front = code(homepage.slice(0, homepage.indexOf('---', 3)));
+    expect(front, 'the strip is not de-duplicated against the rack').toMatch(
+      /newest\.filter\(\(a\) => !onRack\.has\(a\.id\)\)/,
+    );
+    expect(front, 'the rack no longer draws a single ordered slice').toMatch(
+      /const \[feature, \.\.\.rest\] = lead/,
+    );
+    const body = code(template());
+    expect(front).toContain("sort: 'trending', limit: 4");
+    expect(front).toContain('new Set(lead.map((a) => a.id))');
+    // And no second board-level row exists to reintroduce the overlap: the three sections
+    // are gone, not merely reordered.
+    expect(body).not.toContain('trending.map(');
+    expect(body).not.toContain('latest.map(');
   });
 
-  it('prints the picks once, not twice', () => {
-    // The lead row and the old "⭐ Editor's Picks" section were the same `featured` array.
-    // Moving the title up without deleting the lower section would have put the same three
-    // articles on the page twice, which is what a reader would have seen — nothing about
-    // either section is invalid on its own.
-    const board = code(template());
-    // Counted on the map, not on a title. An earlier version of this assertion counted the
-    // picks' heading string and reported two as a duplication, when two was the layout —
-    // the hero subtitle and the board heading both carried it. The hero is gone now, so
-    // that ambiguity is gone with it, but counting the map is the assertion that still
-    // means what it says.
-    expect(board.match(/featured\.map\(/g)?.length ?? 0, 'the picks are rendered once').toBe(1);
-    // The plural, emoji-decorated heading is the one that went.
-    expect(board).not.toContain("Editor's Picks");
-    // The star emoji went with it. Every UI glyph here is a vendored Phosphor path — a
-    // featured card's badge uses one, and the nav now uses `star` for this board — so a
-    // Unicode star in a heading would be the second icon system this repo removed on
-    // purpose.
-    expect(board).not.toContain('⭐');
-  });
-
-  it('serves the picks from the filter, not the sort expression', () => {
-    // `SORT_SQL.featured` is `published_at DESC` with no mention of `a.featured`, so on
-    // the ordering alone this board would be a fourth copy of /latest. What makes it a
-    // board is a WHERE clause, in the query layer — and that is easy to lose in a refactor
-    // that only looks at the sort map.
-    const publicDb = readFileSync(resolve('src/db/public.ts'), 'utf8');
-    expect(publicDb).toContain("if (sort === 'featured') where.push('a.featured = 1');");
-
-    const board = readFileSync(resolve('src/pages/featured.astro'), 'utf8');
-    expect(code(board)).toContain('sort="featured"');
-    expect(code(board)).toContain('path="/featured"');
-  });
-
-  it('fills the space Rising left with Latest, not with emptiness', () => {
-    // The Rising board occupied the right-hand column of `.board-split` and was removed with
-    // the velocity signal it ranked by. A `1fr 1fr` grid with one child is a two-column
-    // layout with a hole in it, which reads as a section that failed to load.
+  it('leads with the rack, not with a photograph', () => {
+    // The band this replaces was 447px of a 900px first screen — 49.7% — with the first
+    // article at y=594. It was also a public-domain photograph of antique book spines, so
+    // the page opened on somebody else's books rather than on the archive's own covers.
     //
-    // Latest is the replacement because it is the board whose contents cannot be inferred
-    // from the others: every card in Trending is in Latest by definition, but the two
-    // orderings disagree, so the pair shows what is moving alongside what is new.
-    // The query is in the frontmatter and the rendering is in the template, so the two are
-    // asserted against the parts of the file they live in rather than both against the body.
-    expect(code(homepage)).toContain("listPublishedArticles(db, { sort: 'latest', limit: 5 })");
-
-    const board = code(template());
-    expect(board).toContain('latest.map(');
-    expect(board).toContain('href="/latest"');
-
-    // Both boards sit inside the split, so the grid has its two children back.
-    const open = board.indexOf('<div class="board-split">');
-    expect(open, 'cannot locate board-split').toBeGreaterThanOrEqual(0);
-    const split = board.slice(open);
-    expect(split).toContain('trending.map(');
-    expect(split).toContain('latest.map(');
+    // Asserted on both halves. Deleting the section but keeping `hero-library.webp` as a
+    // background would satisfy a "no .home-hero" check and still open the page on the
+    // photograph.
+    const body = code(template());
+    expect(body).not.toContain('home-hero');
+    expect(body).not.toContain('hero-library');
+    const css = code(readFileSync(resolve('public/site.css'), 'utf8'));
+    expect(css, 'the hero stylesheet survived the section').not.toContain('.home-hero');
+    expect(css, 'the hero photograph is still referenced').not.toContain('hero-library');
+    // And the rack comes before the strip in reading order.
+    const rack = body.indexOf('class="rack"');
+    expect(rack, 'there is no rack').toBeGreaterThan(-1);
+    expect(body.indexOf('class="strip"'), 'the strip precedes the rack').toBeGreaterThan(rack);
   });
 
-  it('distinguishes a ranking from a chronology in the markup', () => {
-    // Trending is an `<ol>` with rank numbers because it orders by score; Latest is the same
-    // list without them because it orders by time. Passing `rank` to both would claim Latest
-    // is a ranking, and dropping it from both would lose Trending's.
-    const board = code(template());
-    expect(board).toContain('<ArticleCard article={a} rank={i + 1} />');
-    expect(board).toMatch(/latest\.map\(\(a\) => \(\s*<li>\s*<ArticleCard article={a} \/>/);
+  it('keeps a heading, so the page is not announced as untitled', () => {
+    // The shelf leads with artwork and has no visible page title. The h1 is still there,
+    // visually hidden — a headline-less top of page is how a document ends up unnamed.
+    const body = code(template());
+    expect(body).toMatch(/<h1 class="sr-only">/);
+    expect(body).toMatch(/<section class="rack" aria-labelledby="rack-heading">/);
+    expect(body).toMatch(/id="rack-heading"/);
+  });
+
+  it('prints the archive’s real size rather than a slogan', () => {
+    // The old page stated its size nowhere: `/authors` carried "113 articles archived" and
+    // the homepage carried no number at all, so a reader could not tell a nine-article
+    // experiment from a 113-article library. Every figure below is bound from a query.
+    const body = code(template());
+    const front = code(homepage.slice(0, homepage.indexOf('---', 3)));
+    // Rendered…
+    expect(body).toContain('{articleCount}');
+    expect(body).toContain('{authorCount}');
+    expect(body).toContain('{topics.length}');
+    // …and queried.
+    expect(front).toContain('homepageCounts(db)');
+    expect(front).toContain('COUNT(DISTINCT author_username)');
+    expect(front).toContain('listCategoriesWithCounts(db)');
+    // Empty topics are dropped rather than printed: a zero-count topic is not somewhere a
+    // reader can browse into, and `science` currently holds no articles.
+    expect(front).toContain('cats.filter((c) => c.count > 0)');
+  });
+
+  it('still links every board it summarises', () => {
+    // The rack is Trending's top six and the strip is Latest's newest six; both must reach
+    // the boards they are a sample of, or the page becomes the only way in.
+    const body = code(template());
+    expect(body).toContain('href="/trending"');
+    expect(body).toContain('href="/latest"');
   });
 
   it('does not mention Rising anywhere on the page', () => {

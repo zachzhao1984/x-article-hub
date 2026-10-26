@@ -33,6 +33,7 @@ const baseSrc = readFileSync(resolve('src/layouts/Base.astro'), 'utf8');
 const PUBLIC_SURFACES = [
   'src/components/SiteHeader.astro',
   'src/components/ArticleCard.astro',
+  'src/components/RackTile.astro',
   'src/components/BoardPage.astro',
   'src/components/LangSwitch.astro',
   'src/pages/index.astro',

@@ -109,6 +109,14 @@ export interface Translations {
   'home.latest': string;
   'home.allLatest': string;
   'home.popularTags': string;
+  'home.archiveLine': string;
+  'home.topics': string;
+  'home.justArchived': string;
+  'home.archivedCount': string;
+  'home.editorsPick': string;
+  'home.rackLead': string;
+  'home.engagementPending': string;
+  'home.seeAll': string;
 
   // --- board pages
 
@@ -311,6 +319,14 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'home.latest': 'Latest',
     'home.allLatest': 'All latest →',
     'home.popularTags': 'Popular tags',
+    'home.archiveLine': '{articles} articles · {authors} authors · {topics} topics',
+    'home.topics': 'Topics',
+    'home.justArchived': 'Latest articles',
+    'home.archivedCount': '{n} archived',
+    'home.editorsPick': "Editor's pick",
+    'home.rackLead': 'Trending №1',
+    'home.engagementPending': 'Engagement data unavailable',
+    'home.seeAll': 'All latest →',
 
 
     'search.title': 'Search',
@@ -500,6 +516,14 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'home.latest': '最新',
     'home.allLatest': '全部最新 →',
     'home.popularTags': '热门标签',
+    'home.archiveLine': '{articles} 篇文章 · {authors} 位作者 · {topics} 个主题',
+    'home.topics': '主题',
+    'home.justArchived': '最新文章',
+    'home.archivedCount': '已归档 {n} 篇',
+    'home.editorsPick': '编辑精选',
+    'home.rackLead': '热门第 1',
+    'home.engagementPending': '尚未采集互动数据',
+    'home.seeAll': '全部最新 →',
 
 
     'search.title': '搜索',
@@ -688,6 +712,14 @@ export const TRANSLATIONS: Record<SiteLang, Translations> = {
     'home.latest': '新着',
     'home.allLatest': '新着をすべて見る →',
     'home.popularTags': '人気のタグ',
+    'home.archiveLine': '{articles} 記事 · {authors} 著者 · {topics} テーマ',
+    'home.topics': 'テーマ',
+    'home.justArchived': '新着記事',
+    'home.archivedCount': '{n} 本を保存',
+    'home.editorsPick': '編集部の選定',
+    'home.rackLead': '人気 №1',
+    'home.engagementPending': 'エンゲージメントは未取得',
+    'home.seeAll': '新着をすべて見る →',
 
 
     'search.title': '検索',

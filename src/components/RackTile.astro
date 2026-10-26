@@ -1,0 +1,128 @@
+---
+import { i18nSpread, TRANSLATIONS } from '../lib/i18n';
+import type { TranslationKey } from '../lib/i18n';
+
+export interface RackTile {
+  slug: string | null;
+  title: string;
+  excerpt: string | null;
+  ai_summary?: string | null;
+  author_username: string | null;
+  published_at: number | null;
+  word_count: number;
+  category_slug: string | null;
+  category_name: string | null;
+  lang?: 'zh' | 'ja' | 'ko' | 'latin' | null;
+  featured?: 0 | 1;
+  cover_image_id?: string | null;
+  metric_views?: number | null;
+  metric_likes?: number | null;
+  metric_reposts?: number | null;
+  metric_replies?: number | null;
+}
+
+export interface Props {
+  article: RackTile;
+  weight?: 'lead' | 'feature' | 'side';
+  slot?: 1 | 2 | 3 | 4;
+  ordinal?: number | null;
+  flag?: TranslationKey | null;
+}
+
+const { article, weight = 'side', ordinal = null, flag = null, slot = 1 } = Astro.props;
+
+const href = article.slug ? `/article/${article.slug}` : '#';
+const minutes = Math.max(1, Math.round(article.word_count / 220));
+const date = article.published_at
+  ? new Date(article.published_at).toISOString().slice(0, 10)
+  : null;
+
+function compact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    return `${k < 10 ? k.toFixed(1).replace(/\.0$/, '') : Math.round(k)}K`;
+  }
+  const m = n / 1_000_000;
+  return `${m < 10 ? m.toFixed(1).replace(/\.0$/, '') : Math.round(m)}M`;
+}
+
+const views = typeof article.metric_views === 'number' ? compact(article.metric_views) : null;
+const likes = typeof article.metric_likes === 'number' ? compact(article.metric_likes) : null;
+const reposts = typeof article.metric_reposts === 'number' ? compact(article.metric_reposts) : null;
+const replies = typeof article.metric_replies === 'number' ? compact(article.metric_replies) : null;
+const reached = [views, likes, reposts, replies].some((value) => value !== null);
+
+function deck(text: string | null, max = 120): string | null {
+  if (!text) return null;
+  const flat = text.replace(/\s+/g, ' ').trim();
+  const sentence = /^(.+?[。．.!?！？])/.exec(flat)?.[1] ?? flat;
+  if (sentence.length <= max) return sentence;
+  const cut = sentence.slice(0, max);
+  const boundary = Math.max(cut.lastIndexOf('，'), cut.lastIndexOf('、'), cut.lastIndexOf('；'), cut.lastIndexOf(', '));
+  return `${(boundary > max * 0.5 ? cut.slice(0, boundary) : cut).replace(/[，、；,\s]+$/, '')}…`;
+}
+
+const deckText = weight === 'side' ? null : deck(article.excerpt ?? article.ai_summary ?? null, weight === 'lead' ? 132 : 108);
+const kickerKey: TranslationKey | null =
+  weight === 'lead' ? flag : null;
+const numeral = weight !== 'lead' && ordinal ? `№${ordinal}` : null;
+---
+
+<a class:list={['rack-tile', `rack-tile--${weight}`]} data-slot={slot} href={href}>
+  <span class="rack-tile__shot">
+    {
+      article.cover_image_id ? (
+        <img src={`/media/${article.cover_image_id}`} alt="" loading={weight === 'lead' ? 'eager' : 'lazy'} decoding="async" />
+      ) : (
+        <span class="rack-tile__noshot" aria-hidden="true" />
+      )
+    }
+  </span>
+
+  <span class="rack-tile__plate">
+    <span class="rack-tile__eyebrow">
+      {kickerKey ? (
+        <b {...i18nSpread(kickerKey)}>{TRANSLATIONS.en[kickerKey]}</b>
+      ) : (
+        numeral && <b>{numeral}</b>
+      )}
+      {article.category_slug && article.category_name && (
+        <span class="rack-tile__topic">
+          <span class="rack-tile__sep" aria-hidden="true" />
+          {article.category_name}
+        </span>
+      )}
+      <span class="rack-tile__sep" aria-hidden="true" />
+      <span>{minutes} <span {...i18nSpread('card.minRead')}>min read</span></span>
+    </span>
+
+    <span class="rack-tile__title">{article.title}</span>
+
+    {deckText && <span class="rack-tile__deck">{deckText}</span>}
+
+    <span class="rack-tile__by">
+      {article.author_username && <span class="rack-tile__who">@{article.author_username}</span>}
+      {date && <><span aria-hidden="true">·</span><time datetime={date}>{date}</time></>}
+    </span>
+
+    {
+      weight === 'lead' && (
+        <span class="rack-tile__reach">
+          {reached ? (
+            <>
+              {views && <span><b>{views}</b><i {...i18nSpread('card.views')}>views</i></span>}
+              {likes && <span><b>{likes}</b><i {...i18nSpread('card.likes')}>likes</i></span>}
+              {reposts && <span><b>{reposts}</b><i {...i18nSpread('card.reposts')}>reposts</i></span>}
+              {replies && <span><b>{replies}</b><i {...i18nSpread('card.replies')}>replies</i></span>}
+            </>
+          ) : (
+            <span class="rack-tile__unread" {...i18nSpread('home.engagementPending')}>
+              Engagement data unavailable
+            </span>
+          )}
+        </span>
+      )
+    }
+  </span>
+</a>

@@ -20,6 +20,8 @@ export interface ArticleListItem {
   slug: string | null;
   title: string;
   excerpt: string | null;
+  /** Optional archive summary for homepage captions. */
+  ai_summary?: string | null;
   author_username: string | null;
   author_name: string | null;
   published_at: number | null;
@@ -57,7 +59,7 @@ export interface ArticleListItem {
  * they are the same slot; a second column would push the choice onto every caller.
  */
 const LIST_COLUMNS = `
-  a.id, a.slug, a.title, a.excerpt,
+  a.id, a.slug, a.title, a.excerpt, a.ai_summary,
   a.author_username, a.author_name,
   a.published_at, a.imported_at,
   c.slug AS category_slug, c.name AS category_name,

@@ -1,50 +1,36 @@
 ---
-// SPEC §17.3 — the homepage is a discovery surface, not a CMS dump.
+// The Shelf: four ranked articles, followed by six distinct recent articles.
 import { env } from 'cloudflare:workers';
 import Base from '../layouts/Base.astro';
 import SiteHeader from '../components/SiteHeader.astro';
-import ArticleCard from '../components/ArticleCard.astro';
-import Icon from '../components/Icon.astro';
-import {
-  listPublishedArticles,
-  listTagsWithCounts,
-} from '../db/public';
-import { i18nSpread } from '../lib/i18n';
+import RackTile from '../components/RackTile.astro';
+import { listPublishedArticles, homepageCounts, listCategoriesWithCounts } from '../db/public';
+import { i18nSpread, i18nAttrSpread } from '../lib/i18n';
 
 const db = env.DB as unknown as D1Database;
 
-// Every entry here is rendered below. The category grid that used to close the page
-// also made `listCategoriesWithCounts` part of this list, and when it went so did the
-// query: a D1 read on every homepage load for a result nothing displayed, which is the
-// kind of cost that survives long after the section that justified it is deleted.
-// `tests/unit/homepage.test.ts` holds the general form of that rule.
-//
-// Categories stay reachable — the header lists them as chips, and each card, search hit
-// and article links into `/category/:slug` — so this removes one entrance to a page
-// that is still on the sitemap, not a section of the site.
-const [trending, latest, featured, tags] = await Promise.all([
-  listPublishedArticles(db, { sort: 'trending', limit: 5 }),
-  listPublishedArticles(db, { sort: 'latest', limit: 5 }),
-  listPublishedArticles(db, { sort: 'featured', limit: 3 }),
-  listTagsWithCounts(db, 24),
+const [lead, newest, newCount, cats, authors] = await Promise.all([
+  listPublishedArticles(db, { sort: 'trending', limit: 4 }),
+  listPublishedArticles(db, { sort: 'latest', limit: 12 }),
+  homepageCounts(db),
+  listCategoriesWithCounts(db),
+  db.prepare(`SELECT COUNT(DISTINCT author_username) AS total FROM articles
+    WHERE status = 'published' AND display_mode != 'takedown'`).first<{ total: number }>(),
 ]);
-// SPEC §17.3 ordering: the editor's picks, then the machine boards.
-//
-// The lead row is `sort: 'featured'`, which is the human override and not a ranking —
-// the same query `/featured` runs, so the row and the board it links to cannot disagree
-// about what a pick is. It replaced a `trending.slice(0, 3)` row titled "Today's
-// Selection", which was the trending board's own top three shown twice on one page in
-// different guises.
-//
-// The row and the old "⭐ Editor's Picks" section were the same `featured` array, so the
-// lower section went when the title moved up rather than the page printing the same
-// three articles twice.
-// `latest` answers the empty-state question for nothing: `listPublishedArticles` filters
-// on the same `status = 'published' AND display_mode != 'takedown'` that `homepageCounts`
-// counts, so an empty result means an empty archive exactly, not approximately. The
-// hero's count line was this query's only other reader, and it went with the hero — so
-// the query went too, which is the same rule the paragraph above is about.
-const empty = latest.length === 0;
+
+const empty = newest.length === 0;
+
+const [feature, ...rest] = lead;
+const rackSide = rest.slice(0, 3);
+
+const onRack = new Set(lead.map((a) => a.id));
+const justArchived = newest.filter((a) => !onRack.has(a.id)).slice(0, 6);
+
+const topics = cats.filter((c) => c.count > 0);
+const authorCount = authors?.total ?? 0;
+const articleCount = newCount.total;
+
+
 ---
 
 <Base
@@ -53,123 +39,99 @@ const empty = latest.length === 0;
   path="/"
 >
   <SiteHeader>
-    <section class="home-hero">
-      <div class="home-hero-body">
-        <h1 class="home-hero-title" {...i18nSpread('home.heroTitle')}>The long-form, archived.</h1>
-        <p class="home-hero-line" {...i18nSpread('home.heroBody')}>A human-curated, machine-archived library of long X Articles — organized by topic, ranked by real engagement.</p>
-        <a class="home-hero-cta" href="/latest" {...i18nSpread('home.heroCta')}>Read the latest →</a>
+    <div class="home-shelf">
+    {empty ? (
+      <div class="empty-state">
+        <h1 {...i18nSpread('home.noArticles')}>No published articles yet</h1>
+        <p>
+          <span {...i18nSpread('home.noArticlesBody')}>
+            Articles appear here after they are imported and parsed. Paste X Article URLs in the
+          </span>{' '}
+          <a href="/admin/import" {...i18nSpread('home.importer')}>admin importer</a>{' '}
+          <span {...i18nSpread('home.startPipeline')}>to start the pipeline.</span>
+        </p>
+        <pre><code>https://x.com/username/article/1234567890</code></pre>
       </div>
-    </section>
-    <p class="home-hero-credit">
-      Background: <a href="https://www.rawpixel.com/image/5907849/image-book-public-domain-wood">antique book spines</a> — CC0, via rawpixel
-    </p>
+    ) : (
+      <>
 
-    {/*
-      No hero. This block used to open with an eyebrow, a title and a count line,
-      which put the first row of cards below the fold in exchange for restating what
-      the header already says. The hero is back now; what stays `sr-only` in its place
-      is the board heading shape (`<h2>`) rather than the h1, so the page still
-      announces its name.
-    */}
-      {empty ? (
-        <div class="empty-state">
-          <h2 {...i18nSpread('home.noArticles')}>No published articles yet</h2>
-          <p>
-            <span {...i18nSpread('home.noArticlesBody')}>
-              Articles appear here after they are imported and parsed. Paste X Article URLs in the
-            </span>{' '}
-            <a href="/admin/import" {...i18nSpread('home.importer')}>admin importer</a>{' '}
-            <span {...i18nSpread('home.startPipeline')}>to start the pipeline.</span>
-          </p>
-          <pre><code>https://x.com/username/article/1234567890</code></pre>
-        </div>
-      ) : (
-        <>
-          {featured.length > 0 && (
-            <section class="board">
-              <div class="board-head">
-                <h2 class="board-title" {...i18nSpread('home.pick')}>Editor's Pick</h2>
-                <a class="board-more" href="/featured" {...i18nSpread('home.allPicks')}>All picks →</a>
-              </div>
-              <div class="grid-cards">
-                {featured.map((a) => (
-                  <ArticleCard article={a} />
-                ))}
-              </div>
-            </section>
-          )}
+        <h1 class="sr-only">X Article Hub</h1>
 
-            {/*
-              SPEC §17.3 — Trending and Latest, side by side.
+        <section class="rack" aria-labelledby="rack-heading">
+          <div class="rack-head">
+            <h2 class="rack-heading" id="rack-heading" {...i18nSpread('home.trending')}>Trending</h2>
+            <p class="rack-meta">
+              <span {...i18nSpread('home.archivedCount', { n: articleCount })}>{articleCount} archived</span>
 
-              The right-hand column held Rising until that board was removed along with the
-              velocity signal it ranked by. Leaving the grid in place would have kept a
-              two-column layout with one column filled, which reads as a section that failed
-              to load rather than as a page with one board on it.
+            </p>
+            <a class="rack-more" href="/trending" {...i18nSpread('home.allTrending')}>All trending →</a>
+          </div>
 
-              Latest is the replacement, and it is the right filler rather than a
-              placeholder: it is the board whose contents cannot be inferred from the others.
-              Every card in Trending is in Latest by definition, but the two orderings
-              disagree, so the pair shows a reader both what is moving and what is new — and
-              someone who has already read the picks has somewhere to go that is not a
-              repeat.
+          <div class="rack-grid">
+            {feature && <RackTile article={feature} weight="lead" flag="home.rackLead" ordinal={null} slot={1} />}
+            {rackSide.map((article, i) => (
+              <RackTile
+                article={article}
+                weight={i === 0 ? 'feature' : 'side'}
+                ordinal={i + 2}
+                slot={(i + 2) as 2 | 3 | 4}
+              />
+            ))}
+          </div>
+        </section>
 
-              The two are distinguished deliberately: Trending is an ordered list with rank
-              numbers because it is a ranking, and Latest is the same list without them
-              because it is not. `ArticleCard`'s `rank` prop is optional for exactly this.
-            */}
-            <div class="board-split">
-              {trending.length > 0 && (
-                <section class="board">
-                  <div class="board-head">
-                    <h2 class="board-title">
-                      <Icon name="fire" size={17} class="board-icon" /> <span {...i18nSpread('home.trending')}>Trending</span>
-                    </h2>
-                    <a class="board-more" href="/trending" {...i18nSpread('home.allTrending')}>All trending →</a>
-                  </div>
-                  <ol class="ranked-list">
-                    {trending.map((a, i) => (
-                      <li>
-                        <ArticleCard article={a} rank={i + 1} />
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
-
-              {latest.length > 0 && (
-                <section class="board">
-                  <div class="board-head">
-                    <h2 class="board-title">
-                      <Icon name="clock" size={17} class="board-icon" /> <span {...i18nSpread('home.latest')}>Latest</span>
-                    </h2>
-                    <a class="board-more" href="/latest" {...i18nSpread('home.allLatest')}>All latest →</a>
-                  </div>
-                  <ol class="ranked-list">
-                    {latest.map((a) => (
-                      <li>
-                        <ArticleCard article={a} />
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
+        {justArchived.length > 0 && (
+          <section class="strip" aria-labelledby="strip-heading">
+            <div class="strip-head">
+              <h2 class="strip-heading" id="strip-heading" {...i18nSpread('home.justArchived')}>Just archived</h2>
+              <p class="strip-meta" {...i18nSpread('home.archiveLine', { articles: articleCount, authors: authorCount, topics: topics.length })}>
+                {articleCount} articles · {authorCount} authors · {topics.length} topics
+              </p>
+              <a class="strip-more" href="/latest" {...i18nSpread('home.seeAll')}>All latest →</a>
             </div>
-
-          {tags.length > 0 && (
-            <section class="board">
-              <h2 class="board-title" {...i18nSpread('home.popularTags')}>Popular tags</h2>
-              <div class="tag-cloud">
-                {tags.map((t) => (
-                  <a class="tag" href={`/tag/${t.slug}`}>
-                    {t.name} <span class="cat-count">{t.count}</span>
+            <ul class="strip-grid">
+              {justArchived.map((article, i) => (
+                <li>
+                  <a class="strip-item" href={article.slug ? `/article/${article.slug}` : '#'}>
+                    <span class="strip-shot">
+                      {i < 9 && <span class="strip-ordinal">{String(i + 1).padStart(2, '0')}</span>}
+                      {article.cover_image_id ? (
+                        <img src={`/media/${article.cover_image_id}`} alt="" loading="lazy" decoding="async" />
+                      ) : (
+                        <span class="strip-noshot" aria-hidden="true" />
+                      )}
+                    </span>
+                    <span class="strip-title">{article.title}</span>
+                    <span class="strip-by">
+                      {article.author_username && <span>@{article.author_username}</span>}
+                      <span aria-hidden="true">·</span>
+                      <span>{Math.max(1, Math.round(article.word_count / 220))} <span {...i18nSpread('card.minRead')}>min read</span></span>
+                      {article.featured === 1 && (
+                        <span class="strip-pick" {...i18nSpread('home.editorsPick')}>Editor's pick</span>
+                      )}
+                    </span>
                   </a>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )
-    }
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {topics.length > 0 && (
+          <nav class="topics-line" aria-label="Topics" {...i18nAttrSpread('aria-label', 'home.topics')}>
+            <span class="topics-label" {...i18nSpread('home.topics')}>Topics</span>
+            {topics.map((t, i) => (
+              <>
+                {i > 0 && <span class="topics-sep" aria-hidden="true">/</span>}
+                <a href={`/category/${t.slug}`}>
+                  {t.name} <span class="topics-count">{t.count}</span>
+                </a>
+              </>
+            ))}
+          </nav>
+        )}
+      </>
+    )}
+    </div>
   </SiteHeader>
 </Base>
